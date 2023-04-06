@@ -1,4 +1,4 @@
-# Module for Measured Data Handling and exploration
+# Module for Measured Data Handling and Exploration
 
 This Python library is designed to handle measured data from test benches or Building Energy Management Systems (BEMS). It offers a range of features to help identify and correct measurement errors, fill gaps in data, and perform analysis using artificial intelligence (AI) tools. 
 
