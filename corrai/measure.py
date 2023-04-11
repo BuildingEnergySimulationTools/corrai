@@ -7,24 +7,46 @@ import plotly.graph_objects as go
 import datetime as dt
 
 
-def time_series_control(time_series):
-    if isinstance(time_series, pd.Series):
-        time_series = time_series.to_frame()
-    elif isinstance(time_series, pd.DataFrame):
+def time_data_control(data):
+    """
+    Given a pandas Series or DataFrame `data`, checks that the input data
+    as a DateTimeIndex. Returns a DataFrame
+
+    Parameters:
+    -----------
+    data : pandas Series or DataFrame
+        The input data to be checked. If `data` is a pandas Series, it will be
+         converted to a DataFrame with a single column.
+
+    Returns:
+    --------
+    output : pandas DataFrame
+        A DataFrame that is guaranteed to have a pandas DateTimeIndex as
+        its index.
+
+    Raises:
+    -------
+    ValueError
+        If `data` is not a pandas Series or DataFrame.
+        If `data` has an index that is not a pandas DateTimeIndex.
+    """
+    if isinstance(data, pd.Series):
+        output = data.to_frame()
+    elif isinstance(data, pd.DataFrame):
         pass
     else:
         raise ValueError(f"time_series is expecting pandas"
-                         f" Series or DataFrame. Got {type(time_series)}"
+                         f" Series or DataFrame. Got {type(data)}"
                          f"instead")
-    if not isinstance(time_series.index, pd.DatetimeIndex):
+    if not isinstance(data.index, pd.DatetimeIndex):
         raise ValueError(
             "time_series index must be a pandas DateTimeIndex"
         )
-    return time_series
+    return output
 
 
 def time_gradient(time_series, begin=None, end=None):
-    time_series = time_series_control(time_series)
+    time_series = time_data_control(time_series)
 
     if begin is None:
         begin = time_series.index[0]
@@ -56,7 +78,7 @@ def time_integrate(
         end=None,
         interpolate=True,
         interpolation_method='linear'):
-    time_series = time_series_control(time_series)
+    time_series = time_data_control(time_series)
 
     if begin is None:
         begin = time_series.index[0]
@@ -258,7 +280,7 @@ class MeasuredDats:
         self.corr_dict = config_dict["corr_dict"]
 
     def add_time_series(self, time_series, data_type, data_corr_dict=None):
-        time_series = time_series_control(time_series)
+        time_series = time_data_control(time_series)
         if data_corr_dict is None:
             data_corr_dict = {}
 
