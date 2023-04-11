@@ -45,20 +45,61 @@ def time_data_control(data):
     return data
 
 
-def time_gradient(time_series, begin=None, end=None):
-    time_series = time_data_control(time_series)
+def time_gradient(data, begin=None, end=None):
+    """
+        Calculates the time gradient of a given time series `data`
+        between two optional time bounds `begin` and `end`.
+
+        Parameters:
+        -----------
+        data : pandas Series or DataFrame
+            The time series to compute the gradient on.
+            If a Series is provided, it will be converted to a DataFrame
+            with a single column.
+        begin : str or datetime-like, optional
+            Beginning time of the selection.
+            If None, defaults to the first index value of `time_series`.
+        end : str or datetime-like, optional
+            End time of the selection.
+            If None, defaults to the last index value of `time_series`.
+
+        Returns:
+        --------
+        gradient : pandas DataFrame
+            A DataFrame containing the gradient of the input time series
+            for each column. The index will be a DatetimeIndex
+            and the columns will be the same as the input.
+
+        Raises:
+        -------
+        ValueError
+            If `time_series` is not a pandas Series or DataFrame.
+            If the index of `time_series` is not a pandas DateTimeIndex.
+
+        Notes:
+        ------
+        This function applies the `time_data_control` function to ensure that
+        the input `time_series` is formatted correctly
+        for time series analysis. Then, it selects a subset of the data between
+         `begin` and `end` if specified. Finally, the function computes
+        the gradient of each column of the subset of the data, using the
+        `np.gradient` function and the time difference between consecutive
+        data points.
+        """
+
+    data = time_data_control(data)
 
     if begin is None:
-        begin = time_series.index[0]
+        begin = data.index[0]
 
     if end is None:
-        end = time_series.index[-1]
+        end = data.index[-1]
 
-    selected_ts = time_series.loc[begin: end, :]
+    selected_data = data.loc[begin: end, :]
 
     ts_list = []
-    for col in selected_ts:
-        col_ts = selected_ts[col].dropna()
+    for col in selected_data:
+        col_ts = selected_data[col].dropna()
 
         chrono = col_ts.index - col_ts.index[0]
         chrono_sec = chrono.to_series().dt.total_seconds()
