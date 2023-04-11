@@ -31,7 +31,7 @@ def time_data_control(data):
         If `data` has an index that is not a pandas DateTimeIndex.
     """
     if isinstance(data, pd.Series):
-        output = data.to_frame()
+        data = data.to_frame()
     elif isinstance(data, pd.DataFrame):
         pass
     else:
@@ -42,7 +42,7 @@ def time_data_control(data):
         raise ValueError(
             "time_series index must be a pandas DateTimeIndex"
         )
-    return output
+    return data
 
 
 def time_gradient(time_series, begin=None, end=None):
