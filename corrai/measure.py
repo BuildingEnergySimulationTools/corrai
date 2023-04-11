@@ -114,20 +114,70 @@ def time_gradient(data, begin=None, end=None):
 
 
 def time_integrate(
-        time_series,
+        data,
         begin=None,
         end=None,
         interpolate=True,
         interpolation_method='linear'):
-    time_series = time_data_control(time_series)
+    """
+    Perform time Integration of given time series `data` between two optional
+    time bounds `begin` and `end`.
+
+    Parameters:
+    -----------
+    data : pandas Series or DataFrame
+        The time series to integrate. If a Series is provided, it will be
+        converted to a DataFrame with a single column.
+    begin : str or datetime-like, optional
+        Beginning time of the selection. If None, defaults to the first
+        index value of `data`.
+    end : str or datetime-like, optional
+        End time of the selection. If None, defaults to the last index value
+        of `data`.
+    interpolate : bool, optional
+        Whether to interpolate missing values in the input `data` before
+        integrating. If True, missing values will be filled using the specified
+         `interpolation_method`. If False, missing values will be
+         replaced with NaNs.
+    interpolation_method : str, optional
+        The interpolation method to use if `interpolate` is True. Can be one
+        of 'linear', 'nearest', 'zero', 'slinear', 'quadratic', 'cubic',
+         or 'spline'.
+
+    Returns:
+    --------
+    res_series : pandas Series
+        A Series containing the result of integrating the input time series
+        for each column. The index will be the same as the columns of
+        the input `data`.
+
+    Raises:
+    -------
+    ValueError
+        If `data` is not a pandas Series or DataFrame.
+        If the index of `data` is not a pandas DateTimeIndex.
+
+    Notes:
+    ------
+    This function applies the `time_data_control` function to ensure that the
+    input `data` is formatted correctly  for time series analysis. Then, it
+    selects a subset of the data between `begin` and `end` if specified. If
+    `interpolate` is True, missing values in the subset of the data will be
+    filled using the specified interpolation method.
+    The function then computes the integral of each column of the subset of
+    the data, using the `integrate.trapz` function and the time difference
+    between consecutive data points.
+    """
+
+    data = time_data_control(data)
 
     if begin is None:
-        begin = time_series.index[0]
+        begin = data.index[0]
 
     if end is None:
-        end = time_series.index[-1]
+        end = data.index[-1]
 
-    selected_ts = time_series.loc[begin:end, :]
+    selected_ts = data.loc[begin:end, :]
 
     if interpolate:
         selected_ts = selected_ts.interpolate(method=interpolation_method)
@@ -136,7 +186,7 @@ def time_integrate(
     chrono = chrono.dt.total_seconds()
 
     res_series = pd.Series(dtype='float64')
-    for col in time_series:
+    for col in data:
         res_series[col] = integrate.trapz(selected_ts[col], chrono)
 
     return res_series
