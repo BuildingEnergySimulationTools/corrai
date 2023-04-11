@@ -200,6 +200,26 @@ def missing_values_dict(df):
 
 
 def check_config_dict(config_dict):
+    """
+    Check if the input dictionary follows the expected structure and values.
+
+    Parameters:
+    -----------
+    config_dict : dict
+        A dictionary with two keys: "data_type_dict" and "corr_dict".
+
+        "data_type_dict" is a dictionary that maps categories to a list of
+        column names.
+
+        "corr_dict" is a dictionary that maps categories to a dictionary of
+        correction methods and their values.
+
+    Raises:
+    -------
+    ValueError:
+        If the input dictionary does not follow the expected structure and
+        values.
+    """
     if not list(config_dict.keys()) == ['data_type_dict', 'corr_dict']:
         raise ValueError("Invalid data_type or corr_dict")
 
@@ -248,15 +268,45 @@ def select_data(df, cols=None, begin=None, end=None):
     return df.loc[begin:end, cols]
 
 
-def find_gaps(df_in, cols=None, timestep=None):
+def find_gaps(data, cols=None, timestep=None):
+    """
+    Find gaps in time series data. Find individual columns gap and combined gap
+    for all columns.
+
+    Parameters:
+    -----------
+        data (pandas.DataFrame or pandas.Series): The time series data to check
+            for gaps.
+
+        cols (list, optional): The columns to check for gaps. Defaults to None,
+            in which case all columns are checked.
+
+        timestep (str or pandas.Timedelta, optional): The time step of the
+            data. Can be either a string representation of a time period
+            (e.g., '1H' for hourly data), or a pandas.Timedelta object.
+            Defaults to None, in which case the time step is automatically
+            determined.
+
+    Raises:
+    -------
+
+        ValueError: If cols or timestep are invalid.
+
+    Returns:
+    --------
+        dict: A dictionary containing the duration of the gaps for each
+        specified column, as well as the overall combination of columns.
+    """
+
+    data = time_data_control(data)
     if not cols:
-        cols = df_in.columns
+        cols = data.columns
 
     if not timestep:
-        timestep = auto_timestep(df_in)
+        timestep = auto_timestep(data)
 
     # Aggregate in a single columns to know overall quality
-    df = df_in.copy()
+    df = data.copy()
     df = ~df.isnull()
     df["combination"] = df.all(axis=1)
 
@@ -320,6 +370,130 @@ class MeasuredDats:
                  corr_dict=None,
                  config_file_path=None,
                  gaps_timedelta=None):
+        """
+        A class for handling time-series data with missing values.
+
+        Parameters:
+        -----------
+        data : pandas.DataFrame
+            The input data to be processed.
+
+        data_type_dict : dict, optional
+            A dictionary that maps data type categories to the 'data' columns
+            that belong to that category. Default is None.
+
+        corr_dict : dict, optional
+            A dictionary that stores the correction method and parameters for each
+            'data' type category. 'corr_dict" keys must match 'data_type_dict'
+            keys. Default is None.
+
+        config_file_path : str, optional
+            The path to the configuration file.
+            If specified, the data type dictionary and correction dictionary
+            will be loaded from the file. Default is None.
+
+        gaps_timedelta : pandas.Timedelta, optional
+            The maximum allowed data gap size for each data series. Gaps
+            smaller thn 'gaps_timedelta' will not be detected. They will be
+            corrected during gaps filling processes. If None, the
+            'gaps_timedelta' timestep is estimated automatically from the data
+            index mean timestep.
+
+        Attributes:
+        ----------
+        data : pandas.DataFrame
+            The original input data.
+
+        corrected_data : pandas.DataFrame
+            The data after the correction process.
+
+        data_type_dict : dict
+            A dictionary that maps data type categories to the columns that
+            belong to that category.
+
+        corr_dict : dict
+            A dictionary that stores the correction method and parameters for
+            each data type category.
+
+        correction_journal : dict
+            A dictionary that stores the history of the correction process.
+
+        gaps_timedelta : pandas.Timedelta
+            The maximum allowed gap size for each data series.
+
+        resample_func_dict : dict
+            A dictionary that maps resampling functions to the corresponding method
+            string.
+
+        Methods:
+        -------
+        write_config_file(file_path)
+            Writes the data type dictionary and correction dictionary to a
+            JSON file.
+
+        read_config_file(file_path)
+            Reads the data type dictionary and correction dictionary from a J
+            SON file.
+
+        add_time_series(time_series, data_type, data_corr_dict=None)
+            Adds a new time series to the data set and updates the data type
+            and correction dictionaries accordingly.
+
+        auto_correct()
+            Runs the correction process automatically.
+
+        remove_anomalies()
+            Removes the anomalies in the data set using the correction methods
+            specified  in the correction dictionary.
+
+        fill_nan()
+            Fills the missing values in the data set using the correction
+            methods specified in the correction dictionary.
+
+        resample(timestep=None)
+            Resamples the data set to a specified timestep. If None, the
+            timestep is the data index mean timestep.
+
+        plot_gaps(cols=None, begin=None, end=None,
+            gaps_timestep=dt.timedelta(hours=5), title="Gaps plot",
+            raw_data=False, color_rgb=(243, 132, 48),  alpha=0.5):
+            cols (list, optional): List of column names to plot. If not
+                provided, all columns will be plotted. Default is None.
+            begin (str, optional): String specifying the start date for the
+                data selection. If not provided, the entire dataset will be
+                used. Default is None.
+            end (str, optional): String specifying the end date for the data
+                selection. If not provided, the entire dataset will be used.
+                Default is None.
+            gaps_timestep (timedelta, optional): Minimum duration between data
+                points to consider a gap. Default is 5 hours.
+            title (str, optional): Title of the plot. Default is "Gaps plot".
+            raw_data (bool, optional): If True, plot the raw data without gap
+                correction. If False, plot the gap-corrected data.
+                Default is False.
+            color_rgb (tuple of int, optional): RGB color of the gaps.
+                Default is (243, 132, 48).
+            alpha (float, optional): Opacity of the gaps. Default is 0.5.
+
+        plot(cols=None, title="Correction plot", plot_raw=False,
+             begin=None, end=None)
+            Generate a plot comparing the original and corrected values of the given
+            columns over the specified time range.
+            cols : list of str, optional
+                The names of the columns to plot. If None (default), all
+                columns are plotted.
+            title : str, optional
+                The title of the plot. Defaults to "Correction plot".
+            plot_raw : bool, optional
+                If True, plot the raw values in addition to the corrected
+                values. Defaults to False.
+            begin : str or datetime-like, optional
+                A string or datetime-like object specifying the start of the
+                time range to plot. If None (default), plot all data.
+            end : str or datetime-like, optional
+                A string or datetime-like object specifying the end of the
+                time range to plot. If None (default), plot all data.
+        """
 
         self.data = data.apply(
             pd.to_numeric, args=('coerce',)
