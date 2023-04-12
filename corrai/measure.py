@@ -736,7 +736,7 @@ class MeasuredDats:
                 figure=fig,
                 series=to_plot[col],
                 gap_series=find_gaps(
-                    df_in=to_plot, cols=[col], timestep=gaps_timestep)[col],
+                    data=to_plot, cols=[col], timestep=gaps_timestep)[col],
                 color_rgb=color_rgb,
                 alpha=alpha,
                 y_min=y_min,
