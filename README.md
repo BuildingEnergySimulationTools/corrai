@@ -1,5 +1,9 @@
-# CorrAI
-## Module for Measured Data Handling and Exploration
+<p align="center">
+  <img src="https://github.com/BuildingEnergySimulationTools/corrai/blob/main/logo_corrai.svg" alt="CorrAI" width="200"/>
+</p>
+
+
+## Measured Data Exploration and Enrichment
 
 This Python library is designed to handle measured data from test benches or Building Energy Management Systems (BEMS). It offers a range of features to help identify and correct measurement errors, fill gaps in data, and perform analysis using artificial intelligence (AI) tools. 
 
