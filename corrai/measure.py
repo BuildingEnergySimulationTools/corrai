@@ -35,57 +35,57 @@ def time_data_control(data):
     elif isinstance(data, pd.DataFrame):
         pass
     else:
-        raise ValueError(f"time_series is expecting pandas"
-                         f" Series or DataFrame. Got {type(data)}"
-                         f"instead")
-    if not isinstance(data.index, pd.DatetimeIndex):
         raise ValueError(
-            "time_series index must be a pandas DateTimeIndex"
+            f"time_series is expecting pandas"
+            f" Series or DataFrame. Got {type(data)}"
+            f"instead"
         )
+    if not isinstance(data.index, pd.DatetimeIndex):
+        raise ValueError("time_series index must be a pandas DateTimeIndex")
     return data
 
 
 def time_gradient(data, begin=None, end=None):
     """
-        Calculates the time gradient of a given time series `data`
-        between two optional time bounds `begin` and `end`.
+    Calculates the time gradient of a given time series `data`
+    between two optional time bounds `begin` and `end`.
 
-        Parameters:
-        -----------
-        data : pandas Series or DataFrame
-            The time series to compute the gradient on.
-            If a Series is provided, it will be converted to a DataFrame
-            with a single column.
-        begin : str or datetime-like, optional
-            Beginning time of the selection.
-            If None, defaults to the first index value of `time_series`.
-        end : str or datetime-like, optional
-            End time of the selection.
-            If None, defaults to the last index value of `time_series`.
+    Parameters:
+    -----------
+    data : pandas Series or DataFrame
+        The time series to compute the gradient on.
+        If a Series is provided, it will be converted to a DataFrame
+        with a single column.
+    begin : str or datetime-like, optional
+        Beginning time of the selection.
+        If None, defaults to the first index value of `time_series`.
+    end : str or datetime-like, optional
+        End time of the selection.
+        If None, defaults to the last index value of `time_series`.
 
-        Returns:
-        --------
-        gradient : pandas DataFrame
-            A DataFrame containing the gradient of the input time series
-            for each column. The index will be a DatetimeIndex
-            and the columns will be the same as the input.
+    Returns:
+    --------
+    gradient : pandas DataFrame
+        A DataFrame containing the gradient of the input time series
+        for each column. The index will be a DatetimeIndex
+        and the columns will be the same as the input.
 
-        Raises:
-        -------
-        ValueError
-            If `time_series` is not a pandas Series or DataFrame.
-            If the index of `time_series` is not a pandas DateTimeIndex.
+    Raises:
+    -------
+    ValueError
+        If `time_series` is not a pandas Series or DataFrame.
+        If the index of `time_series` is not a pandas DateTimeIndex.
 
-        Notes:
-        ------
-        This function applies the `time_data_control` function to ensure that
-        the input `time_series` is formatted correctly
-        for time series analysis. Then, it selects a subset of the data between
-         `begin` and `end` if specified. Finally, the function computes
-        the gradient of each column of the subset of the data, using the
-        `np.gradient` function and the time difference between consecutive
-        data points.
-        """
+    Notes:
+    ------
+    This function applies the `time_data_control` function to ensure that
+    the input `time_series` is formatted correctly
+    for time series analysis. Then, it selects a subset of the data between
+     `begin` and `end` if specified. Finally, the function computes
+    the gradient of each column of the subset of the data, using the
+    `np.gradient` function and the time difference between consecutive
+    data points.
+    """
 
     data = time_data_control(data)
 
@@ -95,7 +95,7 @@ def time_gradient(data, begin=None, end=None):
     if end is None:
         end = data.index[-1]
 
-    selected_data = data.loc[begin: end, :]
+    selected_data = data.loc[begin:end, :]
 
     ts_list = []
     for col in selected_data:
@@ -104,21 +104,16 @@ def time_gradient(data, begin=None, end=None):
         chrono = col_ts.index - col_ts.index[0]
         chrono_sec = chrono.to_series().dt.total_seconds()
 
-        ts_list.append(pd.Series(
-            np.gradient(col_ts, chrono_sec),
-            index=col_ts.index,
-            name=col
-        ))
+        ts_list.append(
+            pd.Series(np.gradient(col_ts, chrono_sec), index=col_ts.index, name=col)
+        )
 
     return pd.concat(ts_list, axis=1)
 
 
 def time_integrate(
-        data,
-        begin=None,
-        end=None,
-        interpolate=True,
-        interpolation_method='linear'):
+    data, begin=None, end=None, interpolate=True, interpolation_method="linear"
+):
     """
     Perform time Integration of given time series `data` between two optional
     time bounds `begin` and `end`.
@@ -185,7 +180,7 @@ def time_integrate(
     chrono = (selected_ts.index - selected_ts.index[0]).to_series()
     chrono = chrono.dt.total_seconds()
 
-    res_series = pd.Series(dtype='float64')
+    res_series = pd.Series(dtype="float64")
     for col in data:
         res_series[col] = integrate.trapz(selected_ts[col], chrono)
 
@@ -195,7 +190,7 @@ def time_integrate(
 def missing_values_dict(df):
     return {
         "Number_of_missing": df.count(),
-        "Percent_of_missing": (1 - df.count() / df.shape[0]) * 100
+        "Percent_of_missing": (1 - df.count() / df.shape[0]) * 100,
     }
 
 
@@ -220,39 +215,39 @@ def check_config_dict(config_dict):
         If the input dictionary does not follow the expected structure and
         values.
     """
-    if not list(config_dict.keys()) == ['data_type_dict', 'corr_dict']:
+    if not list(config_dict.keys()) == ["data_type_dict", "corr_dict"]:
         raise ValueError("Invalid data_type or corr_dict")
 
     categories = list(config_dict["data_type_dict"].keys())
-    corr_dict_type = list(config_dict['corr_dict'].keys())
+    corr_dict_type = list(config_dict["corr_dict"].keys())
     for cat in categories:
         if cat not in corr_dict_type:
-            raise ValueError("Type present in data_type "
-                             "is missing in corr_dict")
+            raise ValueError("Type present in data_type " "is missing in corr_dict")
 
-    for tpe in config_dict['corr_dict'].keys():
-        to_test = list(config_dict['corr_dict'][tpe].keys())
+    for tpe in config_dict["corr_dict"].keys():
+        to_test = list(config_dict["corr_dict"][tpe].keys())
         for it in to_test:
-            loc_corr = config_dict['corr_dict'][tpe][it]
+            loc_corr = config_dict["corr_dict"][tpe][it]
 
             if it == "minmax":
-                if list(loc_corr.keys()) != ['upper', 'lower']:
+                if list(loc_corr.keys()) != ["upper", "lower"]:
                     raise ValueError(f"Invalid configuration for {tpe} minmax")
 
             elif it == "derivative":
                 for k in list(loc_corr.keys()):
-                    if k not in ['upper_rate', 'lower_rate']:
-                        raise ValueError(f"Invalid configuration "
-                                         f"for {tpe} derivative")
+                    if k not in ["upper_rate", "lower_rate"]:
+                        raise ValueError(
+                            f"Invalid configuration " f"for {tpe} derivative"
+                        )
             elif it == "fill_nan":
                 for elmt in loc_corr:
-                    if elmt not in ['linear_interpolation', 'bfill', "ffill"]:
-                        raise ValueError(f"Invalid configuration "
-                                         f"for {tpe} fill_nan")
+                    if elmt not in ["linear_interpolation", "bfill", "ffill"]:
+                        raise ValueError(
+                            f"Invalid configuration " f"for {tpe} fill_nan"
+                        )
             elif it == "resample":
-                if loc_corr not in ['mean', 'sum']:
-                    raise ValueError(f"Invalid configuration "
-                                     f"for {tpe} resample")
+                if loc_corr not in ["mean", "sum"]:
+                    raise ValueError(f"Invalid configuration " f"for {tpe} resample")
 
 
 def select_data(df, cols=None, begin=None, end=None):
@@ -331,45 +326,51 @@ def find_gaps(data, cols=None, timestep=None):
 def gaps_describe(df_in, cols=None, timestep=None):
     res_find_gaps = find_gaps(df_in, cols, timestep)
 
-    return pd.DataFrame(
-        {k: val.describe() for k, val in res_find_gaps.items()})
+    return pd.DataFrame({k: val.describe() for k, val in res_find_gaps.items()})
 
 
 def auto_timestep(df):
     return df.index.to_frame().diff().mean()[0]
 
 
-def add_scatter_and_gaps(figure, series, gap_series, color_rgb, alpha, y_min,
-                         y_max, yaxis):
-    figure.add_trace(go.Scattergl(
-        x=series.index,
-        y=series.to_numpy().flatten(),
-        mode='lines+markers',
-        name=series.name,
-        yaxis=yaxis
-        # line=dict(color=f'rgb{color_rgb}')
-    ))
+def add_scatter_and_gaps(
+    figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
+):
+    figure.add_trace(
+        go.Scattergl(
+            x=series.index,
+            y=series.to_numpy().flatten(),
+            mode="lines+markers",
+            name=series.name,
+            yaxis=yaxis
+            # line=dict(color=f'rgb{color_rgb}')
+        )
+    )
 
     for t_idx, gap in gap_series.items():
-        figure.add_trace(go.Scattergl(
-            x=[t_idx - gap, t_idx - gap, t_idx, t_idx],
-            y=[y_min, y_max, y_max, y_min],
-            mode='none',
-            fill='toself',
-            showlegend=False,
-            fillcolor=f"rgba({color_rgb[0]}, {color_rgb[1]},"
-                      f" {color_rgb[2]} , {alpha})",
-            yaxis=yaxis
-        ))
+        figure.add_trace(
+            go.Scattergl(
+                x=[t_idx - gap, t_idx - gap, t_idx, t_idx],
+                y=[y_min, y_max, y_max, y_min],
+                mode="none",
+                fill="toself",
+                showlegend=False,
+                fillcolor=f"rgba({color_rgb[0]}, {color_rgb[1]},"
+                f" {color_rgb[2]} , {alpha})",
+                yaxis=yaxis,
+            )
+        )
 
 
 class MeasuredDats:
-    def __init__(self,
-                 data,
-                 data_type_dict=None,
-                 corr_dict=None,
-                 config_file_path=None,
-                 gaps_timedelta=None):
+    def __init__(
+        self,
+        data,
+        data_type_dict=None,
+        corr_dict=None,
+        config_file_path=None,
+        gaps_timedelta=None,
+    ):
         """
         A class for handling time-series data with missing values.
 
@@ -495,49 +496,43 @@ class MeasuredDats:
                 time range to plot. If None (default), plot all data.
         """
 
-        self.data = data.apply(
-            pd.to_numeric, args=('coerce',)
-        ).copy()
-        self.corrected_data = data.apply(
-            pd.to_numeric, args=('coerce',)
-        ).copy()
+        self.data = data.apply(pd.to_numeric, args=("coerce",)).copy()
+        self.corrected_data = data.apply(pd.to_numeric, args=("coerce",)).copy()
 
         if config_file_path is None:
             self.data_type_dict = data_type_dict
             self.corr_dict = corr_dict
-            check_config_dict({
-                "data_type_dict": data_type_dict,
-                "corr_dict": corr_dict
-            })
+            check_config_dict(
+                {"data_type_dict": data_type_dict, "corr_dict": corr_dict}
+            )
         else:
             self.read_config_file(config_file_path)
 
         self.correction_journal = {
             "Entries": data.shape[0],
-            "Init": missing_values_dict(data)
+            "Init": missing_values_dict(data),
         }
         if gaps_timedelta is None:
             self.gaps_timedelta = auto_timestep(self.data)
         else:
             self.gaps_timedelta = gaps_timedelta
 
-        self.resample_func_dict = {
-            'mean': np.mean,
-            'sum': np.sum
-        }
+        self.resample_func_dict = {"mean": np.mean, "sum": np.sum}
 
     @property
     def columns(self):
         return self.data.columns
 
     def write_config_file(self, file_path):
-        with open(file_path, 'w', encoding='utf-8') as f:
-            to_dump = {"data_type_dict": self.data_type_dict,
-                       "corr_dict": self.corr_dict}
+        with open(file_path, "w", encoding="utf-8") as f:
+            to_dump = {
+                "data_type_dict": self.data_type_dict,
+                "corr_dict": self.corr_dict,
+            }
             json.dump(to_dump, f, ensure_ascii=False, indent=4)
 
     def read_config_file(self, file_path):
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             config_dict = json.load(f)
 
         check_config_dict(config_dict)
@@ -555,14 +550,12 @@ class MeasuredDats:
             self.data_type_dict[data_type] = list(time_series.columns)
             self.corr_dict[data_type] = data_corr_dict
 
-        check_config_dict({
-            "data_type_dict": self.data_type_dict,
-            "corr_dict": self.corr_dict
-        })
+        check_config_dict(
+            {"data_type_dict": self.data_type_dict, "corr_dict": self.corr_dict}
+        )
 
         self.data = pd.concat([self.data, time_series], axis=1)
-        self.corrected_data = pd.concat(
-            [self.corrected_data, time_series], axis=1)
+        self.corrected_data = pd.concat([self.corrected_data, time_series], axis=1)
 
     def auto_correct(self):
         self.remove_anomalies()
@@ -572,19 +565,16 @@ class MeasuredDats:
     def remove_anomalies(self):
         for data_type, cols in self.data_type_dict.items():
             if "minmax" in self.corr_dict[data_type].keys():
-                self._minmax_corr(
-                    cols=cols,
-                    **self.corr_dict[data_type]["minmax"]
-                )
+                self._minmax_corr(cols=cols, **self.corr_dict[data_type]["minmax"])
             if "derivative" in self.corr_dict[data_type].keys():
                 self._derivative_corr(
-                    cols=cols,
-                    **self.corr_dict[data_type]["derivative"]
+                    cols=cols, **self.corr_dict[data_type]["derivative"]
                 )
         self.correction_journal["remove_anomalies"] = {
             "missing_values": missing_values_dict(self.corrected_data),
             "gaps_stats": gaps_describe(
-                self.corrected_data, timestep=self.gaps_timedelta)
+                self.corrected_data, timestep=self.gaps_timedelta
+            ),
         }
 
     def fill_nan(self):
@@ -592,7 +582,7 @@ class MeasuredDats:
             function_map = {
                 "linear_interpolation": self._linear_interpolation,
                 "bfill": self._bfill,
-                "ffill": self._ffill
+                "ffill": self._ffill,
             }
 
             for func in self.corr_dict[data_type]["fill_nan"]:
@@ -601,7 +591,8 @@ class MeasuredDats:
         self.correction_journal["fill_nan"] = {
             "missing_values": missing_values_dict(self.corrected_data),
             "gaps_stats": gaps_describe(
-                self.corrected_data, timestep=self.gaps_timedelta)
+                self.corrected_data, timestep=self.gaps_timedelta
+            ),
         }
 
     def resample(self, timestep=None):
@@ -634,10 +625,9 @@ class MeasuredDats:
         ax_dict = self._get_reversed_data_type_dict(cols=cols)
 
         ordered_set_cat = list(dict.fromkeys(ax_dict.values()))
-        ax_map = {cat: f"y{i + 1}"
-                  for i, cat in enumerate(ordered_set_cat)}
+        ax_map = {cat: f"y{i + 1}" for i, cat in enumerate(ordered_set_cat)}
 
-        ax_map[list(ax_map.keys())[0]] = 'y'
+        ax_map[list(ax_map.keys())[0]] = "y"
 
         ax_dict = {k: ax_map[ax_dict[k]] for k in ax_dict.keys()}
 
@@ -645,10 +635,7 @@ class MeasuredDats:
         ax_list = list(ax_map.keys())
         layout_ax_dict["yaxis"] = {"title": ax_list[0]}
         for i, ax in enumerate(ax_list[1:]):
-            layout_ax_dict[f"yaxis{i + 2}"] = {
-                "title": ax,
-                "side": "right"
-            }
+            layout_ax_dict[f"yaxis{i + 2}"] = {"title": ax, "side": "right"}
 
         return ax_dict, layout_ax_dict
 
@@ -662,12 +649,8 @@ class MeasuredDats:
     def _derivative_corr(self, cols, upper_rate, lower_rate):
         df = self.corrected_data.loc[:, cols]
         time_delta = df.index.to_series().diff().dt.total_seconds()
-        abs_der = abs(
-            df.diff().divide(time_delta, axis=0)
-        )
-        abs_der_two = abs(
-            df.diff(periods=2).divide(time_delta, axis=0)
-        )
+        abs_der = abs(df.diff().divide(time_delta, axis=0))
+        abs_der_two = abs(df.diff(periods=2).divide(time_delta, axis=0))
 
         mask_constant = abs_der <= lower_rate
         mask_der = abs_der >= upper_rate
@@ -679,37 +662,36 @@ class MeasuredDats:
         self.corrected_data[mask_to_remove] = np.nan
 
     def _linear_interpolation(self, cols):
-        self._interpolate(cols, method='linear')
+        self._interpolate(cols, method="linear")
 
     def _interpolate(self, cols, method):
         inter = self.corrected_data.loc[:, cols].interpolate(method=method)
         self.corrected_data.loc[:, cols] = inter
 
     def _ffill(self, cols):
-        filled = self.corrected_data.loc[:, cols].fillna(
-            method="ffill"
-        )
+        filled = self.corrected_data.loc[:, cols].fillna(method="ffill")
         self.corrected_data.loc[:, cols] = filled
 
     def _bfill(self, cols):
-        filled = self.corrected_data.loc[:, cols].fillna(
-            method="bfill"
-        )
+        filled = self.corrected_data.loc[:, cols].fillna(method="bfill")
         self.corrected_data.loc[:, cols] = filled
 
     def plot_gaps(
-            self,
-            cols=None,
-            begin=None,
-            end=None,
-            gaps_timestep=dt.timedelta(hours=5),
-            title="Gaps plot",
-            raw_data=False,
-            color_rgb=(243, 132, 48),
-            alpha=0.5):
-
+        self,
+        cols=None,
+        begin=None,
+        end=None,
+        gaps_timestep=None,
+        title="Gaps plot",
+        raw_data=False,
+        color_rgb=(243, 132, 48),
+        alpha=0.5,
+    ):
         if cols is None:
             cols = self.columns
+
+        if gaps_timestep is None:
+            gaps_timestep = dt.timedelta(hours=5)
 
         if raw_data:
             to_plot = select_data(self.data, cols, begin, end)
@@ -727,41 +709,39 @@ class MeasuredDats:
         fig = go.Figure()
 
         for col in cols:
-            y_min = to_plot[
-                cols_data_type[reversed_data_type[col]]].min().min()
-            y_max = to_plot[
-                cols_data_type[reversed_data_type[col]]].max().max()
+            y_min = to_plot[cols_data_type[reversed_data_type[col]]].min().min()
+            y_max = to_plot[cols_data_type[reversed_data_type[col]]].max().max()
 
             add_scatter_and_gaps(
                 figure=fig,
                 series=to_plot[col],
-                gap_series=find_gaps(
-                    data=to_plot, cols=[col], timestep=gaps_timestep)[col],
+                gap_series=find_gaps(data=to_plot, cols=[col], timestep=gaps_timestep)[
+                    col
+                ],
                 color_rgb=color_rgb,
                 alpha=alpha,
                 y_min=y_min,
                 y_max=y_max,
-                yaxis=ax_dict[col]
+                yaxis=ax_dict[col],
             )
 
         fig.update_layout(**layout_ax_dict)
-        fig.update_layout(dict(
-            title=title,
-        ))
+        fig.update_layout(
+            dict(
+                title=title,
+            )
+        )
         fig.update_layout(
             legend=dict(
-                orientation="h",
-                yanchor="top",
-                y=-0.1,
-                xanchor="center",
-                x=0.5),
+                orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5
+            ),
         )
 
         fig.show()
 
-    def plot(self, cols=None, title="Correction plot", plot_raw=False,
-             begin=None, end=None):
-
+    def plot(
+        self, cols=None, title="Correction plot", plot_raw=False, begin=None, end=None
+    ):
         if cols is None:
             cols = self.columns
 
@@ -778,27 +758,24 @@ class MeasuredDats:
                     x=to_plot_raw.index,
                     y=to_plot_raw[col],
                     name=f"{col}_raw",
-                    mode='lines+markers',
-                    line=dict(color=f'rgb(216,79,86)'),
-                    yaxis=ax_dict[col]
+                    mode="lines+markers",
+                    line=dict(color="rgb(216,79,86)"),
+                    yaxis=ax_dict[col],
                 )
 
             fig.add_scattergl(
                 x=to_plot_corr.index,
                 y=to_plot_corr[col],
                 name=f"{col}_corrected",
-                mode='lines+markers',
-                yaxis=ax_dict[col]
+                mode="lines+markers",
+                yaxis=ax_dict[col],
             )
 
         fig.update_layout(**layout_ax_dict)
         fig.update_layout(
             legend=dict(
-                orientation="h",
-                yanchor="top",
-                y=-0.1,
-                xanchor="center",
-                x=0.5),
+                orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5
+            ),
         )
         fig.update_layout(dict(title=title))
 

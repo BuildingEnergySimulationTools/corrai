@@ -30,9 +30,11 @@ setup(
     ],
     python_requires=">=3.7",
     install_requires=[
-        "pandas>=1.2.3",
-        "numpy>=1.17.3",
+        "numpy>=1.21.3",
+        "pandas>=1.3.4,<2",
         "scipy>=1.7.2",
+        "matplotlib>=3.5.1",
+        "plotly>=5.3.1",
     ],
     packages=find_packages(exclude=["tests*"]),
     include_package_data=True,
