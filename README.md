@@ -2,6 +2,7 @@
   <img src="https://github.com/BuildingEnergySimulationTools/corrai/blob/main/logo_corrai.svg" alt="CorrAI" width="200"/>
 </p>
 
+[![codecov](https://codecov.io/gh/BuildingEnergySimulationTools/corrai/branch/main/graph/badge.svg?token=F51O9CXI61)](https://codecov.io/gh/BuildingEnergySimulationTools/corrai)
 
 ## Measured Data Exploration and Enrichment
 
