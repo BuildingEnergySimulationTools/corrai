@@ -203,6 +203,10 @@ def plot_kde_set_point(
      Returns:
          None (the plot is displayed using `fig.show()`).
     """
+    if X.ndim > 1:
+        raise ValueError("plot_kde_set_point plots only a Series or a 1D DataFrame")
+    if isinstance(X, pd.Series):
+        X = X.to_frame()
 
     if fit:
         cluster_col = estimator.fit_predict(X)
