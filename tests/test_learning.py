@@ -99,7 +99,8 @@ class TestLearning:
 
         # Call the function with non-default arguments
         plot_kde_set_point(
-            estimator, x, title="Clustered Timeseries", y_label="test_lab", fit=True)
+            estimator, x, title="Clustered Timeseries", y_label="test_lab", fit=True
+        )
 
     def test_plot_ts_kde(self):
         # Generate test data
@@ -109,5 +110,11 @@ class TestLearning:
         plot_ts_kde(x)
 
         # Call the function with non-default arguments
-        plot_ts_kde(x,  title="Likelihood and data", x_label="x", scaled=False, bandwidth=0.2, xbins=200
-)
+        plot_ts_kde(
+            x,
+            title="Likelihood and data",
+            x_label="x",
+            scaled=False,
+            bandwidth=0.2,
+            xbins=200,
+        )
