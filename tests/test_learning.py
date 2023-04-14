@@ -47,14 +47,18 @@ class TestLearning:
     def test_get_hours_switch(self):
         test_series = pd.Series(
             [0, 0, 1000, 1020, 0.1, 0.3],
-            index=pd.date_range("2009-01-01 00:00:00", freq="H", periods=6),
+            index=pd.date_range(
+                "2009-01-01 00:00:00", freq="H", periods=6, tz="Europe/Paris"
+            ),
             name="flwr",
         )
 
         res = get_hours_switch(test_series, 200)
         ref = pd.Series(
             [2.0],
-            index=pd.date_range("2009-01-01 02:00:00", freq="H", periods=1),
+            index=pd.date_range(
+                "2009-01-01 02:00:00", freq="H", periods=1, tz="Europe/Paris"
+            ),
             name="hour_since_beg_day",
         )
 
@@ -63,7 +67,9 @@ class TestLearning:
         res = get_hours_switch(test_series, 200, switch="negative")
         ref = pd.Series(
             [4.0],
-            index=pd.date_range("2009-01-01 04:00:00", freq="H", periods=1),
+            index=pd.date_range(
+                "2009-01-01 04:00:00", freq="H", periods=1, tz="Europe/Paris"
+            ),
             name="hour_since_beg_day",
         )
 
@@ -72,7 +78,9 @@ class TestLearning:
         res = get_hours_switch(test_series, 200, switch="both")
         ref = pd.Series(
             [2.0, 4.0],
-            index=pd.DatetimeIndex(["2009-01-01 02:00:00", "2009-01-01 04:00:00"]),
+            index=pd.DatetimeIndex(
+                ["2009-01-01 02:00:00", "2009-01-01 04:00:00"], tz="Europe/Paris"
+            ),
             name="hour_since_beg_day",
         )
 
