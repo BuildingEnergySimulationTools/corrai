@@ -68,8 +68,7 @@ class TestCustomTransformers:
         )
 
         ref = pd.DataFrame(
-            {"col1": [np.nan, 2, 3, np.nan, 4],
-             "col2": [np.nan, np.nan, np.nan, 4, 5]}
+            {"col1": [np.nan, 2, 3, np.nan, 4], "col2": [np.nan, np.nan, np.nan, 4, 5]}
         )
 
         dropper = PdDropThreshold(lower=1.1, upper=5)
@@ -97,8 +96,7 @@ class TestCustomTransformers:
         ref = pd.DataFrame(
             {
                 "dumb_column": [5.0, 5.1, np.nan, 6.0, 7.0, np.nan, 6.0, 5.0],
-                "dumb_column2": [5.0, np.nan, 5.1, 6.0, np.nan, 6.0, np.nan,
-                                 np.nan],
+                "dumb_column2": [5.0, np.nan, 5.1, 6.0, np.nan, 6.0, np.nan, np.nan],
             },
             index=time_index,
         )
@@ -122,12 +120,11 @@ class TestCustomTransformers:
 
     def test_pd_time_gradient(self):
         test = (
-                pd.DataFrame(
-                    {"cpt1": [0, 1, 2, 2, 2, 3], "cpt2": [0, 1, 2, 2, 2, 3]},
-                    index=pd.date_range("2009-01-01 00:00:00", freq="10S",
-                                        periods=6),
-                )
-                * 3600
+            pd.DataFrame(
+                {"cpt1": [0, 1, 2, 2, 2, 3], "cpt2": [0, 1, 2, 2, 2, 3]},
+                index=pd.date_range("2009-01-01 00:00:00", freq="10S", periods=6),
+            )
+            * 3600
         )
 
         ref = pd.DataFrame(
@@ -140,13 +137,11 @@ class TestCustomTransformers:
 
         derivator = PdTimeGradient()
 
-        pd.testing.assert_frame_equal(ref, derivator.fit_transform(test),
-                                      rtol=0.01)
+        pd.testing.assert_frame_equal(ref, derivator.fit_transform(test), rtol=0.01)
 
     def test_pd_fill_na(self):
         test = pd.DataFrame(
-            {"cpt1": [0, np.nan, 2, 2, np.nan, 3],
-             "cpt2": [0, 1, 2, 2, np.nan, 3]}
+            {"cpt1": [0, np.nan, 2, 2, np.nan, 3], "cpt2": [0, 1, 2, 2, np.nan, 3]}
         )
 
         ref = pd.DataFrame(
@@ -168,8 +163,7 @@ class TestCustomTransformers:
 
         ref = pd.DataFrame(
             {"col": [2.0]},
-            index=pd.DatetimeIndex(["2009-01-01"], dtype="datetime64[ns]",
-                                   freq="3H"),
+            index=pd.DatetimeIndex(["2009-01-01"], dtype="datetime64[ns]", freq="3H"),
         )
 
         transformer = PdResampler(rule="3H", method=np.mean)
@@ -245,8 +239,7 @@ class TestCustomTransformers:
             ),
         )
 
-        lager = PdAddTimeLag(time_lag=dt.timedelta(hours=1),
-                             drop_resulting_nan=True)
+        lager = PdAddTimeLag(time_lag=dt.timedelta(hours=1), drop_resulting_nan=True)
 
         pd.testing.assert_frame_equal(ref, lager.fit_transform(df))
 
@@ -257,26 +250,12 @@ class TestCustomTransformers:
 
         to_test = gfilter.fit_transform(df)
 
-        g_res = gaussian_filter1d(
-                df.to_numpy()[:, 1],
-                sigma=5,
-                mode='nearest',
-                truncate=4.0
-            )
-
-        to_test_numpy = to_test.to_numpy()
-
         np.testing.assert_almost_equal(
             gaussian_filter1d(
-                df.to_numpy()[:, 0].T,
-                sigma=5,
-                mode='nearest',
-                truncate=4.0
+                df.to_numpy()[:, 0].T, sigma=5, mode="nearest", truncate=4.0
             ),
             to_test.to_numpy()[:, 0],
-            decimal=5
+            decimal=5,
         )
 
         assert list(to_test.columns) == list(df.columns)
-
-
