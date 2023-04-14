@@ -2,9 +2,12 @@ import numpy as np
 import pandas as pd
 import datetime as dt
 
+from scipy.ndimage import gaussian_filter1d
+
 from sklearn.preprocessing import StandardScaler
 
 from corrai.custom_transformers import PdDropna
+from corrai.custom_transformers import PdRenameColumns
 from corrai.custom_transformers import PdSkTransformer
 from corrai.custom_transformers import PdDropThreshold
 from corrai.custom_transformers import PdDropTimeGradient
@@ -14,6 +17,7 @@ from corrai.custom_transformers import PdFillNa
 from corrai.custom_transformers import PdResampler
 from corrai.custom_transformers import PdColumnResampler
 from corrai.custom_transformers import PdAddTimeLag
+from corrai.custom_transformers import PdGaussianFilter1D
 
 
 class TestCustomTransformers:
@@ -24,9 +28,27 @@ class TestCustomTransformers:
 
         dropper = PdDropna(how="any")
 
+        dropper.fit(df)
+        assert list(df.columns) == list(dropper.get_feature_names_out())
+        pd.testing.assert_index_equal(df.index, dropper.index)
         pd.testing.assert_frame_equal(dropper.transform(df), ref)
 
-    def test_pd_scaler(self):
+    def test_pd_rename_columns(self):
+        df = pd.DataFrame({"a": [1.0, 2.0, np.nan], "b": [3.0, 4.0, 5.0]})
+
+        new_cols = ["c", "d"]
+
+        renamer = PdRenameColumns(new_names=new_cols)
+
+        renamer.fit(df)
+        assert list(df.columns) == list(renamer.get_feature_names_out())
+        pd.testing.assert_index_equal(df.index, renamer.index)
+        assert list(renamer.transform(df).columns) == new_cols
+
+        inversed = renamer.inverse_transform(np.zeros((2, 2)))
+        assert list(inversed.columns) == new_cols
+
+    def test_pd_sk_transformer(self):
         df = pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]})
 
         scaler = PdSkTransformer(StandardScaler())
@@ -35,6 +57,10 @@ class TestCustomTransformers:
         ref = pd.DataFrame({"a": [-1.0, 1.0], "b": [-1.0, 1.0]})
 
         pd.testing.assert_frame_equal(to_test, ref)
+        assert list(df.columns) == list(scaler.get_feature_names_out())
+
+        to_inverse = to_test.to_numpy()
+        pd.testing.assert_frame_equal(scaler.inverse_transform(to_inverse), df)
 
     def test_pd_drop_threshold(self):
         df = pd.DataFrame(
@@ -42,12 +68,20 @@ class TestCustomTransformers:
         )
 
         ref = pd.DataFrame(
-            {"col1": [np.nan, 2, 3, np.nan, 4], "col2": [np.nan, np.nan, np.nan, 4, 5]}
+            {"col1": [np.nan, 2, 3, np.nan, 4],
+             "col2": [np.nan, np.nan, np.nan, 4, 5]}
         )
 
         dropper = PdDropThreshold(lower=1.1, upper=5)
+        dropper.fit(df)
+
+        assert list(df.columns) == list(dropper.get_feature_names_out())
 
         pd.testing.assert_frame_equal(dropper.transform(df), ref)
+
+        # check do nothing
+        dropper = PdDropThreshold()
+        pd.testing.assert_frame_equal(dropper.transform(df), df)
 
     def test_pd_drop_time_gradient(self):
         time_index = pd.date_range("2021-01-01 00:00:00", freq="H", periods=8)
@@ -63,14 +97,19 @@ class TestCustomTransformers:
         ref = pd.DataFrame(
             {
                 "dumb_column": [5.0, 5.1, np.nan, 6.0, 7.0, np.nan, 6.0, 5.0],
-                "dumb_column2": [5.0, np.nan, 5.1, 6.0, np.nan, 6.0, np.nan, np.nan],
+                "dumb_column2": [5.0, np.nan, 5.1, 6.0, np.nan, 6.0, np.nan,
+                                 np.nan],
             },
             index=time_index,
         )
 
         dropper = PdDropTimeGradient(lower_rate=0, upper_rate=0.004)
 
-        pd.testing.assert_frame_equal(ref, dropper.transform(df))
+        pd.testing.assert_frame_equal(ref, dropper.fit_transform(df))
+
+        # check do nothing
+        dropper = PdDropTimeGradient()
+        pd.testing.assert_frame_equal(dropper.transform(df), df)
 
     def test_pd_apply_expression(self):
         df = pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]})
@@ -79,15 +118,16 @@ class TestCustomTransformers:
 
         transformer = PdApplyExpression("X * 2")
 
-        pd.testing.assert_frame_equal(ref, transformer.transform(df))
+        pd.testing.assert_frame_equal(ref, transformer.fit_transform(df))
 
     def test_pd_time_gradient(self):
         test = (
-            pd.DataFrame(
-                {"cpt1": [0, 1, 2, 2, 2, 3], "cpt2": [0, 1, 2, 2, 2, 3]},
-                index=pd.date_range("2009-01-01 00:00:00", freq="10S", periods=6),
-            )
-            * 3600
+                pd.DataFrame(
+                    {"cpt1": [0, 1, 2, 2, 2, 3], "cpt2": [0, 1, 2, 2, 2, 3]},
+                    index=pd.date_range("2009-01-01 00:00:00", freq="10S",
+                                        periods=6),
+                )
+                * 3600
         )
 
         ref = pd.DataFrame(
@@ -100,11 +140,13 @@ class TestCustomTransformers:
 
         derivator = PdTimeGradient()
 
-        pd.testing.assert_frame_equal(ref, derivator.transform(test), rtol=0.01)
+        pd.testing.assert_frame_equal(ref, derivator.fit_transform(test),
+                                      rtol=0.01)
 
     def test_pd_fill_na(self):
         test = pd.DataFrame(
-            {"cpt1": [0, np.nan, 2, 2, np.nan, 3], "cpt2": [0, 1, 2, 2, np.nan, 3]}
+            {"cpt1": [0, np.nan, 2, 2, np.nan, 3],
+             "cpt2": [0, 1, 2, 2, np.nan, 3]}
         )
 
         ref = pd.DataFrame(
@@ -126,12 +168,13 @@ class TestCustomTransformers:
 
         ref = pd.DataFrame(
             {"col": [2.0]},
-            index=pd.DatetimeIndex(["2009-01-01"], dtype="datetime64[ns]", freq="3H"),
+            index=pd.DatetimeIndex(["2009-01-01"], dtype="datetime64[ns]",
+                                   freq="3H"),
         )
 
         transformer = PdResampler(rule="3H", method=np.mean)
 
-        pd.testing.assert_frame_equal(ref, transformer.transform(test))
+        pd.testing.assert_frame_equal(ref, transformer.fit_transform(test))
 
     def test_pd_columns_resampler(self):
         np.random.seed(42)
@@ -169,6 +212,18 @@ class TestCustomTransformers:
             ref, column_resampler.fit_transform(df).astype("float"), atol=0.01
         )
 
+        column_resampler = PdColumnResampler(
+            rule="5H",
+            columns_method=[(["col2"], np.mean), (["col1"], np.mean)],
+            remainder="drop",
+        )
+
+        pd.testing.assert_frame_equal(
+            ref[["col2", "col1"]],
+            column_resampler.fit_transform(df).astype("float"),
+            atol=0.01,
+        )
+
     def test_pd_add_time_lag(self):
         df = pd.DataFrame(
             {
@@ -190,6 +245,38 @@ class TestCustomTransformers:
             ),
         )
 
-        lager = PdAddTimeLag(time_lag=dt.timedelta(hours=1), drop_resulting_nan=True)
+        lager = PdAddTimeLag(time_lag=dt.timedelta(hours=1),
+                             drop_resulting_nan=True)
 
         pd.testing.assert_frame_equal(ref, lager.fit_transform(df))
+
+    def test_pd_gaussian_filter(self):
+        df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+
+        gfilter = PdGaussianFilter1D()
+
+        to_test = gfilter.fit_transform(df)
+
+        g_res = gaussian_filter1d(
+                df.to_numpy()[:, 1],
+                sigma=5,
+                mode='nearest',
+                truncate=4.0
+            )
+
+        to_test_numpy = to_test.to_numpy()
+
+        np.testing.assert_almost_equal(
+            gaussian_filter1d(
+                df.to_numpy()[:, 0].T,
+                sigma=5,
+                mode='nearest',
+                truncate=4.0
+            ),
+            to_test.to_numpy()[:, 0],
+            decimal=5
+        )
+
+        assert list(to_test.columns) == list(df.columns)
+
+

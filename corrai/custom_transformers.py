@@ -161,6 +161,7 @@ class PdSkTransformer(TransformerMixin, BaseEstimator):
     def inverse_transform(self, X):
         if isinstance(X, np.ndarray):
             X = pd.DataFrame(X)
+            X.columns = self.columns
         return pd.DataFrame(
             data=self.transformer.inverse_transform(X), index=X.index, columns=X.columns
         )
@@ -745,6 +746,8 @@ class PdAddTimeLag(BaseEstimator, TransformerMixin):
         if feature_marker is None:
             self.feature_marker = str(time_lag) + "_"
         else:
+            if not isinstance(feature_marker, str):
+                raise ValueError("feature_marker must be a string")
             self.feature_marker = feature_marker
 
     def fit(self, X, y=None):
@@ -836,8 +839,5 @@ class PdGaussianFilter1D(BaseEstimator, TransformerMixin):
         gauss_filter = partial(
             gaussian_filter1d, sigma=self.sigma, mode=self.mode, truncate=self.truncate
         )
-        # smooth_function = lambda x: gaussian_filter1d(
-        #     x, sigma=self.sigma, mode=self.mode, truncate=self.truncate
-        # )
 
         return X.apply(gauss_filter)
