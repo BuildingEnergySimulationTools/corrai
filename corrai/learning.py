@@ -19,6 +19,44 @@ def _reshape_1d(sample):
         return sample.flatten()
 
 
+def _2d_n_1_dataframer(X):
+    """
+    Converts a 1D array-like object to a pandas DataFrame with a single column.
+
+    Parameters
+    ----------
+        X (list or numpy.ndarray or pandas.DataFrame): Input array-like object
+        containing the data.
+
+    Returns
+    -------
+    pandas.DataFrame: A pandas DataFrame object with a single column containing the
+    input data.
+
+    Raises
+    ------
+    ValueError: If input data is not a list, numpy.ndarray, or pandas.DataFrame.
+    ValueError: If input data has more than one column.
+    """
+
+    if not isinstance(X, (list, np.ndarray, pd.DataFrame)):
+        raise ValueError(f"X must be one of {list, np.array, pd.DataFrame}")
+
+    if isinstance(X, list):
+        X = pd.DataFrame(np.array(X))
+
+    if isinstance(X, np.ndarray):
+        X = pd.DataFrame(X)
+
+    if X.shape[1] > 1:
+        raise ValueError(
+            f"X has {X.shape[1]} columns "
+            f"KdeSetPointIdentificator only fits 1 times series at a time"
+        )
+
+    return X
+
+
 def get_hours_switch(timeseries, diff_filter_threshold=0, switch="positive"):
     """
     From a time series determine the number of hour since the beginning

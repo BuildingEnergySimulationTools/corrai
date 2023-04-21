@@ -6,6 +6,7 @@ from sklearn.pipeline import Pipeline
 from corrai.learning import KdeSetPointIdentificator
 from corrai.learning import get_hours_switch
 from corrai.learning import plot_kde_set_point, plot_ts_kde
+from corrai.learning import _2d_n_1_dataframer
 import corrai.custom_transformers as ct
 
 from pathlib import Path
@@ -14,6 +15,16 @@ FILES_PATH = Path(__file__).parent / "resources"
 
 
 class TestLearning:
+    def test__2d_n_1_dataframer(self):
+        ref = pd.DataFrame(np.array([1, 2, 3]))
+
+        pd.testing.assert_frame_equal(ref, _2d_n_1_dataframer([1, 2, 3]))
+        pd.testing.assert_frame_equal(ref, _2d_n_1_dataframer(np.array([1, 2, 3])))
+        pd.testing.assert_frame_equal(
+            ref, _2d_n_1_dataframer(np.array([[1], [2], [3]]))
+        )
+        pd.testing.assert_frame_equal(ref, _2d_n_1_dataframer(ref))
+
     def test_kde_set_point_identificator(self):
         data = pd.read_csv(
             FILES_PATH / "kde_test_dataset.csv", index_col=0, parse_dates=True
