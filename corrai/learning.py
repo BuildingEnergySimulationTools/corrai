@@ -19,6 +19,46 @@ def _reshape_1d(sample):
         return sample.flatten()
 
 
+def _2d_n_1_dataframer(X):
+    """
+    Converts a 1D array-like object to a pandas DataFrame with a single column.
+
+    Parameters
+    ----------
+        X (list or numpy.ndarray or pandas.DataFrame): Input array-like object
+        containing the data.
+
+    Returns
+    -------
+    pandas.DataFrame: A pandas DataFrame object with a single column containing the
+    input data.
+
+    Raises
+    ------
+    ValueError: If input data is not a list, numpy.ndarray, or pandas.DataFrame.
+    ValueError: If input data has more than one column.
+    """
+
+    if not isinstance(X, (list, np.ndarray, pd.DataFrame)):
+        raise ValueError(
+            f"X must be one of {list, np.array, pd.DataFrame}, " f"got {type(X)}"
+        )
+
+    if isinstance(X, list):
+        X = pd.DataFrame(np.array(X))
+
+    if isinstance(X, np.ndarray):
+        X = pd.DataFrame(X)
+
+    if X.shape[1] > 1:
+        raise ValueError(
+            f"X has {X.shape[1]} columns "
+            f"KdeSetPointIdentificator only fits 1 times series at a time"
+        )
+
+    return X
+
+
 def get_hours_switch(timeseries, diff_filter_threshold=0, switch="positive"):
     """
     From a time series determine the number of hour since the beginning
@@ -32,7 +72,7 @@ def get_hours_switch(timeseries, diff_filter_threshold=0, switch="positive"):
     :return: pandas Series
     """
     if not isinstance(timeseries, pd.Series):
-        raise ValueError("timeseries must be a Pandas Series object")
+        raise ValueError("timeseries must be a Pandas DataFrame object")
     if not isinstance(timeseries.index, pd.DatetimeIndex):
         raise ValueError("Series index must be a Pandas DatetimeIndex")
 
@@ -129,8 +169,7 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
         self.labels_ = None
 
     def fit(self, X, y=None):
-        if isinstance(X, pd.DataFrame):
-            X = X.to_numpy()
+        X = _2d_n_1_dataframer(X)
 
         tolerance = np.mean(np.abs(X), axis=0) * self.domain_tol
 
@@ -158,11 +197,8 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
         return self
 
     def predict(self, X):
-        if self.set_points is None:
-            raise ValueError("Model not fitted yet. Call 'fit' method")
-
-        if isinstance(X, pd.DataFrame):
-            X = X.to_numpy()
+        X = _2d_n_1_dataframer(X)
+        X = X.to_numpy()
         X = _reshape_1d(X)
 
         x_cluster = np.empty(X.shape[0])
@@ -203,10 +239,7 @@ def plot_kde_set_point(
      Returns:
          None (the plot is displayed using `fig.show()`).
     """
-    if X.ndim > 1:
-        raise ValueError("plot_kde_set_point plots only a Series or a 1D DataFrame")
-    if isinstance(X, pd.Series):
-        X = X.to_frame()
+    X = _2d_n_1_dataframer(X)
 
     if fit:
         cluster_col = estimator.fit_predict(X)
@@ -263,26 +296,26 @@ def plot_kde_set_point(
 
 
 def plot_ts_kde(
-    x, title="Likelihood and data", x_label="", scaled=True, bandwidth=0.1, xbins=100
+    X, title="Likelihood and data", x_label="", scaled=True, bandwidth=0.1, xbins=100
 ):
-    if isinstance(x, pd.Series):
-        x = x.to_frame()
-    x = x.dropna()
+    X = _2d_n_1_dataframer(X)
+
+    X = X.dropna()
 
     scaler = StandardScaler()
     if scaled:
-        x = scaler.fit_transform(x)
+        X = scaler.fit_transform(X)
     else:
-        x = x.to_numpy()
+        X = X.to_numpy()
 
     domain = np.linspace(
-        np.min(x, axis=0) - (np.mean(np.abs(x), axis=0) * 0.15),
-        np.max(x, axis=0) + (np.mean(np.abs(x), axis=0) * 0.15),
+        np.min(X, axis=0) - (np.mean(np.abs(X), axis=0) * 0.15),
+        np.max(X, axis=0) + (np.mean(np.abs(X), axis=0) * 0.15),
         1000,
     )
 
     kde = KernelDensity(bandwidth=bandwidth)
-    kde.fit(x)
+    kde.fit(X)
 
     log_like_domain = np.exp(kde.score_samples(domain))
 
@@ -297,7 +330,7 @@ def plot_ts_kde(
     )
     fig.add_trace(
         go.Histogram(
-            x=x.squeeze(),
+            x=X.squeeze(),
             histnorm="probability density",
             name="measured data",
             nbinsx=xbins,
