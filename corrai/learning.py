@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from copy import deepcopy
 
 from sklearn.base import BaseEstimator, ClusterMixin
 from sklearn.neighbors import KernelDensity
@@ -14,6 +15,16 @@ import plotly.graph_objects as go
 
 import corrai.custom_transformers as ct
 from sklearn.pipeline import make_pipeline
+
+
+def _reshape_2d_df(sample):
+    if isinstance(sample, pd.DataFrame):
+        return sample
+    if isinstance(sample, pd.Series):
+        return sample.to_frame()
+    elif isinstance(sample, np.ndarray) and sample.ndim == 1:
+        x = np.reshape(sample, (-1, 1))
+        return pd.DataFrame(x)
 
 
 def _reshape_1d(sample):
@@ -183,7 +194,7 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
             self.domain_n_sample,
         )
 
-        self.kde.fit(X)
+        self.kde.fit(X.to_numpy())
 
         func_sample = self.kde.score_samples(self.domain)
         max_index = argrelextrema(func_sample, np.greater)
@@ -254,6 +265,7 @@ def set_point_identifier(X, estimator=None, sk_scaler=None, cols=None):
     to each column of the input data, and then finding the peaks of the density estimate,
     which shall correspond to the set points.
     """
+    X = _reshape_2d_df(X)
 
     if not isinstance(X.index, pd.DatetimeIndex):
         raise ValueError("X index must be a DateTimeIndex")
@@ -310,11 +322,11 @@ def moving_window_set_point_identifier(
 ):
     if estimator is None:
         estimator = KdeSetPointIdentificator()
-        print(estimator.__class__)
     if not isinstance(estimator, KdeSetPointIdentificator):
-        print(estimator.__class__)
-        print(KdeSetPointIdentificator)
-        raise ValueError("estimator must be a corrai KdeSetPointIdentificator object")
+        raise ValueError(
+            f"estimator must be a corrai KdeSetPointIdentificator object "
+            f"got {type(estimator)}"
+        )
     if not isinstance(window_size, dt.timedelta):
         raise ValueError("window_size must be a datetime.timedelta object")
     if not isinstance(slide_size, dt.timedelta):
@@ -335,12 +347,15 @@ def moving_window_set_point_identifier(
     while start_date <= end_date - window_size:
         selected_data = X.loc[start_date : start_date + window_size, cols]
         groups_res_list.append(
-            set_point_identifier(data=selected_data, estimator=estimator)
+            set_point_identifier(X=selected_data, estimator=estimator)
         )
 
         start_date += slide_size
 
-    return pd.concat(groups_res_list)
+    if not all(v is None for v in groups_res_list):
+        return pd.concat(groups_res_list)
+    else:
+        return None
 
 
 def plot_kde_set_point(
