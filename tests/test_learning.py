@@ -106,11 +106,15 @@ class TestLearning:
         estimator.fit(x.to_frame())
 
         # Call the function with default arguments
-        plot_kde_set_point(estimator, x)
+        plot_kde_set_point(estimator, x.to_frame())
 
         # Call the function with non-default arguments
         plot_kde_set_point(
-            estimator, x, title="Clustered Timeseries", y_label="test_lab", fit=True
+            estimator,
+            x.to_frame(),
+            title="Clustered Timeseries",
+            y_label="test_lab",
+            fit=True,
         )
 
     def test_plot_ts_kde(self):
@@ -118,11 +122,11 @@ class TestLearning:
         x = pd.Series(np.random.randn(100), name="x")
 
         # Call the function with default arguments
-        plot_ts_kde(x)
+        plot_ts_kde(x.to_frame())
 
         # Call the function with non-default arguments
         plot_ts_kde(
-            x,
+            x.to_frame(),
             title="Likelihood and data",
             x_label="x",
             scaled=False,
