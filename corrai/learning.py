@@ -32,7 +32,7 @@ def get_hours_switch(timeseries, diff_filter_threshold=0, switch="positive"):
     :return: pandas Series
     """
     if not isinstance(timeseries, pd.Series):
-        raise ValueError("timeseries must be a Pandas Series object")
+        raise ValueError("timeseries must be a Pandas DataFrame object")
     if not isinstance(timeseries.index, pd.DatetimeIndex):
         raise ValueError("Series index must be a Pandas DatetimeIndex")
 
@@ -129,6 +129,12 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
         self.labels_ = None
 
     def fit(self, X, y=None):
+        if X.shape[1] > 1:
+            raise ValueError(
+                f"X has {X.shape[1]} columns"
+                f"KdeSetPointIdentificator only fits 1 times series at a time"
+            )
+
         if isinstance(X, pd.DataFrame):
             X = X.to_numpy()
 
@@ -160,6 +166,12 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
     def predict(self, X):
         if self.set_points is None:
             raise ValueError("Model not fitted yet. Call 'fit' method")
+
+        if X.shape[1] > 1:
+            raise ValueError(
+                f"X has {X.shape[1]} columns"
+                f"KdeSetPointIdentificator only fits 1 times series at a time"
+            )
 
         if isinstance(X, pd.DataFrame):
             X = X.to_numpy()
