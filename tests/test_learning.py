@@ -106,12 +106,12 @@ class TestLearning:
         estimator.fit(x.to_frame())
 
         # Call the function with default arguments
-        plot_kde_set_point(estimator, x.to_frame())
+        plot_kde_set_point(x.to_frame(), estimator)
 
         # Call the function with non-default arguments
         plot_kde_set_point(
-            estimator,
             x.to_frame(),
+            estimator,
             title="Clustered Timeseries",
             y_label="test_lab",
             fit=True,

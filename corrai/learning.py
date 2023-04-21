@@ -7,9 +7,13 @@ from sklearn.preprocessing import StandardScaler
 from scipy.signal import argrelextrema
 
 import itertools
+import datetime as dt
 
 import plotly.colors as colors
 import plotly.graph_objects as go
+
+import corrai.custom_transformers as ct
+from sklearn.pipeline import make_pipeline
 
 
 def _reshape_1d(sample):
@@ -212,8 +216,135 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
         return np.nan_to_num(x_cluster, nan=-1)
 
 
+def set_point_identifier(X, estimator=None, sk_scaler=None, cols=None):
+    """
+    Identifies set points in a time series data using kernel density estimation.
+
+    Parameters
+    ----------
+    X : pandas.DataFrame
+        The input data containing time series data to identify set points in. The data
+        must have a DateTimeIndex.
+    estimator : object, optional
+        A corrai KdeSetPointIdentificator. Default is None, which will use a
+        `KdeSetPointIdentificator` object with default parameters values.
+    sk_scaler : object, optional
+        A scikit-learn scaler object that can transform data.
+        Default is None, which will use a `StandardScaler` object wrapped in a
+        corrai `PdSkTransformer` object.
+    cols : list, optional
+        The column names to identify set points in. Default is None, which will
+        identify set points in all columns.
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        A DataFrame containing the identified set points for each specified column,
+        with MultiIndex row labels indicating the period and the set point number.
+        Returns None if no set points were identified.
+
+    Raises
+    ------
+    ValueError
+        If the input data is not a DataFrame and does not have a DateTimeIndex.
+
+    Notes
+    -----
+    The set point identification is performed by fitting the kernel density estimator
+    to each column of the input data, and then finding the peaks of the density estimate,
+    which shall correspond to the set points.
+    """
+
+    if not isinstance(X.index, pd.DatetimeIndex):
+        raise ValueError("X index must be a DateTimeIndex")
+
+    if cols is None:
+        cols = X.columns
+
+    if sk_scaler is None:
+        pd_scaler = ct.PdSkTransformer(StandardScaler())
+    else:
+        pd_scaler = ct.PdSkTransformer(sk_scaler)
+
+    if estimator is None:
+        estimator = KdeSetPointIdentificator()
+
+    model = make_pipeline(pd_scaler, estimator)
+    pd_scaler = model.named_steps["pdsktransformer"]
+    kde = model.named_steps["kdesetpointidentificator"]
+
+    duration = X.index[-1] - X.index[-0]
+
+    period = pd.Period(
+        X.index[0].strftime("%Y-%m-%d"),
+        day=duration.days,
+        second=duration.seconds,
+    )
+
+    multi_series_list = []
+    for col in cols:
+        model.fit(X[[col]])
+        try:
+            set_points = pd_scaler.inverse_transform(kde.set_points)
+        except ValueError:
+            set_points = None
+
+        if set_points is not None:
+            index_tuple = [
+                (period, f"set_point_{i}") for i in range(set_points.shape[0])
+            ]
+            multiindex = pd.MultiIndex.from_tuples(index_tuple)
+            set_points_series = pd.Series(
+                set_points.to_numpy().flatten(), index=multiindex, name=col
+            )
+            multi_series_list.append(set_points_series)
+
+    if multi_series_list:
+        return pd.concat(multi_series_list, axis=1)
+    else:
+        return None
+
+
+def moving_window_set_point_identifier(
+    X, window_size, slide_size, estimator=None, cols=None
+):
+    if estimator is None:
+        estimator = KdeSetPointIdentificator()
+        print(estimator.__class__)
+    if not isinstance(estimator, KdeSetPointIdentificator):
+        print(estimator.__class__)
+        print(KdeSetPointIdentificator)
+        raise ValueError("estimator must be a corrai KdeSetPointIdentificator object")
+    if not isinstance(window_size, dt.timedelta):
+        raise ValueError("window_size must be a datetime.timedelta object")
+    if not isinstance(slide_size, dt.timedelta):
+        raise ValueError("window_size must be a datetime.timedelta object")
+    if not isinstance(X, pd.DataFrame):
+        raise ValueError("data must be a Pandas DataFrame")
+    if not isinstance(X.index, pd.DatetimeIndex):
+        raise ValueError("data index be a Pandas DateTimeIndex")
+
+    if cols is None:
+        cols = X.columns
+
+    start_date = X.index[0]
+    end_date = X.index[-1]
+
+    groups_res_list = []
+
+    while start_date <= end_date - window_size:
+        selected_data = X.loc[start_date : start_date + window_size, cols]
+        groups_res_list.append(
+            set_point_identifier(data=selected_data, estimator=estimator)
+        )
+
+        start_date += slide_size
+
+    return pd.concat(groups_res_list)
+
+
 def plot_kde_set_point(
-    estimator, X, title="Clustered Timeseries", y_label="[-]", fit=False
+    X, estimator, title="Clustered Timeseries", y_label="[-]", fit=False
 ):
     """
     Plots a scatter plot of a time series with markers colored by cluster,
