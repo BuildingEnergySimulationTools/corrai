@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from copy import deepcopy
 
 from sklearn.base import BaseEstimator, ClusterMixin
 from sklearn.neighbors import KernelDensity
@@ -230,6 +229,8 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
 def set_point_identifier(X, estimator=None, sk_scaler=None, cols=None):
     """
     Identifies set points in a time series data using kernel density estimation.
+    Uses CorrAI KdeSetPointIdentificator combined with a transformer to scale the data.
+    If no scaler is provided, the function uses scikit learn StandardScaler
 
     Parameters
     ----------
@@ -262,8 +263,8 @@ def set_point_identifier(X, estimator=None, sk_scaler=None, cols=None):
     Notes
     -----
     The set point identification is performed by fitting the kernel density estimator
-    to each column of the input data, and then finding the peaks of the density estimate,
-    which shall correspond to the set points.
+    to each column of the input data, and then finding the peaks of the density
+    estimate, which shall correspond to the set points.
     """
     X = _reshape_2d_df(X)
 
@@ -288,7 +289,7 @@ def set_point_identifier(X, estimator=None, sk_scaler=None, cols=None):
     duration = X.index[-1] - X.index[-0]
 
     period = pd.Period(
-        X.index[0].strftime("%Y-%m-%d"),
+        X.index[0].strftime("%Y-%m-%d %H-%M-%S"),
         day=duration.days,
         second=duration.seconds,
     )
@@ -318,7 +319,7 @@ def set_point_identifier(X, estimator=None, sk_scaler=None, cols=None):
 
 
 def moving_window_set_point_identifier(
-    X, window_size, slide_size, estimator=None, cols=None
+    X, window_size, slide_size, estimator=None, sk_scaler=None, cols=None
 ):
     if estimator is None:
         estimator = KdeSetPointIdentificator()
@@ -347,7 +348,9 @@ def moving_window_set_point_identifier(
     while start_date <= end_date - window_size:
         selected_data = X.loc[start_date : start_date + window_size, cols]
         groups_res_list.append(
-            set_point_identifier(X=selected_data, estimator=estimator)
+            set_point_identifier(
+                X=selected_data, estimator=estimator, sk_scaler=sk_scaler
+            )
         )
 
         start_date += slide_size
@@ -359,38 +362,39 @@ def moving_window_set_point_identifier(
 
 
 def plot_kde_set_point(
-    X, estimator, title="Clustered Timeseries", y_label="[-]", fit=False
+    X, estimator=None, sk_scaler=None, title="Clustered Timeseries", y_label="[-]"
 ):
     """
-    Plots a scatter plot of a time series with markers colored by cluster,
-    along with an annotation in the upper right corner showing the different
-    cluster colors.
+    Plots a scatter plot of the input data with different colors representing the
+    clusters of the data points identified by the `KdeSetPointIdentificator` estimator.
 
-     Args:
-         estimator: A clustering estimator that has a `fit_predict` or
-         `predict` method. This estimator is used to assign cluster labels to
-          the data.
-
-         X: A pandas Series or DataFrame with a time index and numeric values.
-          If X is a DataFrame, each column is treated as a separate time series
-          and plotted separately.
-
-         title: (optional) The title of the plot.
-
-         y_label: (optional) The label of the y-axis.
-
-         fit: (optional) Whether to call the `fit_predict` method of the
-          estimator instead of the `predict` method.
-
-     Returns:
-         None (the plot is displayed using `fig.show()`).
+    Parameters
+    ----------
+        X : pandas.DataFrame
+            The input data with shape (n_samples, 1).
+        estimator : corrai.learning.KdeSetPointIdentificator, optional
+            An instance of KdeSetPointIdentificator to use for clustering the data.
+            Defaults to `KdeSetPointIdentificator` with default values.
+        sk_scaler : object, optional
+            An instance of the scaler to use for preprocessing the
+            data. Defaults to `StandardScaler`.
+        title : str, optional
+            The title of the plot. Defaults to "Clustered Timeseries".
+        y_label : str
+            The label of the y-axis. Defaults to "[-]".
     """
     X = _2d_n_1_dataframer(X)
 
-    if fit:
-        cluster_col = estimator.fit_predict(X)
+    if sk_scaler is None:
+        pd_scaler = ct.PdSkTransformer(StandardScaler())
     else:
-        cluster_col = estimator.predict(X)
+        pd_scaler = ct.PdSkTransformer(sk_scaler)
+
+    if estimator is None:
+        estimator = KdeSetPointIdentificator()
+
+    model = make_pipeline(pd_scaler, estimator)
+    cluster_col = model.fit_predict(X)
 
     color_dict = {
         key: value
@@ -441,9 +445,25 @@ def plot_kde_set_point(
     fig.show()
 
 
-def plot_ts_kde(
+def plot_time_series_kde(
     X, title="Likelihood and data", x_label="", scaled=True, bandwidth=0.1, xbins=100
 ):
+    """
+    Plots the likelihood function and histogram of the input data as estimated by
+    kernel density estimation.
+
+    Parameters
+    ----------
+        X (pandas.DataFrame): The input data with shape (n_samples, n_features).
+        title (str): The title of the plot. Defaults to "Likelihood and data".
+        x_label (str): The label of the x-axis. Defaults to "".
+        scaled (bool): Whether to scale the input data using `StandardScaler`.
+            Defaults to True.
+        bandwidth (float): The bandwidth parameter for the kernel density estimator.
+            Defaults to 0.1.
+        xbins (int): The number of bins to use for the histogram. Defaults to 100.
+    """
+
     X = _2d_n_1_dataframer(X)
 
     X = X.dropna()
