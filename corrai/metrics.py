@@ -18,8 +18,7 @@ def nmbe(y_pred, y_true):
         y_true, y_pred, "uniform_average"
     )
 
-    np.sum((y_pred - y_true))
-    return np.sum((y_pred - y_true)) / np.sum(y_true) * 100
+    return np.sum(y_pred - y_true) / np.sum(y_true) * 100
 
 
 def cv_rmse(y_pred, y_true):
