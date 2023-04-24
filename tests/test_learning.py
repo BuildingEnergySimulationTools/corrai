@@ -5,7 +5,7 @@ from sklearn.pipeline import Pipeline
 
 from corrai.learning import KdeSetPointIdentificator
 from corrai.learning import get_hours_switch
-from corrai.learning import plot_kde_set_point, plot_ts_kde
+from corrai.learning import plot_kde_set_point, plot_time_series_kde
 from corrai.learning import _2d_n_1_dataframer
 import corrai.custom_transformers as ct
 
@@ -114,18 +114,17 @@ class TestLearning:
             estimator,
             title="Clustered Timeseries",
             y_label="test_lab",
-            fit=True,
         )
 
-    def test_plot_ts_kde(self):
+    def test_plot_time_series_kde(self):
         # Generate test data
         x = pd.Series(np.random.randn(100), name="x")
 
         # Call the function with default arguments
-        plot_ts_kde(x.to_frame())
+        plot_time_series_kde(x.to_frame())
 
         # Call the function with non-default arguments
-        plot_ts_kde(
+        plot_time_series_kde(
             x.to_frame(),
             title="Likelihood and data",
             x_label="x",
