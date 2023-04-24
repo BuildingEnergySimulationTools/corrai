@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from pymoo.core.problem import ElementwiseProblem
-from pymoo.core.variable import Integer, Real, Choice
+from pymoo.core.variable import Integer, Real, Choice, Binary
 
 
 class ModelicaFunction:
@@ -70,6 +70,8 @@ class MyMixedProblem(ElementwiseProblem):
                 var = Real(bounds=bounds)
             elif vtype == "Choice":
                 var = Choice(options=bounds)
+            elif vtype == "Binary":
+                var = Binary()
             variable_string[name] = var
 
         super().__init__(vars=variable_string,
