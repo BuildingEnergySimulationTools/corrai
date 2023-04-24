@@ -5,10 +5,12 @@ from sklearn.pipeline import Pipeline
 
 from corrai.learning import KdeSetPointIdentificator
 from corrai.learning import get_hours_switch
-from corrai.learning import plot_kde_set_point, plot_ts_kde
+from corrai.learning import plot_kde_set_point, plot_time_series_kde
 from corrai.learning import _2d_n_1_dataframer
+from corrai.learning import set_point_identifier, moving_window_set_point_identifier
 import corrai.custom_transformers as ct
 
+import datetime as dt
 from pathlib import Path
 
 FILES_PATH = Path(__file__).parent / "resources"
@@ -106,26 +108,25 @@ class TestLearning:
         estimator.fit(x.to_frame())
 
         # Call the function with default arguments
-        plot_kde_set_point(estimator, x.to_frame())
+        plot_kde_set_point(x.to_frame(), estimator)
 
         # Call the function with non-default arguments
         plot_kde_set_point(
-            estimator,
             x.to_frame(),
+            estimator,
             title="Clustered Timeseries",
             y_label="test_lab",
-            fit=True,
         )
 
-    def test_plot_ts_kde(self):
+    def test_plot_time_series_kde(self):
         # Generate test data
         x = pd.Series(np.random.randn(100), name="x")
 
         # Call the function with default arguments
-        plot_ts_kde(x.to_frame())
+        plot_time_series_kde(x.to_frame())
 
         # Call the function with non-default arguments
-        plot_ts_kde(
+        plot_time_series_kde(
             x.to_frame(),
             title="Likelihood and data",
             x_label="x",
@@ -133,3 +134,65 @@ class TestLearning:
             bandwidth=0.2,
             xbins=200,
         )
+
+    def test_set_point_identifier(self):
+        f_data = pd.read_csv(
+            FILES_PATH / "kde_false_data.csv", index_col=0, parse_dates=True
+        )
+
+        res = set_point_identifier(
+            f_data, estimator=KdeSetPointIdentificator(bandwidth=0.1, lik_filter=0.6)
+        )
+
+        ref = pd.DataFrame(
+            {
+                "a": {
+                    (
+                        pd.Period("2009-01-01 00:00", "H"),
+                        "set_point_0",
+                    ): 122.65772294951199,
+                    (
+                        pd.Period("2009-01-01 00:00", "H"),
+                        "set_point_1",
+                    ): 241.75480686502476,
+                    (
+                        pd.Period("2009-01-01 00:00", "H"),
+                        "set_point_2",
+                    ): 387.6906702544559,
+                }
+            }
+        )
+
+        pd.testing.assert_frame_equal(res, ref)
+
+    def test_moving_window_set_point_identifier(self):
+        f_data = pd.read_csv(
+            FILES_PATH / "kde_false_data.csv", index_col=0, parse_dates=True
+        )
+
+        res = moving_window_set_point_identifier(
+            f_data,
+            window_size=dt.timedelta(hours=10),
+            slide_size=dt.timedelta(hours=10),
+        )
+
+        ref = pd.DataFrame(
+            {
+                "a": {
+                    (
+                        pd.Period("2009-01-01 00:00", "H"),
+                        "set_point_0",
+                    ): 122.28125863629094,
+                    (
+                        pd.Period("2009-01-01 00:00", "H"),
+                        "set_point_1",
+                    ): 384.76032496023265,
+                    (
+                        pd.Period("2009-01-01 10:00", "H"),
+                        "set_point_0",
+                    ): 245.13766266266265,
+                }
+            }
+        )
+
+        pd.testing.assert_frame_equal(res, ref)
