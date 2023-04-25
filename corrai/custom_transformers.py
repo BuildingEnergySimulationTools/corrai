@@ -520,11 +520,11 @@ class PdResampler(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y=None):
         self.columns = X.columns
-        # Not very clean. perform dumb resampling just to get output index
-        self.resampled_index = X.resample(self.rule).max().index
+        self.resampled_index = X.resample(self.rule).asfreq()
         return self
 
     def transform(self, X):
+        X = X.apply(pd.to_numeric)
         X_resampled = X.resample(self.rule).agg(self.method)
         self.resampled_index = X_resampled.index
         return X_resampled
