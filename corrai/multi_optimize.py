@@ -31,22 +31,19 @@ class ModelicaFunction:
         res = self.simulator.get_results()
 
         res_series = pd.Series(dtype='float64')
-
         solo_ind_names = self.indicators
-
         if self.reference_dict is not None:
             for k in self.reference_dict.keys():
                 res_series[k] = self.agg_methods_dict[k](
                     res[k], self.reference_df[self.reference_dict[k]]
                 )
+
             solo_ind_names = [
-                i for i in self.indicators if i not in self.reference_dict.keys]
+                i for i in self.indicators if i not in self.reference_dict.keys()]
 
         for ind in solo_ind_names:
-            # res_series[ind] = res[ind]
             res_series[ind] = self.agg_methods_dict[ind](res[ind])
 
-        print(res_series)
         return res_series
 
 
@@ -75,7 +72,6 @@ class MyProblem(ElementwiseProblem):
 
         out["F"] = list(res[self.function_names])
         out["G"] = list(res[self.constraint_names])
-
 
 class MyMixedProblem(ElementwiseProblem):
     def __init__(self, parameters, mf_list, pyf_list, function_names, constraint_names):
