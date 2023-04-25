@@ -30,7 +30,7 @@ class ModelicaFunction:
         self.simulator.simulate()
         res = self.simulator.get_results()
 
-        res_series = pd.Series(dtype='float64')
+        res_series = pd.Series(dtype="float64")
         solo_ind_names = self.indicators
         if self.reference_dict is not None:
             for k in self.reference_dict.keys():
@@ -39,7 +39,8 @@ class ModelicaFunction:
                 )
 
             solo_ind_names = [
-                i for i in self.indicators if i not in self.reference_dict.keys()]
+                i for i in self.indicators if i not in self.reference_dict.keys()
+            ]
 
         for ind in solo_ind_names:
             res_series[ind] = self.agg_methods_dict[ind](res[ind])
@@ -48,10 +49,12 @@ class ModelicaFunction:
 
 
 class MyProblem(ElementwiseProblem):
-    def __init__(self, parameters, mf_list, pyf_list, function_names, constraint_names):
+    def __init__(
+        self, parameters, obj_func_list, func_list, function_names, constraint_names
+    ):
         self.parameters = parameters
-        self.mf_list = mf_list
-        self.pyf_list = pyf_list
+        self.obj_func_list = obj_func_list  # objects with methods functions
+        self.func_list = func_list
         self.function_names = function_names
         self.constraint_names = constraint_names
 
@@ -66,12 +69,13 @@ class MyProblem(ElementwiseProblem):
     def _evaluate(self, x, out, *args, **kwargs):
         current_param = {param["name"]: val for param, val in zip(self.parameters, x)}
         res = pd.concat(
-            [m.function(current_param) for m in self.mf_list]
-            + [pyf(current_param) for pyf in self.pyf_list]
+            [m.function(current_param) for m in self.obj_func_list]
+            + [pyf(current_param) for pyf in self.func_list]
         )
 
         out["F"] = list(res[self.function_names])
         out["G"] = list(res[self.constraint_names])
+
 
 class MyMixedProblem(ElementwiseProblem):
     def __init__(self, parameters, mf_list, pyf_list, function_names, constraint_names):
