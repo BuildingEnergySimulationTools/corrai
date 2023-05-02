@@ -4,50 +4,6 @@ from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Integer, Real, Choice, Binary
 
 
-class ModelicaFunction:
-    def __init__(
-        self,
-        simulator,
-        param_dict,
-        indicators=None,
-        agg_methods_dict=None,
-        reference_dict=None,
-        reference_df=None,
-    ):
-        self.simulator = simulator
-        self.param_dict = param_dict
-        if indicators is None:
-            self.indicators = simulator.output_list
-        else:
-            self.indicators = indicators
-        self.agg_methods_dict = agg_methods_dict or [np.mean for _ in self.indicators]
-        self.reference_dict = reference_dict
-        self.reference_df = reference_df
-
-    def function(self, x_dict):
-        temp_dict = {param["name"]: x_dict[param["name"]] for param in self.param_dict}
-        self.simulator.set_param_dict(temp_dict)
-        self.simulator.simulate()
-        res = self.simulator.get_results()
-
-        res_series = pd.Series(dtype="float64")
-        solo_ind_names = self.indicators
-        if self.reference_dict is not None:
-            for k in self.reference_dict.keys():
-                res_series[k] = self.agg_methods_dict[k](
-                    res[k], self.reference_df[self.reference_dict[k]]
-                )
-
-            solo_ind_names = [
-                i for i in self.indicators if i not in self.reference_dict.keys()
-            ]
-
-        for ind in solo_ind_names:
-            res_series[ind] = self.agg_methods_dict[ind](res[ind])
-
-        return res_series
-
-
 class MyProblem(ElementwiseProblem):
     def __init__(
         self, parameters, obj_func_list, func_list, function_names, constraint_names
