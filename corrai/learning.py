@@ -13,64 +13,10 @@ import plotly.colors as colors
 import plotly.graph_objects as go
 
 import corrai.custom_transformers as ct
+from corrai.utils import as_1_column_dataframe
+from corrai.utils import _reshape_1d
+
 from sklearn.pipeline import make_pipeline
-
-
-def _reshape_2d_df(sample):
-    if isinstance(sample, pd.DataFrame):
-        return sample
-    if isinstance(sample, pd.Series):
-        return sample.to_frame()
-    elif isinstance(sample, np.ndarray) and sample.ndim == 1:
-        x = np.reshape(sample, (-1, 1))
-        return pd.DataFrame(x)
-
-
-def _reshape_1d(sample):
-    if isinstance(sample, pd.DataFrame):
-        return sample.squeeze()
-    elif isinstance(sample, np.ndarray):
-        return sample.flatten()
-
-
-def _2d_n_1_dataframer(X):
-    """
-    Converts a 1D array-like object to a pandas DataFrame with a single column.
-
-    Parameters
-    ----------
-        X (list or numpy.ndarray or pandas.DataFrame): Input array-like object
-        containing the data.
-
-    Returns
-    -------
-    pandas.DataFrame: A pandas DataFrame object with a single column containing the
-    input data.
-
-    Raises
-    ------
-    ValueError: If input data is not a list, numpy.ndarray, or pandas.DataFrame.
-    ValueError: If input data has more than one column.
-    """
-
-    if not isinstance(X, (list, np.ndarray, pd.DataFrame)):
-        raise ValueError(
-            f"X must be one of {list, np.array, pd.DataFrame}, " f"got {type(X)}"
-        )
-
-    if isinstance(X, list):
-        X = pd.DataFrame(np.array(X))
-
-    if isinstance(X, np.ndarray):
-        X = pd.DataFrame(X)
-
-    if X.shape[1] > 1:
-        raise ValueError(
-            f"X has {X.shape[1]} columns "
-            f"KdeSetPointIdentificator only fits 1 times series at a time"
-        )
-
-    return X
 
 
 def get_hours_switch(timeseries, diff_filter_threshold=0, switch="positive"):
@@ -183,7 +129,7 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
         self.labels_ = None
 
     def fit(self, X, y=None):
-        X = _2d_n_1_dataframer(X)
+        X = as_1_column_dataframe(X)
 
         tolerance = np.mean(np.abs(X), axis=0) * self.domain_tol
 
@@ -211,7 +157,7 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
         return self
 
     def predict(self, X):
-        X = _2d_n_1_dataframer(X)
+        X = as_1_column_dataframe(X)
         X = X.to_numpy()
         X = _reshape_1d(X)
 
@@ -266,7 +212,6 @@ def set_point_identifier(X, estimator=None, sk_scaler=None, cols=None):
     to each column of the input data, and then finding the peaks of the density
     estimate, which shall correspond to the set points.
     """
-    X = _reshape_2d_df(X)
 
     if not isinstance(X.index, pd.DatetimeIndex):
         raise ValueError("X index must be a DateTimeIndex")
@@ -383,7 +328,7 @@ def plot_kde_set_point(
         y_label : str
             The label of the y-axis. Defaults to "[-]".
     """
-    X = _2d_n_1_dataframer(X)
+    X = as_1_column_dataframe(X)
 
     if sk_scaler is None:
         pd_scaler = ct.PdSkTransformer(StandardScaler())
@@ -464,7 +409,7 @@ def plot_time_series_kde(
         xbins (int): The number of bins to use for the histogram. Defaults to 100.
     """
 
-    X = _2d_n_1_dataframer(X)
+    X = as_1_column_dataframe(X)
 
     X = X.dropna()
 
