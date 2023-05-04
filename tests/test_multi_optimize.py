@@ -2,13 +2,9 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
-from sklearn.metrics import mean_squared_error, mean_absolute_error
-
 from corrai.multi_optimize import MyProblem, MyMixedProblem
-from corrai.metrics import nmbe, cv_rmse
-from modelitool.functiongenerator import ModelicaFunction
-from pymoo.algorithms.moo.nsga2 import NSGA2
 
+from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.soo.nonconvex.ga import GA
 from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
@@ -17,73 +13,68 @@ from pymoo.operators.sampling.rnd import IntegerRandomSampling
 from pymoo.algorithms.soo.nonconvex.de import DE
 from pymoo.operators.sampling.lhs import LHS
 from pymoo.optimize import minimize
-from modelitool.simulate import Simulator
-# from pymoo.core.variable import Integer, Real, Choice, Binary
+from pymoo.algorithms.moo.nsga2 import RankAndCrowdingSurvival
+from pymoo.core.mixed import MixedVariableGA
+
 
 PACKAGE_DIR = Path(__file__).parent / "TestLib"
 
 
 def py_func_rosen(x_dict):
     return pd.Series(
-        (1 - x_dict['x.k']) ** 2 + 100 * (x_dict['y.k'] - x_dict['x.k'] ** 2) ** 2,
+        (1 - x_dict['x']) ** 2 + 100 * (x_dict['y'] - x_dict['x'] ** 2) ** 2,
         index=["f1"])
 
 
-class MyObject1:
+class MyObject_BinhandKorn1:
     def function(self, x):
-        f1 = 4 * x['x.k'] ** 2 + 4 * x['y.k'] ** 2
-        f2 = (x['x.k'] - 5) ** 2 + (x['y.k'] - 5) ** 2
-        g1 = (x['x.k'] - 5) ** 2 + x['y.k'] ** 2 - 25
+        f1 = 4 * x['x'] ** 2 + 4 * x['y'] ** 2
+        f2 = (x['x'] - 5) ** 2 + (x['y'] - 5) ** 2
+        g1 = (x['x'] - 5) ** 2 + x['y'] ** 2 - 25
         return pd.Series([f1, f2, g1], index=["f1", "f2", "g1"])
 
 
-class MyObject2:
+class MyObject_BinhandKorn2:
     def function(self, x):
-        g2 = 7.7 - (x['x.k'] - 8) ** 2 - (x['y.k'] + 3) ** 2
+        g2 = 7.7 - (x['x'] - 8) ** 2 - (x['y'] + 3) ** 2
         return pd.Series([g2], index=["g2"])
 
+class MyObject_mixed:
+    def function(self, x):
+        f1 = x['z'] ** 2 + x['y'] ** 2
+        f2 = (x['z'] + 2) ** 2 + (x['y']-1) ** 2
 
-simu_options = {
-    "startTime": 0,
-    "stopTime": 1,
-    "stepSize": 1,
-    "tolerance": 1e-06,
-    "solver": "dassl",
-}
+        if x['b']:
+            f2 = 100 * f2
 
-simu = Simulator(
-    model_path="TestLib.BinhandKorn",
-    package_path=PACKAGE_DIR / "package.mo",
-    simulation_options=simu_options,
-    output_list=["f1", "f2", "g1", "g2"],
-    simulation_path=None,
-    lmodel=["Modelica"],
-)
+        if x['x'] == "multiply":
+            f2 = 10 * f2
 
-x_dict = {"x.k": 2, "y.k": 2}
+        return pd.Series([f1, f2], index=["f1", "f2"])
+
+
 
 parameters = [
-    {"name": "x.k", "interval": (-2, 10)},
-    {"name": "y.k", "interval": (-2, 10)},
+    {"name": "x", "interval": (-2, 10)},
+    {"name": "y", "interval": (-2, 10)},
 ]
-
-algorithm = DE(
-    pop_size=100,
-    sampling=LHS(),
-    CR=0.3,
-    jitter=False
-)
 
 
 class TestMyProblem():
     def test_myproblem_simple(self):
-
         problem = MyProblem(
             parameters=parameters,
             obj_func_list=[],
             func_list=[py_func_rosen],
             function_names=["f1"],
             constraint_names=[]
+        )
+
+        algorithm = DE(
+            pop_size=100,
+            sampling=LHS(),
+            CR=0.3,
+            jitter=False
         )
 
         res = minimize(problem,
@@ -95,12 +86,12 @@ class TestMyProblem():
 
     def test_myproblem_twoobjectsfunction(self):
         param = [
-            {"name": "x.k", "interval": (0, 5)},
-            {"name": "y.k", "interval": (0, 3)},
+            {"name": "x", "interval": (0, 5)},
+            {"name": "y", "interval": (0, 3)},
         ]
 
-        obj1 = MyObject1()
-        obj2 = MyObject2()
+        obj1 = MyObject_BinhandKorn1()
+        obj2 = MyObject_BinhandKorn2()
 
         problem = MyProblem(
             parameters=param,
@@ -114,7 +105,7 @@ class TestMyProblem():
                        NSGA2(pop_size=10),
                        ('n_gen', 10),
                        seed=1,
-                       verbose=True)
+                       verbose=False)
 
         np.testing.assert_almost_equal(res.X,
                                        np.array([[0.08320695, 0.05947538],
@@ -129,7 +120,6 @@ class TestMyProblem():
                                                  [1.68980871, 0.95713564]]))
 
     def test_myproblem_integers(self):
-
         problem = MyProblem(
             parameters=parameters,
             obj_func_list=[],
@@ -154,9 +144,39 @@ class TestMyProblem():
 
         assert np.allclose(res.X, np.array([1, 1]), rtol=0, atol=0)
 
-    def test_myproblem_mixed(self): #à finir
+    def test_myproblem_mixed(self):
 
-        parameters = [
-            {"name": "x", "interval": (-2, 10), 'type': "Integer"},
-            {"name": "y", "interval": (-2, 11.5), 'type': "Integer"}
+        param = [
+            {"name": "b", "interval": (), 'type': "Binary"},
+            {"name": "x", "interval": ("nothing", "multiply"), 'type': "Choice"},
+            {"name": "y", "interval": (-2, 2.5), 'type': "Integer"},
+            {"name": "z", "interval": (5, -5), 'type': "Real"},
         ]
+
+        obj = MyObject_mixed()
+
+        problem = MyMixedProblem(
+            parameters=param,
+            obj_func_list=[obj],
+            func_list=[],
+            function_names=["f1", "f2"],
+            constraint_names=[]
+        )
+
+        algorithm = MixedVariableGA(pop_size=10, survival=RankAndCrowdingSurvival())
+
+        res = minimize(problem,
+                       algorithm,
+                       ('n_gen', 10),
+                       seed=1,
+                       verbose=False)
+
+        np.array_equal(res.X,
+                       np.array([{'b': False, 'x': 'nothing', 'y': 0, 'z': -0.9193284996322444},
+                                 {'b': True, 'x': 'nothing', 'y': 0, 'z': -0.031853402754111526},
+                                 {'b': False, 'x': 'multiply', 'y': 0, 'z': 0.11304433422108318},
+                                 {'b': False, 'x': 'nothing', 'y': 0, 'z': -2.9032762721742804},
+                                 {'b': False, 'x': 'nothing', 'y': 0, 'z': -0.5998932514007078},
+                                 {'b': True, 'x': 'nothing', 'y': 0, 'z': -0.10011235296152621}])
+                       )
+

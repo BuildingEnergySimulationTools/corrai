@@ -60,8 +60,6 @@ class MyMixedProblem(ElementwiseProblem):
             n_var=len(parameters),
             n_obj=len(function_names),
             n_ieq_constr=len(constraint_names),
-            xl=np.array([p["interval"][0] for p in parameters]),
-            xu=np.array([p["interval"][-1] for p in parameters]),
         )
 
     def _evaluate(self, X, out, *args, **kwargs):
