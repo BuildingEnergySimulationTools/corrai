@@ -36,6 +36,7 @@ setup(
         "matplotlib>=3.5.1",
         "plotly>=5.3.1",
         "scikit-learn>=1.0.2",
+        "pymoo>=0.6.0.1",
     ],
     packages=find_packages(exclude=["tests*"]),
     include_package_data=True,
