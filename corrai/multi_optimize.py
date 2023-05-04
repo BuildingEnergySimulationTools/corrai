@@ -120,7 +120,8 @@ class MyMixedProblem(ElementwiseProblem):
          - Real: continuous variable that takes values within a range of real numbers.
          - Integer: variable that takes integer values within a range.
          - 'Binary: variable that takes binary values (0 or 1).
-         - 'Choice': variable that represents multiple choices from a set of discrete values.
+         - 'Choice': variable that represents multiple choices from a
+         set of discrete values.
      n_var (int):
         The number of variables inherited from parameters.
      n_obj (int):
