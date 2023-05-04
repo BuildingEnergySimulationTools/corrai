@@ -15,29 +15,29 @@ import plotly.graph_objects as go
 import corrai.custom_transformers as ct
 from corrai.utils import as_1_column_dataframe
 from corrai.utils import _reshape_1d
+from corrai.utils import check_datetime_index
 
 from sklearn.pipeline import make_pipeline
 
 
-def get_hours_switch(timeseries, diff_filter_threshold=0, switch="positive"):
+def get_hours_switch(X, diff_filter_threshold=0, switch="positive"):
     """
     From a time series determine the number of hour since the beginning
     of the day when the signal rises (switch='positive') or decreases
     (switch='negative') or both (switch='both').
     diff_filter_threshold is used to filter small variations
 
-    :param timeseries: pandas Series with DatetimeIndex
+    :param X: pandas Series or one column DataFrame with DatetimeIndex
     :param diff_filter_threshold: float or integer
     :param switch: 'positive', 'negative', 'both
     :return: pandas Series
     """
-    if not isinstance(timeseries, pd.Series):
-        raise ValueError("timeseries must be a Pandas DataFrame object")
-    if not isinstance(timeseries.index, pd.DatetimeIndex):
-        raise ValueError("Series index must be a Pandas DatetimeIndex")
 
-    df = timeseries.dropna().copy().to_frame().diff()
-    data_col_name = timeseries.name
+    X = as_1_column_dataframe(X)
+    check_datetime_index(X)
+
+    df = X.dropna().copy().diff()
+    data_col_name = X.columns[0]
     if switch == "positive":
         df = df[df > 0]
     elif switch == "negative":
