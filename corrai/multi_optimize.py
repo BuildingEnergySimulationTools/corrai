@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
+from modelitool.sensitivity import plot_parcoord
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Integer, Real, Choice, Binary
+import plotly.graph_objs as go
 
 
 # TODO Add permutation variables to MyMixedProblem
@@ -87,6 +89,35 @@ class MyProblem(ElementwiseProblem):
         out["F"] = list(res[self.function_names])
         out["G"] = list(res[self.constraint_names])
 
+    def plot_pcd(self, res, ref):
+        data_dict = {param["name"]: res.X[:, i] for param, i in zip(self.parameters, range(res.X.shape[1]))}
+        data_dict.update({self.function_names[i]: res.F[:, i] for i in range(res.F.shape[1])})
+
+        plot_parcoord(data_dict=data_dict, colorby=ref)
+
+    def plot_parcoord(self, colorby=None, colorscale='Electric'):
+        fig = go.Figure(data=go.Parcoords(
+            line=dict(
+                color=self.parameters[colorby],
+                colorscale=colorscale,
+                showscale=True,
+                cmin=self.parameters[colorby].min(),
+                cmax=self.parameters[colorby].max()
+            ),
+            dimensions=[
+                {
+                    "range": [self.parameters[par].min(),
+                              self.parameters[par].max()],
+                    "label": par,
+                    "values": self.parameters[par]
+                }
+                for par in self.parameters.keys() if par != "F"
+            ]
+        ))
+
+        fig.show()
+
+
 
 class MyMixedProblem(ElementwiseProblem):
     """
@@ -119,8 +150,8 @@ class MyMixedProblem(ElementwiseProblem):
          from parameters. The variable types can be any of the following:
          - Real: continuous variable that takes values within a range of real numbers.
          - Integer: variable that takes integer values within a range.
-         - 'Binary: variable that takes binary values (0 or 1).
-         - 'Choice': variable that represents multiple choices from a
+         - Binary: variable that takes binary values (0 or 1).
+         - Choice: variable that represents multiple choices from a
          set of discrete values.
      n_var (int):
         The number of variables inherited from parameters.
@@ -172,11 +203,30 @@ class MyMixedProblem(ElementwiseProblem):
             n_ieq_constr=len(constraint_names),
         )
 
-    def _evaluate(self, X, out, *args, **kwargs):
-        res = pd.concat(
-            [m.function(X) for m in self.obj_func_list]
-            + [pyf(X) for pyf in self.func_list]
-        )
+    def plot_pcd(self, res, ref): # à tester avec binaires, non floats, etc.
+        data_dict = {param["name"]: res.X[:, i] for param, i in zip(self.parameters, range(res.X.shape[1]))}
+        data_dict.update({self.function_names[i]: res.F[:, i] for i in range(res.F.shape[1])})
 
-        out["F"] = list(res[self.function_names])
-        out["G"] = list(res[self.constraint_names])
+        plot_parcoord(data_dict=data_dict, colorby=ref)
+
+    def plot_parcoord(self, colorby=None, colorscale='Electric'):
+        fig = go.Figure(data=go.Parcoords(
+            line=dict(
+                color=self.parameters[colorby],
+                colorscale=colorscale,
+                showscale=True,
+                cmin=self.parameters[colorby].min(),
+                cmax=self.parameters[colorby].max()
+            ),
+            dimensions=[
+                {
+                    "range": [self.parameters[par].min(),
+                              self.parameters[par].max()],
+                    "label": par,
+                    "values": self.parameters[par]
+                }
+                for par in self.parameters.keys() if par != "F"
+            ]
+        ))
+
+        fig.show()
