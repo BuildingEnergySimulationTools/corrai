@@ -60,6 +60,10 @@ class MyProblem(ElementwiseProblem):
         self, parameters, obj_func_list, func_list, function_names, constraint_names
     ):
         self.parameters = parameters
+        if len(obj_func_list) == 0 and len(func_list) == 0:
+            raise ValueError(
+                "At least one of obj_func_list or func_list should be provided"
+            )
         self.obj_func_list = obj_func_list
         self.func_list = func_list
         self.function_names = function_names
@@ -138,6 +142,10 @@ class MyMixedProblem(ElementwiseProblem):
     ):
         global var
         self.parameters = parameters
+        if len(obj_func_list) == 0 and len(func_list) == 0:
+            raise ValueError(
+                "At least one of obj_func_list or func_list should be provided"
+            )
         self.obj_func_list = obj_func_list
         self.func_list = func_list
         self.function_names = function_names

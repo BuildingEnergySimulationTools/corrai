@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
+import pytest
+
 from corrai.multi_optimize import MyProblem, MyMixedProblem
 
 from pymoo.algorithms.moo.nsga2 import NSGA2
@@ -145,7 +147,7 @@ class TestMyProblem:
             {"name": "b", "interval": (), "type": "Binary"},
             {"name": "x", "interval": ("nothing", "multiply"), "type": "Choice"},
             {"name": "y", "interval": (-2, 2.5), "type": "Integer"},
-            {"name": "z", "interval": (5, -5), "type": "Real"},
+            {"name": "z", "interval": (-5, 5), "type": "Real"},
         ]
 
         obj = MyObject_mixed()
@@ -175,3 +177,22 @@ class TestMyProblem:
                 ]
             ),
         )
+
+    def test_warning_error(self):
+        with pytest.raises(ValueError):
+            MyProblem(
+                parameters=parameters,
+                obj_func_list=[],
+                func_list=[],
+                function_names=["f1"],
+                constraint_names=[],
+            )
+
+        with pytest.raises(ValueError):
+            MyMixedProblem(
+                parameters=parameters,
+                obj_func_list=[],
+                func_list=[],
+                function_names=["f1"],
+                constraint_names=[],
+            )
