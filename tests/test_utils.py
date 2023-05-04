@@ -19,11 +19,21 @@ class TestUtils:
     def test_as_1_column_dataframe(self):
         ref = pd.DataFrame({0: [1.0, 2.0]})
 
+        # Test list in
         pd.testing.assert_frame_equal(as_1_column_dataframe([1.0, 2.0]), ref)
-        pd.testing.assert_frame_equal(ref, ref)
+
+        # Test DataFrame in
+        pd.testing.assert_frame_equal(as_1_column_dataframe(ref), ref)
+
+        # Test Series in
+        pd.testing.assert_frame_equal(as_1_column_dataframe(ref.squeeze()), ref)
+
+        # Test 2D array in
         pd.testing.assert_frame_equal(
             as_1_column_dataframe(np.array([[1.0], [2.0]])), ref
         )
+
+        # Test 1D array in
         pd.testing.assert_frame_equal(as_1_column_dataframe(np.array([1.0, 2.0])), ref)
 
         with pytest.raises(ValueError):

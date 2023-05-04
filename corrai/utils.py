@@ -29,7 +29,7 @@ def as_1_column_dataframe(X):
     ValueError: If input data has more than one column.
     """
 
-    if not isinstance(X, (list, np.ndarray, pd.DataFrame)):
+    if not isinstance(X, (list, np.ndarray, pd.DataFrame, pd.Series)):
         raise ValueError(
             f"X must be one of {list, np.array, pd.DataFrame}, " f"got {type(X)}"
         )
@@ -39,6 +39,9 @@ def as_1_column_dataframe(X):
 
     if isinstance(X, np.ndarray):
         X = pd.DataFrame(X)
+
+    if isinstance(X, pd.Series):
+        X = X.to_frame()
 
     if X.shape[1] > 1:
         raise ValueError(
