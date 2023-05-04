@@ -34,7 +34,9 @@ class MyProblem(ElementwiseProblem):
 
 
 class MyMixedProblem(ElementwiseProblem):
-    def __init__(self, parameters, obj_func_list, func_list, function_names, constraint_names):
+    def __init__(
+        self, parameters, obj_func_list, func_list, function_names, constraint_names
+    ):
         global var
         self.parameters = parameters
         self.obj_func_list = obj_func_list
@@ -64,7 +66,8 @@ class MyMixedProblem(ElementwiseProblem):
 
     def _evaluate(self, X, out, *args, **kwargs):
         res = pd.concat(
-            [m.function(X) for m in self.obj_func_list] + [pyf(X) for pyf in self.func_list]
+            [m.function(X) for m in self.obj_func_list]
+            + [pyf(X) for pyf in self.func_list]
         )
 
         out["F"] = list(res[self.function_names])
