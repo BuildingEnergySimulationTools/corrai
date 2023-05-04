@@ -4,12 +4,63 @@ from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Integer, Real, Choice, Binary
 
 
+# TODO Add permutation variables to MyMixedProblem
 class MyProblem(ElementwiseProblem):
+    """
+    A class that represents a single-objective optimization problem
+    with one or more constraints. This class inherits from the PyMOO
+    ElementwiseProblem class and overrides the _evaluate method.
+
+    Parameters
+    ----------
+    parameters (list):
+        A list of dictionaries, where each dictionary represents a
+        parameter and contains its name, interval, and type.
+    obj_func_list (list):
+        A list of objects that have methods that represent the objective
+        functions to be optimized or constraints (example: Modelica,
+        EnergyPlus models...). If optimization is subject to inequality
+        constraints g, they should be formulated as "less than" constraints
+        (i.e., g(x) < 0). Leave empy if none.
+    func_list (list):
+        A list of objects that have methods that represent the objective
+        functions to be optimized or constraints. If optimization is subject
+        to inequality constraints g, they should be formulated as "less than"
+        constraints (i.e., g(x) < 0). Leave empy if none.
+    function_names (list):
+        A list of strings that represent the names of the objective functions.
+    constraint_names (list):
+        A list of strings that represent the names of the constraint. Leave
+        empy if none.
+
+    Attributes
+    ----------
+    n_var (int):
+        The number of variables inherited from parameters.
+    n_obj (int):
+        The number of objective functions inherited from parameters.
+    n_ieq_constr (int):
+        The number of constraints inherited from parameters.
+    xl (numpy.ndarray):
+        An array of lower bound of each variable inherited from parameters.
+    xu (numpy.ndarray):
+        An array of upper bound of each variable inherited from parameters.
+
+    Methods
+    -------
+    _evaluate(x, out, *args, **kwargs):
+        Evaluates the problem for the given variable values and returns
+        the objective values out["F"] as a list of NumPy array with length of
+        n_obj and the constraints values out["G"] with length of n_ieq_constr
+        (if the problem has constraints to be satisfied at all).
+
+    """
+
     def __init__(
         self, parameters, obj_func_list, func_list, function_names, constraint_names
     ):
         self.parameters = parameters
-        self.obj_func_list = obj_func_list  # objects with methods functions
+        self.obj_func_list = obj_func_list
         self.func_list = func_list
         self.function_names = function_names
         self.constraint_names = constraint_names
@@ -34,6 +85,54 @@ class MyProblem(ElementwiseProblem):
 
 
 class MyMixedProblem(ElementwiseProblem):
+    """
+     A class that represents a mixed-integer optimization problem with one
+     or more constraints. This class inherits from the PyMOO ElementwiseProblem
+     class and overrides the _evaluate method.
+
+     Parameters
+     ----------
+     parameters (list):
+         A list of dictionaries, where each dictionary represents a parameter
+         and contains its name, interval, and type.
+     obj_func_list (list):
+         A list of objects that have methods that represent the objective
+         functions to be optimized. Leave empy if none
+     func_list (list):
+         A list of PyFunc objects that represent the constraints to be satisfied.
+         Leave empy if none.
+     function_names (list):
+         A list of strings that represent the names of the objective functions.
+         Leave empy if none.
+     constraint_names (list):
+         A list of strings that represent the names of the constraints.
+         Leave empy if none.
+
+     Attributes
+     ----------
+     vars (dict):
+         A dictionary of decision variables and their types inherited
+         from parameters. The variable types can be any of the following:
+         - Real: continuous variable that takes values within a range of real numbers.
+         - Integer: variable that takes integer values within a range.
+         - 'Binary: variable that takes binary values (0 or 1).
+         - 'Choice': variable that represents multiple choices from a set of discrete values.
+     n_var (int):
+        The number of variables inherited from parameters.
+     n_obj (int):
+        The number of objective functions inherited from parameters.
+     n_ieq_constr (int):
+        The number of constraints inherited from parameters.
+
+     Methods
+     -------
+    _evaluate(x, out, *args, **kwargs):
+        Evaluates the problem for the given variable values and returns
+        the objective values out["F"] as a list of NumPy array with length of
+        n_obj and the constraints values out["G"] with length of n_ieq_constr
+        (if the problem has constraints to be satisfied at all).
+    """
+
     def __init__(
         self, parameters, obj_func_list, func_list, function_names, constraint_names
     ):
