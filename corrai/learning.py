@@ -141,8 +141,8 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
 
         self.kde.fit(X.to_numpy())
 
-        func_sample = self.kde.score_samples(self.domain)
-        max_index = argrelextrema(func_sample, np.greater)
+        like_domain = np.exp(self.kde.score_samples(self.domain))
+        max_index = argrelextrema(like_domain, np.greater)
         self.set_points = self.domain[max_index[0]]
 
         # Pass if perfectly flat (all values equal in the domain)
