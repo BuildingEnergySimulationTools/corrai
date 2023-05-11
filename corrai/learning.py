@@ -212,9 +212,10 @@ def set_point_identifier(X, estimator=None, sk_scaler=None, cols=None):
     to each column of the input data, and then finding the peaks of the density
     estimate, which shall correspond to the set points.
     """
+    check_datetime_index(X)
 
-    if not isinstance(X.index, pd.DatetimeIndex):
-        raise ValueError("X index must be a DateTimeIndex")
+    if isinstance(X, pd.Series):
+        X = X.to_frame()
 
     if cols is None:
         cols = X.columns
