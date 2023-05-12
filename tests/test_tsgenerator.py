@@ -1,7 +1,11 @@
 import pandas as pd
 import numpy as np
 from corrai.tsgenerator import DHWaterConsumption
+from corrai.tsgenerator import Scheduler
 import datetime as dt
+from pathlib import Path
+
+FILES_PATH = Path(__file__).parent / "resources"
 
 
 class TestDHWaterConsumption:
@@ -81,3 +85,59 @@ class TestDHWaterConsumption:
         assert np.isclose(
             df.loc["2023-09-10 08:00", "consoECS_RE2020"], 261.3, rtol=0.05
         )
+
+    def test_scheduler(self):
+        schedule_dict = {
+            "DAYS": {
+                "working_day": {
+                    "09:15": {"heating": 17, "extraction_flow_rate": 0},
+                    "18:00": {"heating": 21, "extraction_flow_rate": 3000},
+                    "19:00": {"heating": 22},
+                    "23:00": {"heating": 17, "extraction_flow_rate": 0},
+                },
+                "Off": {
+                    "23:00": {"heating": 17, "extraction_flow_rate": 0},
+                },
+            },
+            "WEEKS": {
+                "winter_week": {
+                    "Monday": "working_day",
+                    "Tuesday": "working_day",
+                    "Wednesday": "working_day",
+                    "Thursday": "working_day",
+                    "Friday": "working_day",
+                    "Saturday": "Off",
+                    "Sunday": "Off",
+                },
+                "summer_week": {
+                    "Monday": "Off",
+                    "Tuesday": "Off",
+                    "Wednesday": "Off",
+                    "Thursday": "Off",
+                    "Friday": "Off",
+                    "Saturday": "Off",
+                    "Sunday": "Off",
+                },
+            },
+            "PERIODS": [
+                (("01-01", "03-31"), "winter_week"),
+                (("04-01", "09-30"), "summer_week"),
+                (("10-01", "12-31"), "winter_week"),
+            ],
+            "YEAR": 2009,
+            "TZ": "Europe/Paris",
+        }
+
+        ref = pd.read_csv(
+            filepath_or_buffer=FILES_PATH / "scheduler_test_ref.csv",
+            parse_dates=True,
+            index_col=0,
+        )
+
+        ref.index = pd.date_range(ref.index[0], periods=ref.shape[0], freq="H")
+
+        sched = Scheduler(config_dict=schedule_dict)
+
+        df = sched.get_dataframe(freq="H")
+
+        pd.testing.assert_frame_equal(df, ref)

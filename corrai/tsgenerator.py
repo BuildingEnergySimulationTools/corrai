@@ -473,4 +473,5 @@ class Scheduler:
         df = df.fillna(method="bfill")
         df = df.resample("T").bfill()
         df = df.shift(-1)
+        df = df.fillna(method="ffill")
         return df.resample(freq).mean()
