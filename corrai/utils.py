@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-
+import datetime as dt
 
 def _reshape_1d(sample):
     if isinstance(sample, pd.DataFrame):
@@ -59,3 +59,16 @@ def check_datetime_index(X):
         )
     if not isinstance(X.index, pd.DatetimeIndex):
         raise ValueError("X do not have a DateTimeIndex")
+
+
+def float_to_hour(hours):
+    """
+    Convert a float value representing hours to a string representation with the
+    format "%H:%M".
+    :param Float hours: Floating-point value representing hours.
+    :return String representation of the hours in the format "%H:%M".
+    """
+    hours = int(hours)
+    minutes = int((1.5 - hours) * 60)
+    time_str = dt.time(hours, minutes).strftime("%H:%M")
+    return time_str
