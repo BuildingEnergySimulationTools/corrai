@@ -431,9 +431,103 @@ class DHWaterConsumption:
 
 class Scheduler:
     def __init__(self, config_dict=None):
+        """
+        Scheduler class for generating a schedules in a DataFrame object based on
+        configuration settings.
+
+        :param dict config_dict: A dictionary containing the configuration settings
+            for the scheduler. See bellow for a dictionary example.
+
+        Guidelines for config_dict:
+            - The schedules hour means "until". The first specified hour correspond to
+            the first switch. In the example below, heating is 17 until 09:15 when it
+            becomes 21.
+            - If the set-point is constant through the day, provide the last hour of
+            the day ("23:00") and the corresponding value.
+            - The Scheduler allows the specification of several schedules at once.
+            Each key provided in the hour dictionary correspond to a new column. If
+            a key is absent at a specific hour, the previous set-point value is
+            propagated
+
+        Example of config_dict structure:
+            {
+                "DAYS": {
+                    "working_day": {
+                        "09:15": {"heating": 17, "extraction_flow_rate": 0},
+                        "18:00": {"heating": 21, "extraction_flow_rate": 3000},
+                        "19:00": {"heating": 22},
+                        "23:00": {"heating": 17, "extraction_flow_rate": 0},
+                    },
+                    "Off": {
+                        "23:00": {"heating": 0, "extraction_flow_rate": 0},
+                    },
+                    ...
+                },
+                "WEEKS": {
+                    "winter_week": {
+                        "Monday": "working_day",
+                        ...
+                    },
+                    "summer_week": {
+                        "Monday": "Off",
+                        ...
+                    },
+                    ...
+                },
+                "PERIODS": [
+                    (("01-01", "03-31"), "winter_week"),
+                    (("04-01", "09-30"), "summer_week"),
+                    (("10-01", "12-31"), "winter_week"),
+                ],
+                "YEAR": 2009,
+                "TZ": "Europe/Paris",
+            }
+
+        Guidelines for config_dict:
+            - The "DAYS" key should contain a dictionary where the keys represent the
+            names of the schedule. Each schedule is a dictionary with hourly settings.
+
+            - The hour in the schedule dictionary represents the "until" time.
+            The first specified hour corresponds to the first switch. In the example,
+            "heating" is 17 until 09:15 when it becomes 21.
+
+            - If a set-point is constant throughout the day, provide the last hour of
+            the day ("23:00") and the corresponding value.
+
+            - The Scheduler allows the specification of several schedules at once.
+            Each key provided in the hour dictionary corresponds to a new column.
+            If a key is absent at a specific hour, the previous set-point value is
+            propagated.
+
+        Note:
+            The config_dict should be provided during initialization and should have
+            the following structure:
+            - "DAYS": A dictionary containing daily schedules with specific timings
+            and values.
+
+            - "WEEKS": A dictionary mapping weekdays to the corresponding daily
+            schedules.
+
+            - "PERIODS": A list of tuples representing date periods and corresponding
+            week schedules.
+
+            - "YEAR": The year to consider for the scheduler.
+
+            - "TZ": The timezone for the scheduler.
+
+        Example:
+            scheduler = Scheduler(config_dict)
+            df = scheduler.get_dataframe()
+
+        """
+
         self.config_dict = config_dict
 
     def _get_day_dict(self):
+        """
+        Returns a dictionary with daily schedules based on the configuration settings.
+        :return: dict containing DatFrame
+        """
         day_dict = {}
         for day in self.config_dict["DAYS"].keys():
             day_df = pd.DataFrame(index=["00:00"])
@@ -444,6 +538,13 @@ class Scheduler:
         return day_dict
 
     def get_dataframe(self, freq="T"):
+        """
+        Generates and returns the scheduled DataFrame based on the configuration
+        settings.
+
+        :param str freq: output DataFrame DateTimeIndex frequency
+        """
+
         year = self.config_dict["YEAR"]
 
         day_list = []
