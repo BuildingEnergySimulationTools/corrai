@@ -475,11 +475,10 @@ class Scheduler:
                     ...
                 },
                 "PERIODS": [
-                    (("01-01", "03-31"), "winter_week"),
-                    (("04-01", "09-30"), "summer_week"),
-                    (("10-01", "12-31"), "winter_week"),
+                    (("2009-01-01", "2009-03-31"), "winter_week"),
+                    (("2009-04-01", "2009-09-30"), "summer_week"),
+                    (("2009-10-01", "2009-12-31"), "winter_week"),
                 ],
-                "YEAR": 2009,
                 "TZ": "Europe/Paris",
             }
 
@@ -510,8 +509,6 @@ class Scheduler:
 
             - "PERIODS": A list of tuples representing date periods and corresponding
             week schedules.
-
-            - "YEAR": The year to consider for the scheduler.
 
             - "TZ": The timezone for the scheduler.
 
@@ -545,13 +542,11 @@ class Scheduler:
         :param str freq: output DataFrame DateTimeIndex frequency
         """
 
-        year = self.config_dict["YEAR"]
-
         day_list = []
         for period in self.config_dict["PERIODS"]:
             period_index = pd.date_range(
-                start=f"{year}-{period[0][0]}",
-                end=f"{year}-{period[0][1]}",
+                start=period[0][0],
+                end=period[0][1],
                 freq="D",
                 tz=self.config_dict["TZ"],
             )
