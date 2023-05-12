@@ -427,3 +427,50 @@ class DHWaterConsumption:
         to_return = to_return[: len(periods)]
         to_return.columns = ["consoECS_RE2020"]
         return to_return
+
+
+class Scheduler:
+    def __init__(self, config_dict=None):
+        self.config_dict = config_dict
+
+    def _get_day_dict(self):
+        day_dict = {}
+        for day in self.config_dict["DAYS"].keys():
+            day_df = pd.DataFrame(index=["00:00"])
+            for hour, prog in self.config_dict["DAYS"][day].items():
+                day_df.loc[hour, prog.keys()] = prog.values()
+            day_dict[day] = day_df
+
+        return day_dict
+
+    def get_dataframe(self, freq="T"):
+        year = self.config_dict["YEAR"]
+
+        day_list = []
+        for period in self.config_dict["PERIODS"]:
+            period_index = pd.date_range(
+                start=f"{year}-{period[0][0]}",
+                end=f"{year}-{period[0][1]}",
+                freq="D",
+                tz=self.config_dict["TZ"],
+            )
+            day_dict = self._get_day_dict()
+
+            week = self.config_dict["WEEKS"][period[1]]
+            for day in week.keys():
+                ref_day = day_dict[week[day]]
+                day_index = period_index[period_index.day_name() == day]
+                for d in day_index:
+                    current_day = ref_day.copy()
+                    date = d.date()
+                    new_index = pd.to_datetime(
+                        date.strftime("%Y-%m-%d ") + current_day.index
+                    )
+                    current_day.index = new_index
+                    day_list.append(current_day)
+
+        df = pd.concat(day_list)
+        df = df.fillna(method="bfill")
+        df = df.resample("T").bfill()
+        df = df.shift(-1)
+        return df.resample(freq).mean()
