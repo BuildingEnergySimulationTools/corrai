@@ -120,11 +120,10 @@ class TestDHWaterConsumption:
                 },
             },
             "PERIODS": [
-                (("01-01", "03-31"), "winter_week"),
-                (("04-01", "09-30"), "summer_week"),
-                (("10-01", "12-31"), "winter_week"),
+                (("2009-01-01", "2009-03-31"), "winter_week"),
+                (("2009-04-01", "2009-09-30"), "summer_week"),
+                (("2009-10-01", "2009-12-31"), "winter_week"),
             ],
-            "YEAR": 2009,
             "TZ": "Europe/Paris",
         }
 
