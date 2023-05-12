@@ -571,6 +571,7 @@ class Scheduler:
                     day_list.append(current_day)
 
         df = pd.concat(day_list)
+        df.sort_index(inplace=True)
         df = df.fillna(method="bfill")
         df = df.resample("T").bfill()
         df = df.shift(-1)
