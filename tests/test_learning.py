@@ -47,7 +47,7 @@ class TestLearning:
 
         np.testing.assert_array_almost_equal(clustered, np.array([1, 0, -1]))
 
-    def test_get_hours_switch(self):
+    def test_switch(self):
         test_series = pd.Series(
             [0, 0, 1000, 1020, 0.1, 0.3],
             index=pd.date_range(
@@ -55,39 +55,11 @@ class TestLearning:
             ),
             name="flwr",
         )
+        assert True
 
-        res = get_hours_switch(test_series, 200)
-        ref = pd.Series(
-            [2.0],
-            index=pd.date_range(
-                "2009-01-01 02:00:00", freq="H", periods=1, tz="Europe/Paris"
-            ),
-            name="hour_since_beg_day",
-        )
-
-        pd.testing.assert_series_equal(res, ref)
-
-        res = get_hours_switch(test_series, 200, switch="negative")
-        ref = pd.Series(
-            [4.0],
-            index=pd.date_range(
-                "2009-01-01 04:00:00", freq="H", periods=1, tz="Europe/Paris"
-            ),
-            name="hour_since_beg_day",
-        )
-
-        pd.testing.assert_series_equal(res, ref)
-
-        res = get_hours_switch(test_series, 200, switch="both")
-        ref = pd.Series(
-            [2.0, 4.0],
-            index=pd.DatetimeIndex(
-                ["2009-01-01 02:00:00", "2009-01-01 04:00:00"], tz="Europe/Paris"
-            ),
-            name="hour_since_beg_day",
-        )
-
-        pd.testing.assert_series_equal(res, ref)
+        assert get_hours_switch(test_series, 200, switch="positive") == ["02:00"]
+        assert get_hours_switch(test_series, 200, switch="negative") == ["04:00"]
+        assert get_hours_switch(test_series, 200, switch="both") == ["02:00", "04:00"]
 
     def test_plot_kde_set_point(self):
         # Generate test data
