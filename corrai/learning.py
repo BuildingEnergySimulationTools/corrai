@@ -16,6 +16,7 @@ import corrai.custom_transformers as ct
 from corrai.utils import as_1_column_dataframe
 from corrai.utils import _reshape_1d
 from corrai.utils import check_datetime_index
+from corrai.utils import float_to_hour
 
 from sklearn.pipeline import make_pipeline
 
@@ -30,7 +31,7 @@ def get_hours_switch(X, diff_filter_threshold=0, switch="positive"):
     :param X: pandas Series or one column DataFrame with DatetimeIndex
     :param diff_filter_threshold: float or integer
     :param switch: 'positive', 'negative', 'both
-    :return: pandas Series
+    :return: list of hour string formatted "%H:%M"
     """
 
     X = as_1_column_dataframe(X)
@@ -55,7 +56,7 @@ def get_hours_switch(X, diff_filter_threshold=0, switch="positive"):
     df["hour_since_beg_day"] = (df.index - df.start_day).dt.total_seconds() / 60 / 60
     df.loc[~(df[data_col_name] > diff_filter_threshold), "hour_since_beg_day"] = np.nan
 
-    return df.hour_since_beg_day.dropna()
+    return float_to_hour(list(df.hour_since_beg_day.dropna()))
 
 
 class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
