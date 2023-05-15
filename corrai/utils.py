@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 
+
 def _reshape_1d(sample):
     if isinstance(sample, pd.DataFrame):
         return sample.squeeze()
@@ -68,7 +69,20 @@ def float_to_hour(hours):
     :param Float hours: Floating-point value representing hours.
     :return String representation of the hours in the format "%H:%M".
     """
-    hours = int(hours)
-    minutes = int((1.5 - hours) * 60)
-    time_str = dt.time(hours, minutes).strftime("%H:%M")
-    return time_str
+
+    def func(x):
+        h = int(x)
+        minutes = int((x - h) * 60)
+        time_str = dt.time(h, minutes).strftime("%H:%M")
+        return time_str
+
+    if isinstance(hours, float):
+        return func(hours)
+    elif isinstance(hours, list):
+        return [func(i) for i in hours]
+    elif isinstance(hours, np.ndarray):
+        return np.vectorize(func)(hours)
+    elif isinstance(hours, pd.Series):
+        return hours.apply(func)
+    elif isinstance(hours, pd.DataFrame):
+        return hours.applymap(func)
