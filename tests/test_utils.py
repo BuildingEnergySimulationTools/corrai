@@ -7,6 +7,7 @@ from corrai.utils import _reshape_1d
 from corrai.utils import as_1_column_dataframe
 from corrai.utils import check_datetime_index
 from corrai.utils import float_to_hour
+from corrai.utils import hour_to_float
 
 
 class TestUtils:
@@ -64,4 +65,20 @@ class TestUtils:
         )
         pd.testing.assert_frame_equal(
             float_to_hour(pd.DataFrame({"a": [2.5]})), pd.DataFrame({"a": ["02:30"]})
+        )
+
+    def test_hour_to_float(self):
+        assert hour_to_float("01:30") == 1.5
+        assert hour_to_float(["01:30"]) == [1.5]
+        np.testing.assert_array_equal(
+            hour_to_float(np.array(["01:30"])), np.array([1.5])
+        )
+        np.testing.assert_array_equal(
+            hour_to_float(np.array([["01:30"]])), np.array([[1.5]])
+        )
+        pd.testing.assert_series_equal(
+            hour_to_float(pd.Series(["01:30"])), pd.Series([1.5])
+        )
+        pd.testing.assert_frame_equal(
+            hour_to_float(pd.DataFrame({"a": ["02:30"]})), pd.DataFrame({"a": [2.5]})
         )

@@ -62,27 +62,55 @@ def check_datetime_index(X):
         raise ValueError("X do not have a DateTimeIndex")
 
 
-def float_to_hour(hours):
+def apply_transformation(x, function):
+    """
+    Utility function to apply elementwise transformation to list, ndarray,
+    Series or DataFrame. If an object other than previously mentioned is passed,
+    returns function(x)
+    :param x: input to be transformed
+    :param function: callable
+    :return: transformed list, ndarray, Series or DataFrame or object, depending on
+    the input
+    """
+    if isinstance(x, list):
+        return [function(i) for i in x]
+    elif isinstance(x, np.ndarray):
+        return np.vectorize(function)(x)
+    elif isinstance(x, pd.Series):
+        return x.apply(function)
+    elif isinstance(x, pd.DataFrame):
+        return x.applymap(function)
+
+    return function(x)
+
+
+def float_to_hour(hours_float):
     """
     Convert a float value representing hours to a string representation with the
     format "%H:%M".
-    :param Float hours: Floating-point value representing hours.
+    :param Float hours_float: Floating-point value representing hours.
     :return String representation of the hours in the format "%H:%M".
     """
 
-    def func(x):
+    def f2s(x):
         h = int(x)
         minutes = int((x - h) * 60)
         time_str = dt.time(h, minutes).strftime("%H:%M")
         return time_str
 
-    if isinstance(hours, float):
-        return func(hours)
-    elif isinstance(hours, list):
-        return [func(i) for i in hours]
-    elif isinstance(hours, np.ndarray):
-        return np.vectorize(func)(hours)
-    elif isinstance(hours, pd.Series):
-        return hours.apply(func)
-    elif isinstance(hours, pd.DataFrame):
-        return hours.applymap(func)
+    return apply_transformation(hours_float, f2s)
+
+
+def hour_to_float(hours_string):
+    """
+    Convert hour string representation with the format "%H:%M"to a float value.
+    :param hours_string: String, list, ndarray, Series, DataFrame value
+    representing hours.
+    :return float: Floating-point value representing hours.
+    """
+
+    def s2f(x):
+        time_obj = dt.datetime.strptime(x, "%H:%M")
+        return time_obj.hour + time_obj.minute / 60
+
+    return apply_transformation(hours_string, s2f)
