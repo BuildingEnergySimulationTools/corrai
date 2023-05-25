@@ -840,5 +840,5 @@ class MeasuredDats:
         r = int(r * factor)
         g = int(g * factor)
         b = int(b * factor)
-        darkened_color = "#{:02X}{:02X}{:02X}".format(r, g, b)
+        darkened_color = f"#{r:02X}{g:02X}{b:02X}"
         return darkened_color
