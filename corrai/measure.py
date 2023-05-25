@@ -112,7 +112,7 @@ def time_gradient(data, begin=None, end=None):
 
 
 def time_integrate(
-        data, begin=None, end=None, interpolate=True, interpolation_method="linear"
+    data, begin=None, end=None, interpolate=True, interpolation_method="linear"
 ):
     """
     Perform time Integration of given time series `data` between two optional
@@ -334,7 +334,7 @@ def auto_timestep(df):
 
 
 def add_scatter_and_gaps(
-        figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
+    figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
 ):
     figure.add_trace(
         go.Scattergl(
@@ -356,7 +356,7 @@ def add_scatter_and_gaps(
                 fill="toself",
                 showlegend=False,
                 fillcolor=f"rgba({color_rgb[0]}, {color_rgb[1]},"
-                          f" {color_rgb[2]} , {alpha})",
+                f" {color_rgb[2]} , {alpha})",
                 yaxis=yaxis,
             )
         )
@@ -364,12 +364,12 @@ def add_scatter_and_gaps(
 
 class MeasuredDats:
     def __init__(
-            self,
-            data,
-            data_type_dict=None,
-            corr_dict=None,
-            config_file_path=None,
-            gaps_timedelta=None,
+        self,
+        data,
+        data_type_dict=None,
+        corr_dict=None,
+        config_file_path=None,
+        gaps_timedelta=None,
     ):
         """
         A class for handling time-series data with missing values.
@@ -677,15 +677,15 @@ class MeasuredDats:
         self.corrected_data.loc[:, cols] = filled
 
     def plot_gaps(
-            self,
-            cols=None,
-            begin=None,
-            end=None,
-            gaps_timestep=None,
-            title="Gaps plot",
-            raw_data=False,
-            color_rgb=(243, 132, 48),
-            alpha=0.5,
+        self,
+        cols=None,
+        begin=None,
+        end=None,
+        gaps_timestep=None,
+        title="Gaps plot",
+        raw_data=False,
+        color_rgb=(243, 132, 48),
+        alpha=0.5,
     ):
         if cols is None:
             cols = self.columns
@@ -740,7 +740,14 @@ class MeasuredDats:
         fig.show()
 
     def plot(
-            self, cols=None, title="Correction plot", plot_raw=False, line=False, marker=False, begin=None, end=None
+        self,
+        cols=None,
+        title="Correction plot",
+        plot_raw=False,
+        line=False,
+        marker=False,
+        begin=None,
+        end=None,
     ):
         if cols is None:
             cols = self.columns
@@ -822,5 +829,5 @@ class MeasuredDats:
         r = int(r * factor)
         g = int(g * factor)
         b = int(b * factor)
-        darkened_color = '#{:02X}{:02X}{:02X}'.format(r, g, b)
+        darkened_color = "#{:02X}{:02X}{:02X}".format(r, g, b)
         return darkened_color
