@@ -744,8 +744,10 @@ class MeasuredDats:
         cols=None,
         title="Correction plot",
         plot_raw=False,
-        line=True,
-        marker=True,
+        line_corrected=True,
+        marker_corrected=True,
+        line_raw=True,
+        marker_raw=True,
         begin=None,
         end=None,
     ):
@@ -781,29 +783,36 @@ class MeasuredDats:
 
             dark_color = self.darken_color(color, 0.7)
 
-            if line and not marker:
-                mode = "lines"
-            elif line and marker:
-                mode = "lines+markers"
+            if line_corrected and not marker_corrected:
+                mode_corrected = "lines"
+            elif line_corrected and marker_corrected:
+                mode_corrected = "lines+markers"
             else:
-                mode = "markers"
+                mode_corrected = "markers"
 
             fig.add_scattergl(
                 x=to_plot_corr.index,
                 y=to_plot_corr[col],
                 name=f"{col}_corrected",
-                mode=mode,
+                mode=mode_corrected,
                 line=dict(width=2, color=dark_color),
                 marker=dict(color=dark_color, opacity=0.2),
                 yaxis=ax_dict[col],
             )
+
+            if line_raw and not marker_raw:
+                mode_raw = "lines"
+            elif line_raw and marker_raw:
+                mode_raw = "lines+markers"
+            else:
+                mode_raw = "markers"
 
             if plot_raw:
                 fig.add_scattergl(
                     x=to_plot_raw.index,
                     y=to_plot_raw[col],
                     name=f"{col}_raw",
-                    mode=mode,
+                    mode=mode_raw,
                     marker=dict(color=color, opacity=0.5),
                     yaxis=ax_dict[col],
                 )
