@@ -740,7 +740,17 @@ class MeasuredDats:
         fig.show()
 
     def plot(
-        self, cols=None, title="Correction plot", plot_raw=False, begin=None, end=None
+        self,
+        cols=None,
+        title="Correction plot",
+        plot_raw=False,
+        plot_corrected=False,
+        line_corrected=True,
+        marker_corrected=True,
+        line_raw=True,
+        marker_raw=True,
+        begin=None,
+        end=None,
     ):
         if cols is None:
             cols = self.columns
@@ -752,24 +762,62 @@ class MeasuredDats:
 
         fig = go.Figure()
 
-        for col in cols:
+        # Define the color palette
+        color_palette = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
+
+        num_cols = len(cols)
+
+        for i, col in enumerate(cols):
+            if i == 0:
+                # Use the first color in the palette for the first column
+                color = color_palette[0]
+            elif i == 1:
+                # Use the last color in the palette for the second column
+                color = color_palette[-1]
+            elif num_cols <= 5:
+                # Use the specified colors for up to 5 columns
+                color = color_palette[i % len(color_palette)]
+            else:
+                # Generate interpolated colors for more than 5 columns
+                t = (i - 2) / (num_cols - 3)  # Interpolation parameter
+                color = self.interpolate_color(color_palette[0], color_palette[-1], t)
+
+            dark_color = self.darken_color(color, 0.7)
+
+            if line_corrected and not marker_corrected:
+                mode_corrected = "lines"
+            elif line_corrected and marker_corrected:
+                mode_corrected = "lines+markers"
+            else:
+                mode_corrected = "markers"
+
+            if plot_corrected:
+                fig.add_scattergl(
+                    x=to_plot_corr.index,
+                    y=to_plot_corr[col],
+                    name=f"{col}_corrected",
+                    mode=mode_corrected,
+                    line=dict(width=2, color=dark_color),
+                    marker=dict(color=dark_color, opacity=0.2),
+                    yaxis=ax_dict[col],
+                )
+
+            if line_raw and not marker_raw:
+                mode_raw = "lines"
+            elif line_raw and marker_raw:
+                mode_raw = "lines+markers"
+            else:
+                mode_raw = "markers"
+
             if plot_raw:
                 fig.add_scattergl(
                     x=to_plot_raw.index,
                     y=to_plot_raw[col],
                     name=f"{col}_raw",
-                    mode="lines+markers",
-                    line=dict(color="rgb(216,79,86)"),
+                    mode=mode_raw,
+                    marker=dict(color=color, opacity=0.5),
                     yaxis=ax_dict[col],
                 )
-
-            fig.add_scattergl(
-                x=to_plot_corr.index,
-                y=to_plot_corr[col],
-                name=f"{col}_corrected",
-                mode="lines+markers",
-                yaxis=ax_dict[col],
-            )
 
         fig.update_layout(**layout_ax_dict)
         fig.update_layout(
@@ -778,5 +826,19 @@ class MeasuredDats:
             ),
         )
         fig.update_layout(dict(title=title))
-
         fig.show()
+
+    def interpolate_color(self, color1, color2, t):
+        """Interpolate between two colors based on a parameter t"""
+        r = int((1 - t) * int(color1[1:3], 16) + t * int(color2[1:3], 16))
+        g = int((1 - t) * int(color1[3:5], 16) + t * int(color2[3:5], 16))
+        b = int((1 - t) * int(color1[5:7], 16) + t * int(color2[5:7], 16))
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def darken_color(self, color, factor):
+        r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+        r = int(r * factor)
+        g = int(g * factor)
+        b = int(b * factor)
+        darkened_color = f"#{r:02X}{g:02X}{b:02X}"
+        return darkened_color
