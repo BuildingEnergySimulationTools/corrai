@@ -758,10 +758,13 @@ class MeasuredDats:
         num_cols = len(cols)
 
         for i, col in enumerate(cols):
-            if i < 2:
-                # Use the first two colors in the palette for the first two columns
-                color = color_palette[i]
-            if num_cols <= 5:
+            if i == 0:
+                # Use the first color in the palette for the first column
+                color = color_palette[0]
+            elif i == 1:
+                # Use the last color in the palette for the second column
+                color = color_palette[-1]
+            elif num_cols <= 5:
                 # Use the specified colors for up to 5 columns
                 color = color_palette[i % len(color_palette)]
             else:
