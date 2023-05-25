@@ -744,7 +744,7 @@ class MeasuredDats:
         cols=None,
         title="Correction plot",
         plot_raw=False,
-        plot_corrected=True,
+        plot_corrected=False,
         line_corrected=True,
         marker_corrected=True,
         line_raw=True,
