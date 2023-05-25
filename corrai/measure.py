@@ -112,7 +112,7 @@ def time_gradient(data, begin=None, end=None):
 
 
 def time_integrate(
-    data, begin=None, end=None, interpolate=True, interpolation_method="linear"
+        data, begin=None, end=None, interpolate=True, interpolation_method="linear"
 ):
     """
     Perform time Integration of given time series `data` between two optional
@@ -334,7 +334,7 @@ def auto_timestep(df):
 
 
 def add_scatter_and_gaps(
-    figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
+        figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
 ):
     figure.add_trace(
         go.Scattergl(
@@ -356,7 +356,7 @@ def add_scatter_and_gaps(
                 fill="toself",
                 showlegend=False,
                 fillcolor=f"rgba({color_rgb[0]}, {color_rgb[1]},"
-                f" {color_rgb[2]} , {alpha})",
+                          f" {color_rgb[2]} , {alpha})",
                 yaxis=yaxis,
             )
         )
@@ -364,12 +364,12 @@ def add_scatter_and_gaps(
 
 class MeasuredDats:
     def __init__(
-        self,
-        data,
-        data_type_dict=None,
-        corr_dict=None,
-        config_file_path=None,
-        gaps_timedelta=None,
+            self,
+            data,
+            data_type_dict=None,
+            corr_dict=None,
+            config_file_path=None,
+            gaps_timedelta=None,
     ):
         """
         A class for handling time-series data with missing values.
@@ -677,15 +677,15 @@ class MeasuredDats:
         self.corrected_data.loc[:, cols] = filled
 
     def plot_gaps(
-        self,
-        cols=None,
-        begin=None,
-        end=None,
-        gaps_timestep=None,
-        title="Gaps plot",
-        raw_data=False,
-        color_rgb=(243, 132, 48),
-        alpha=0.5,
+            self,
+            cols=None,
+            begin=None,
+            end=None,
+            gaps_timestep=None,
+            title="Gaps plot",
+            raw_data=False,
+            color_rgb=(243, 132, 48),
+            alpha=0.5,
     ):
         if cols is None:
             cols = self.columns
@@ -740,7 +740,7 @@ class MeasuredDats:
         fig.show()
 
     def plot(
-        self, cols=None, title="Correction plot", plot_raw=False, begin=None, end=None
+            self, cols=None, title="Correction plot", plot_raw=False, line=False, marker=False, begin=None, end=None
     ):
         if cols is None:
             cols = self.columns
@@ -752,24 +752,51 @@ class MeasuredDats:
 
         fig = go.Figure()
 
-        for col in cols:
-            if plot_raw:
-                fig.add_scattergl(
-                    x=to_plot_raw.index,
-                    y=to_plot_raw[col],
-                    name=f"{col}_raw",
-                    mode="lines+markers",
-                    line=dict(color="rgb(216,79,86)"),
-                    yaxis=ax_dict[col],
-                )
+        # Define the color palette
+        color_palette = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
+
+        num_cols = len(cols)
+
+        for i, col in enumerate(cols):
+            if i < 2:
+                # Use the first two colors in the palette for the first two columns
+                color = color_palette[i]
+            if num_cols <= 5:
+                # Use the specified colors for up to 5 columns
+                color = color_palette[i % len(color_palette)]
+            else:
+                # Generate interpolated colors for more than 5 columns
+                t = (i - 2) / (num_cols - 3)  # Interpolation parameter
+                color = self.interpolate_color(color_palette[0], color_palette[-1], t)
+
+            dark_color = self.darken_color(color, 0.7)
+
+            if line and not marker:
+                mode = "lines"
+            elif line and marker:
+                mode = "lines+markers"
+            else:
+                mode = "markers"
 
             fig.add_scattergl(
                 x=to_plot_corr.index,
                 y=to_plot_corr[col],
                 name=f"{col}_corrected",
-                mode="lines+markers",
+                mode=mode,
+                line=dict(width=2, color=dark_color),
+                marker=dict(color=dark_color, opacity=0.2),
                 yaxis=ax_dict[col],
             )
+
+            if plot_raw:
+                fig.add_scattergl(
+                    x=to_plot_raw.index,
+                    y=to_plot_raw[col],
+                    name=f"{col}_raw",
+                    mode=mode,
+                    marker=dict(color=color, opacity=0.5),
+                    yaxis=ax_dict[col],
+                )
 
         fig.update_layout(**layout_ax_dict)
         fig.update_layout(
@@ -778,5 +805,19 @@ class MeasuredDats:
             ),
         )
         fig.update_layout(dict(title=title))
-
         fig.show()
+
+    def interpolate_color(self, color1, color2, t):
+        """Interpolate between two colors based on a parameter t"""
+        r = int((1 - t) * int(color1[1:3], 16) + t * int(color2[1:3], 16))
+        g = int((1 - t) * int(color1[3:5], 16) + t * int(color2[3:5], 16))
+        b = int((1 - t) * int(color1[5:7], 16) + t * int(color2[5:7], 16))
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def darken_color(self, color, factor):
+        r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+        r = int(r * factor)
+        g = int(g * factor)
+        b = int(b * factor)
+        darkened_color = '#{:02X}{:02X}{:02X}'.format(r, g, b)
+        return darkened_color
