@@ -197,11 +197,14 @@ class MyMixedProblem(ElementwiseProblem):
 
 
 def plot_parcoord(data_dict, colorby=None, colorscale="Electric"):
+    # Define the color palette
+    color_palette = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
+
     fig = go.Figure(
         data=go.Parcoords(
             line=dict(
                 color=data_dict[colorby],
-                colorscale=colorscale,
+                colorscale=color_palette,
                 showscale=True,
                 cmin=data_dict[colorby].min(),
                 cmax=data_dict[colorby].max(),
