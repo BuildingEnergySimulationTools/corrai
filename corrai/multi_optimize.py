@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Integer, Real, Choice, Binary
+import plotly.graph_objs as go
 
 
 # TODO Add permutation variables to MyMixedProblem
@@ -87,6 +88,17 @@ class MyProblem(ElementwiseProblem):
         out["F"] = list(res[self.function_names])
         out["G"] = list(res[self.constraint_names])
 
+    def plot_pcp(self, res, ref):
+        data_dict = {
+            param["name"]: res.X[:, i]
+            for param, i in zip(self.parameters, range(res.X.shape[1]))
+        }
+        data_dict.update(
+            {self.function_names[i]: res.F[:, i] for i in range(res.F.shape[1])}
+        )
+
+        plot_parcoord(data_dict=data_dict, colorby=ref)
+
 
 class MyMixedProblem(ElementwiseProblem):
     """
@@ -119,8 +131,8 @@ class MyMixedProblem(ElementwiseProblem):
          from parameters. The variable types can be any of the following:
          - Real: continuous variable that takes values within a range of real numbers.
          - Integer: variable that takes integer values within a range.
-         - 'Binary: variable that takes binary values (0 or 1).
-         - 'Choice': variable that represents multiple choices from a
+         - Binary: variable that takes binary values (0 or 1).
+         - Choice: variable that represents multiple choices from a
          set of discrete values.
      n_var (int):
         The number of variables inherited from parameters.
@@ -172,11 +184,40 @@ class MyMixedProblem(ElementwiseProblem):
             n_ieq_constr=len(constraint_names),
         )
 
-    def _evaluate(self, X, out, *args, **kwargs):
-        res = pd.concat(
-            [m.function(X) for m in self.obj_func_list]
-            + [pyf(X) for pyf in self.func_list]
+    def plot_pcp(self, res, ref):  # à tester avec binaires, non floats, etc.
+        data_dict = {
+            param["name"]: res.X[:, i]
+            for param, i in zip(self.parameters, range(res.X.shape[1]))
+        }
+        data_dict.update(
+            {self.function_names[i]: res.F[:, i] for i in range(res.F.shape[1])}
         )
 
-        out["F"] = list(res[self.function_names])
-        out["G"] = list(res[self.constraint_names])
+        plot_parcoord(data_dict=data_dict, colorby=ref)
+
+
+def plot_parcoord(data_dict, colorby=None, colorscale="Electric"):
+    # Define the color palette
+    color_palette = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
+
+    fig = go.Figure(
+        data=go.Parcoords(
+            line=dict(
+                color=data_dict[colorby],
+                colorscale=color_palette,
+                showscale=True,
+                cmin=data_dict[colorby].min(),
+                cmax=data_dict[colorby].max(),
+            ),
+            dimensions=[
+                {
+                    "range": [data_dict[par].min(), data_dict[par].max()],
+                    "label": par,
+                    "values": data_dict[par],
+                }
+                for par in data_dict.keys()
+            ],
+        )
+    )
+
+    fig.show()
