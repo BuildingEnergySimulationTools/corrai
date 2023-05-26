@@ -90,33 +90,42 @@ class MyProblem(ElementwiseProblem):
         out["G"] = list(res[self.constraint_names])
 
     def plot_pcd(self, res, ref):
-        data_dict = {param["name"]: res.X[:, i] for param, i in zip(self.parameters, range(res.X.shape[1]))}
-        data_dict.update({self.function_names[i]: res.F[:, i] for i in range(res.F.shape[1])})
+        data_dict = {
+            param["name"]: res.X[:, i]
+            for param, i in zip(self.parameters, range(res.X.shape[1]))
+        }
+        data_dict.update(
+            {self.function_names[i]: res.F[:, i] for i in range(res.F.shape[1])}
+        )
 
         plot_parcoord(data_dict=data_dict, colorby=ref)
 
-    def plot_parcoord(self, colorby=None, colorscale='Electric'):
-        fig = go.Figure(data=go.Parcoords(
-            line=dict(
-                color=self.parameters[colorby],
-                colorscale=colorscale,
-                showscale=True,
-                cmin=self.parameters[colorby].min(),
-                cmax=self.parameters[colorby].max()
-            ),
-            dimensions=[
-                {
-                    "range": [self.parameters[par].min(),
-                              self.parameters[par].max()],
-                    "label": par,
-                    "values": self.parameters[par]
-                }
-                for par in self.parameters.keys() if par != "F"
-            ]
-        ))
+    def plot_parcoord(self, colorby=None, colorscale="Electric"):
+        fig = go.Figure(
+            data=go.Parcoords(
+                line=dict(
+                    color=self.parameters[colorby],
+                    colorscale=colorscale,
+                    showscale=True,
+                    cmin=self.parameters[colorby].min(),
+                    cmax=self.parameters[colorby].max(),
+                ),
+                dimensions=[
+                    {
+                        "range": [
+                            self.parameters[par].min(),
+                            self.parameters[par].max(),
+                        ],
+                        "label": par,
+                        "values": self.parameters[par],
+                    }
+                    for par in self.parameters.keys()
+                    if par != "F"
+                ],
+            )
+        )
 
         fig.show()
-
 
 
 class MyMixedProblem(ElementwiseProblem):
@@ -203,30 +212,40 @@ class MyMixedProblem(ElementwiseProblem):
             n_ieq_constr=len(constraint_names),
         )
 
-    def plot_pcd(self, res, ref): # à tester avec binaires, non floats, etc.
-        data_dict = {param["name"]: res.X[:, i] for param, i in zip(self.parameters, range(res.X.shape[1]))}
-        data_dict.update({self.function_names[i]: res.F[:, i] for i in range(res.F.shape[1])})
+    def plot_pcd(self, res, ref):  # à tester avec binaires, non floats, etc.
+        data_dict = {
+            param["name"]: res.X[:, i]
+            for param, i in zip(self.parameters, range(res.X.shape[1]))
+        }
+        data_dict.update(
+            {self.function_names[i]: res.F[:, i] for i in range(res.F.shape[1])}
+        )
 
         plot_parcoord(data_dict=data_dict, colorby=ref)
 
-    def plot_parcoord(self, colorby=None, colorscale='Electric'):
-        fig = go.Figure(data=go.Parcoords(
-            line=dict(
-                color=self.parameters[colorby],
-                colorscale=colorscale,
-                showscale=True,
-                cmin=self.parameters[colorby].min(),
-                cmax=self.parameters[colorby].max()
-            ),
-            dimensions=[
-                {
-                    "range": [self.parameters[par].min(),
-                              self.parameters[par].max()],
-                    "label": par,
-                    "values": self.parameters[par]
-                }
-                for par in self.parameters.keys() if par != "F"
-            ]
-        ))
+    def plot_parcoord(self, colorby=None, colorscale="Electric"):
+        fig = go.Figure(
+            data=go.Parcoords(
+                line=dict(
+                    color=self.parameters[colorby],
+                    colorscale=colorscale,
+                    showscale=True,
+                    cmin=self.parameters[colorby].min(),
+                    cmax=self.parameters[colorby].max(),
+                ),
+                dimensions=[
+                    {
+                        "range": [
+                            self.parameters[par].min(),
+                            self.parameters[par].max(),
+                        ],
+                        "label": par,
+                        "values": self.parameters[par],
+                    }
+                    for par in self.parameters.keys()
+                    if par != "F"
+                ],
+            )
+        )
 
         fig.show()
