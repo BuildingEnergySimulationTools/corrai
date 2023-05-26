@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from modelitool.sensitivity import plot_parcoord
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Integer, Real, Choice, Binary
 import plotly.graph_objs as go
@@ -89,7 +88,7 @@ class MyProblem(ElementwiseProblem):
         out["F"] = list(res[self.function_names])
         out["G"] = list(res[self.constraint_names])
 
-    def plot_pcd(self, res, ref):
+    def plot_pcp(self, res, ref):
         data_dict = {
             param["name"]: res.X[:, i]
             for param, i in zip(self.parameters, range(res.X.shape[1]))
@@ -99,33 +98,6 @@ class MyProblem(ElementwiseProblem):
         )
 
         plot_parcoord(data_dict=data_dict, colorby=ref)
-
-    def plot_parcoord(self, colorby=None, colorscale="Electric"):
-        fig = go.Figure(
-            data=go.Parcoords(
-                line=dict(
-                    color=self.parameters[colorby],
-                    colorscale=colorscale,
-                    showscale=True,
-                    cmin=self.parameters[colorby].min(),
-                    cmax=self.parameters[colorby].max(),
-                ),
-                dimensions=[
-                    {
-                        "range": [
-                            self.parameters[par].min(),
-                            self.parameters[par].max(),
-                        ],
-                        "label": par,
-                        "values": self.parameters[par],
-                    }
-                    for par in self.parameters.keys()
-                    if par != "F"
-                ],
-            )
-        )
-
-        fig.show()
 
 
 class MyMixedProblem(ElementwiseProblem):
@@ -212,7 +184,7 @@ class MyMixedProblem(ElementwiseProblem):
             n_ieq_constr=len(constraint_names),
         )
 
-    def plot_pcd(self, res, ref):  # à tester avec binaires, non floats, etc.
+    def plot_pcp(self, res, ref):  # à tester avec binaires, non floats, etc.
         data_dict = {
             param["name"]: res.X[:, i]
             for param, i in zip(self.parameters, range(res.X.shape[1]))
@@ -223,29 +195,26 @@ class MyMixedProblem(ElementwiseProblem):
 
         plot_parcoord(data_dict=data_dict, colorby=ref)
 
-    def plot_parcoord(self, colorby=None, colorscale="Electric"):
-        fig = go.Figure(
-            data=go.Parcoords(
-                line=dict(
-                    color=self.parameters[colorby],
-                    colorscale=colorscale,
-                    showscale=True,
-                    cmin=self.parameters[colorby].min(),
-                    cmax=self.parameters[colorby].max(),
-                ),
-                dimensions=[
-                    {
-                        "range": [
-                            self.parameters[par].min(),
-                            self.parameters[par].max(),
-                        ],
-                        "label": par,
-                        "values": self.parameters[par],
-                    }
-                    for par in self.parameters.keys()
-                    if par != "F"
-                ],
-            )
-        )
 
-        fig.show()
+def plot_parcoord(data_dict, colorby=None, colorscale="Electric"):
+    fig = go.Figure(
+        data=go.Parcoords(
+            line=dict(
+                color=data_dict[colorby],
+                colorscale=colorscale,
+                showscale=True,
+                cmin=data_dict[colorby].min(),
+                cmax=data_dict[colorby].max(),
+            ),
+            dimensions=[
+                {
+                    "range": [data_dict[par].min(), data_dict[par].max()],
+                    "label": par,
+                    "values": data_dict[par],
+                }
+                for par in data_dict.keys()
+            ],
+        )
+    )
+
+    fig.show()
