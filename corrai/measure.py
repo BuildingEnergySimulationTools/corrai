@@ -826,6 +826,14 @@ class MeasuredDats:
             ),
         )
         fig.update_layout(dict(title=title))
+        nb_right_y_axis = len(set(ax_dict.values()))
+        x_right_space = 1 - 0.03 * (nb_right_y_axis - 1)
+        fig.update_xaxes(domain=(0, x_right_space))
+        ax_args = {
+            f"yaxis{2 + i}": dict(position=x_right_space + i * 0.03)
+            for i in range(nb_right_y_axis)
+        }
+        fig.update_layout(**ax_args)
         fig.show()
 
     def interpolate_color(self, color1, color2, t):
