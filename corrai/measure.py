@@ -1,10 +1,30 @@
 import numpy as np
 import pandas as pd
+import corrai.custom_transformers as ct
 import json
 from collections import defaultdict
 from corrai.utils import check_datetime_index
 import plotly.graph_objects as go
 import datetime as dt
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import make_pipeline
+
+
+TRANSFORMER_MAP = {
+    "dropna": ct.PdDropna,
+    "rename_columns": ct.PdRenameColumns,
+    "sk_transformer": ct.PdSkTransformer,
+    "drop_threshold": ct.PdDropThreshold,
+    "drop_time_gradient": ct.PdDropTimeGradient,
+    "apply_expression": ct.PdApplyExpression,
+    "time_gradient": ct.PdTimeGradient,
+    "fill_na": ct.PdFillNa,
+    "resample": ct.PdResampler,
+    "interpolate": ct.PdInterpolate,
+    "gaussian_filter": ct.PdGaussianFilter1D,
+}
+
+ERROR_TRANSFORMER = ["drop_threshold", "drop_time_gradient"]
 
 
 def missing_values_dict(df):
@@ -66,11 +86,11 @@ def check_config_dict(config_dict):
         for it in to_test:
             loc_corr = config_dict["corr_dict"][tpe][it]
 
-            if it == "minmax":
+            if it == "drop_threshold":
                 if list(loc_corr.keys()) != ["upper", "lower"]:
                     raise ValueError(f"Invalid configuration for {tpe} minmax")
 
-            elif it == "derivative":
+            elif it == "drop_time_gradient":
                 for k in list(loc_corr.keys()):
                     if k not in ["upper_rate", "lower_rate"]:
                         raise ValueError(
@@ -171,7 +191,7 @@ def get_mean_timestep(df):
 
 
 def add_scatter_and_gaps(
-        figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
+    figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
 ):
     figure.add_trace(
         go.Scattergl(
@@ -193,7 +213,7 @@ def add_scatter_and_gaps(
                 fill="toself",
                 showlegend=False,
                 fillcolor=f"rgba({color_rgb[0]}, {color_rgb[1]},"
-                          f" {color_rgb[2]} , {alpha})",
+                f" {color_rgb[2]} , {alpha})",
                 yaxis=yaxis,
             )
         )
@@ -201,12 +221,12 @@ def add_scatter_and_gaps(
 
 class MeasuredDats:
     def __init__(
-            self,
-            data,
-            data_type_dict=None,
-            corr_dict=None,
-            config_file_path=None,
-            gaps_timedelta=None,
+        self,
+        data,
+        data_type_dict=None,
+        corr_dict=None,
+        config_file_path=None,
+        gaps_timedelta=None,
     ):
         """
         A class for handling time-series data with missing values.
@@ -399,6 +419,38 @@ class MeasuredDats:
         self.fill_nan()
         self.resample()
 
+    def make_column_transformer(self, category=None):
+        if category == "anomalies":
+            cat_filter = ERROR_TRANSFORMER
+        elif category == "post_process":
+            cat_filter = [
+                name for name in TRANSFORMER_MAP.keys() if name not in ERROR_TRANSFORMER
+            ]
+        else:
+            cat_filter = TRANSFORMER_MAP.keys()
+
+        column_config_list = []
+        for data_type, cols in self.data_type_dict.items():
+            pipe_dict = {
+                name: self.corr_dict[data_type][name]
+                for name in self.corr_dict[data_type].keys()
+                if name in cat_filter
+            }
+
+            column_config_list.append(
+                (
+                    f"anomalies_{data_type}",
+                    make_pipeline(
+                        *[TRANSFORMER_MAP[key](**pipe_dict[key]) for key in pipe_dict]
+                    ),
+                    cols,
+                )
+            )
+
+        return ColumnTransformer(
+            column_config_list, verbose_feature_names_out=False, remainder="passthrough"
+        ).set_output(transform='pandas')
+
     def remove_anomalies(self):
         for data_type, cols in self.data_type_dict.items():
             if "minmax" in self.corr_dict[data_type].keys():
@@ -514,15 +566,15 @@ class MeasuredDats:
         self.corrected_data.loc[:, cols] = filled
 
     def plot_gaps(
-            self,
-            cols=None,
-            begin=None,
-            end=None,
-            gaps_timestep=None,
-            title="Gaps plot",
-            raw_data=False,
-            color_rgb=(243, 132, 48),
-            alpha=0.5,
+        self,
+        cols=None,
+        begin=None,
+        end=None,
+        gaps_timestep=None,
+        title="Gaps plot",
+        raw_data=False,
+        color_rgb=(243, 132, 48),
+        alpha=0.5,
     ):
         if cols is None:
             cols = self.columns
@@ -577,17 +629,17 @@ class MeasuredDats:
         fig.show()
 
     def plot(
-            self,
-            cols=None,
-            title="Correction plot",
-            plot_raw=False,
-            plot_corrected=False,
-            line_corrected=True,
-            marker_corrected=True,
-            line_raw=True,
-            marker_raw=True,
-            begin=None,
-            end=None,
+        self,
+        cols=None,
+        title="Correction plot",
+        plot_raw=False,
+        plot_corrected=False,
+        line_corrected=True,
+        marker_corrected=True,
+        line_raw=True,
+        marker_raw=True,
+        begin=None,
+        end=None,
     ):
         if cols is None:
             cols = self.columns
