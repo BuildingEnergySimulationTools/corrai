@@ -3,7 +3,7 @@ import numpy as np
 import datetime as dt
 from functools import partial
 from sklearn.base import TransformerMixin, BaseEstimator
-from corrai.measure import time_gradient
+from corrai.math import time_gradient
 from scipy.ndimage import gaussian_filter1d
 
 
