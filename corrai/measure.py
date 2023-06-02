@@ -374,7 +374,7 @@ class MeasuredDats:
         else:
             self.gaps_timedelta = gaps_timedelta
 
-        self.resample_func_dict = {"mean": np.mean, "sum": np.sum}
+        self.anomalies_pipe = self.make_column_transformer(category="anomalies")
 
     @property
     def columns(self):
@@ -449,22 +449,11 @@ class MeasuredDats:
 
         return ColumnTransformer(
             column_config_list, verbose_feature_names_out=False, remainder="passthrough"
-        ).set_output(transform='pandas')
+        ).set_output(transform="pandas")
 
     def remove_anomalies(self):
-        for data_type, cols in self.data_type_dict.items():
-            if "minmax" in self.corr_dict[data_type].keys():
-                self._minmax_corr(cols=cols, **self.corr_dict[data_type]["minmax"])
-            if "derivative" in self.corr_dict[data_type].keys():
-                self._derivative_corr(
-                    cols=cols, **self.corr_dict[data_type]["derivative"]
-                )
-        self.correction_journal["remove_anomalies"] = {
-            "missing_values": missing_values_dict(self.corrected_data),
-            "gaps_stats": gaps_describe(
-                self.corrected_data, timestep=self.gaps_timedelta
-            ),
-        }
+        pipe = self.make_column_transformer(category="anomalies")
+        self.corrected_data = pipe.fit_transform(self.data)
 
     def fill_nan(self):
         for data_type, cols in self.data_type_dict.items():
@@ -527,28 +516,6 @@ class MeasuredDats:
             layout_ax_dict[f"yaxis{i + 2}"] = {"title": ax, "side": "right"}
 
         return ax_dict, layout_ax_dict
-
-    def _minmax_corr(self, cols, upper, lower):
-        df = self.corrected_data.loc[:, cols]
-        upper_mask = df > upper
-        lower_mask = df < lower
-        mask = np.logical_or(upper_mask, lower_mask)
-        self.corrected_data[mask] = np.nan
-
-    def _derivative_corr(self, cols, upper_rate, lower_rate):
-        df = self.corrected_data.loc[:, cols]
-        time_delta = df.index.to_series().diff().dt.total_seconds()
-        abs_der = abs(df.diff().divide(time_delta, axis=0))
-        abs_der_two = abs(df.diff(periods=2).divide(time_delta, axis=0))
-
-        mask_constant = abs_der <= lower_rate
-        mask_der = abs_der >= upper_rate
-        mask_der_two = abs_der_two >= upper_rate
-
-        mask_to_remove = np.logical_and(mask_der, mask_der_two)
-        mask_to_remove = np.logical_or(mask_to_remove, mask_constant)
-
-        self.corrected_data[mask_to_remove] = np.nan
 
     def _linear_interpolation(self, cols):
         self._interpolate(cols, method="linear")

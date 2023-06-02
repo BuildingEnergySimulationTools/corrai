@@ -106,12 +106,24 @@ class TestMeasuredDats:
 
         ref = pd.DataFrame(
             {
-                "dumb_column": [np.nan, 5, np.nan, 5, 5.1, np.nan, 6, 7, np.nan, 6, 5],
+                "dumb_column": [
+                    np.nan,
+                    5,
+                    np.nan,
+                    np.nan,
+                    5.1,
+                    np.nan,
+                    6,
+                    7,
+                    np.nan,
+                    6,
+                    5,
+                ],
                 "dumb_column2": [
                     np.nan,
                     50,
                     np.nan,
-                    50,
+                    np.nan,
                     50.1,
                     np.nan,
                     60,
@@ -132,12 +144,12 @@ class TestMeasuredDats:
             },
             corr_dict={
                 "col_1": {
-                    "minmax": {"upper": 50, "lower": 0},
-                    "derivative": {"lower_rate": 0, "upper_rate": 0.004},
+                    "drop_threshold": {"upper": 50, "lower": 0},
+                    "drop_time_gradient": {"lower_rate": 0, "upper_rate": 0.004},
                 },
                 "col_2": {
-                    "minmax": {"upper": 500, "lower": 0},
-                    "derivative": {"lower_rate": 0, "upper_rate": 0.04},
+                    "drop_threshold": {"upper": 500, "lower": 0},
+                    "drop_time_gradient": {"lower_rate": 0, "upper_rate": 0.04},
                 },
             },
         )
