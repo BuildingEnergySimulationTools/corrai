@@ -395,8 +395,7 @@ class PdTimeGradient(BaseEstimator, TransformerMixin):
 
     """
 
-    def __init__(self, dropna=True):
-        self.dropna = dropna
+    def __init__(self):
         self.columns = None
         self.index = None
 
@@ -409,19 +408,9 @@ class PdTimeGradient(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        X_transformed = []
-        for column in X.columns:
-            X_column = X[column]
-            if self.dropna:
-                original_index = X_column.index.copy()
-                X_column = X_column.dropna()
-
-            derivative = time_gradient(X_column)
-            if self.dropna:
-                derivative = derivative.reindex(original_index)
-
-            X_transformed.append(derivative)
-        return pd.concat(X_transformed, axis=1)
+        original_index = X.index.copy()
+        derivative = time_gradient(X)
+        return derivative.reindex(original_index)
 
 
 class PdFillNa(BaseEstimator, TransformerMixin):
