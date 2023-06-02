@@ -656,14 +656,14 @@ class MeasuredDats:
         fig.update_layout(**ax_args)
         fig.show()
 
-    def interpolate_color(self, color1, color2, t):
+    def interpolate_color(color1, color2, t):
         """Interpolate between two colors based on a parameter t"""
         r = int((1 - t) * int(color1[1:3], 16) + t * int(color2[1:3], 16))
         g = int((1 - t) * int(color1[3:5], 16) + t * int(color2[3:5], 16))
         b = int((1 - t) * int(color1[5:7], 16) + t * int(color2[5:7], 16))
         return f"#{r:02x}{g:02x}{b:02x}"
 
-    def darken_color(self, color, factor):
+    def darken_color(color, factor):
         r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
         r = int(r * factor)
         g = int(g * factor)
