@@ -135,7 +135,7 @@ def find_gaps(data, cols=None, timestep=None):
         cols = data.columns
 
     if not timestep:
-        timestep = auto_timestep(data)
+        timestep = get_mean_timestep(data)
 
     # Aggregate in a single columns to know overall quality
     df = data.copy()
@@ -166,12 +166,12 @@ def gaps_describe(df_in, cols=None, timestep=None):
     return pd.DataFrame({k: val.describe() for k, val in res_find_gaps.items()})
 
 
-def auto_timestep(df):
+def get_mean_timestep(df):
     return df.index.to_frame().diff().mean()[0]
 
 
 def add_scatter_and_gaps(
-    figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
+        figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
 ):
     figure.add_trace(
         go.Scattergl(
@@ -193,7 +193,7 @@ def add_scatter_and_gaps(
                 fill="toself",
                 showlegend=False,
                 fillcolor=f"rgba({color_rgb[0]}, {color_rgb[1]},"
-                f" {color_rgb[2]} , {alpha})",
+                          f" {color_rgb[2]} , {alpha})",
                 yaxis=yaxis,
             )
         )
@@ -201,12 +201,12 @@ def add_scatter_and_gaps(
 
 class MeasuredDats:
     def __init__(
-        self,
-        data,
-        data_type_dict=None,
-        corr_dict=None,
-        config_file_path=None,
-        gaps_timedelta=None,
+            self,
+            data,
+            data_type_dict=None,
+            corr_dict=None,
+            config_file_path=None,
+            gaps_timedelta=None,
     ):
         """
         A class for handling time-series data with missing values.
@@ -333,8 +333,8 @@ class MeasuredDats:
                 time range to plot. If None (default), plot all data.
         """
 
-        self.data = data.apply(pd.to_numeric, args=("coerce",)).copy()
-        self.corrected_data = data.apply(pd.to_numeric, args=("coerce",)).copy()
+        self.data = data.copy()
+        self.corrected_data = None
 
         if config_file_path is None:
             self.data_type_dict = data_type_dict
@@ -350,7 +350,7 @@ class MeasuredDats:
             "Init": missing_values_dict(data),
         }
         if gaps_timedelta is None:
-            self.gaps_timedelta = auto_timestep(self.data)
+            self.gaps_timedelta = get_mean_timestep(self.data)
         else:
             self.gaps_timedelta = gaps_timedelta
 
@@ -434,7 +434,7 @@ class MeasuredDats:
 
     def resample(self, timestep=None):
         if not timestep:
-            timestep = auto_timestep(self.corrected_data)
+            timestep = get_mean_timestep(self.corrected_data)
 
         agg_arguments = {}
         for data_type, cols in self.data_type_dict.items():
@@ -514,15 +514,15 @@ class MeasuredDats:
         self.corrected_data.loc[:, cols] = filled
 
     def plot_gaps(
-        self,
-        cols=None,
-        begin=None,
-        end=None,
-        gaps_timestep=None,
-        title="Gaps plot",
-        raw_data=False,
-        color_rgb=(243, 132, 48),
-        alpha=0.5,
+            self,
+            cols=None,
+            begin=None,
+            end=None,
+            gaps_timestep=None,
+            title="Gaps plot",
+            raw_data=False,
+            color_rgb=(243, 132, 48),
+            alpha=0.5,
     ):
         if cols is None:
             cols = self.columns
@@ -577,17 +577,17 @@ class MeasuredDats:
         fig.show()
 
     def plot(
-        self,
-        cols=None,
-        title="Correction plot",
-        plot_raw=False,
-        plot_corrected=False,
-        line_corrected=True,
-        marker_corrected=True,
-        line_raw=True,
-        marker_raw=True,
-        begin=None,
-        end=None,
+            self,
+            cols=None,
+            title="Correction plot",
+            plot_raw=False,
+            plot_corrected=False,
+            line_corrected=True,
+            marker_corrected=True,
+            line_raw=True,
+            marker_raw=True,
+            begin=None,
+            end=None,
     ):
         if cols is None:
             cols = self.columns
@@ -672,18 +672,3 @@ class MeasuredDats:
         }
         fig.update_layout(**ax_args)
         fig.show()
-
-    def interpolate_color(color1, color2, t):
-        """Interpolate between two colors based on a parameter t"""
-        r = int((1 - t) * int(color1[1:3], 16) + t * int(color2[1:3], 16))
-        g = int((1 - t) * int(color1[3:5], 16) + t * int(color2[3:5], 16))
-        b = int((1 - t) * int(color1[5:7], 16) + t * int(color2[5:7], 16))
-        return f"#{r:02x}{g:02x}{b:02x}"
-
-    def darken_color(color, factor):
-        r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
-        r = int(r * factor)
-        g = int(g * factor)
-        b = int(b * factor)
-        darkened_color = f"#{r:02X}{g:02X}{b:02X}"
-        return darkened_color
