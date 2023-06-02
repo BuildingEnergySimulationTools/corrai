@@ -3,46 +3,10 @@ import pandas as pd
 import json
 from collections import defaultdict
 from scipy import integrate
+from corrai.utils import check_datetime_index
+from corrai.utils import as_1_column_dataframe
 import plotly.graph_objects as go
 import datetime as dt
-
-
-def time_data_control(data):
-    """
-    Given a pandas Series or DataFrame `data`, checks that the input data
-    as a DateTimeIndex. Returns a DataFrame
-
-    Parameters:
-    -----------
-    data : pandas Series or DataFrame
-        The input data to be checked. If `data` is a pandas Series, it will be
-         converted to a DataFrame with a single column.
-
-    Returns:
-    --------
-    output : pandas DataFrame
-        A DataFrame that is guaranteed to have a pandas DateTimeIndex as
-        its index.
-
-    Raises:
-    -------
-    ValueError
-        If `data` is not a pandas Series or DataFrame.
-        If `data` has an index that is not a pandas DateTimeIndex.
-    """
-    if isinstance(data, pd.Series):
-        data = data.to_frame()
-    elif isinstance(data, pd.DataFrame):
-        pass
-    else:
-        raise ValueError(
-            f"time_series is expecting pandas"
-            f" Series or DataFrame. Got {type(data)}"
-            f"instead"
-        )
-    if not isinstance(data.index, pd.DatetimeIndex):
-        raise ValueError("time_series index must be a pandas DateTimeIndex")
-    return data
 
 
 def time_gradient(data, begin=None, end=None):
@@ -87,7 +51,9 @@ def time_gradient(data, begin=None, end=None):
     data points.
     """
 
-    data = time_data_control(data)
+    check_datetime_index(data)
+    if isinstance(data, pd.Series):
+        data = as_1_column_dataframe(data)
 
     if begin is None:
         begin = data.index[0]
@@ -164,7 +130,9 @@ def time_integrate(
     between consecutive data points.
     """
 
-    data = time_data_control(data)
+    check_datetime_index(data)
+    if isinstance(data, pd.Series):
+        data = as_1_column_dataframe(data)
 
     if begin is None:
         begin = data.index[0]
@@ -293,7 +261,7 @@ def find_gaps(data, cols=None, timestep=None):
         specified column, as well as the overall combination of columns.
     """
 
-    data = time_data_control(data)
+    check_datetime_index(data)
     if not cols:
         cols = data.columns
 
@@ -540,7 +508,7 @@ class MeasuredDats:
         self.corr_dict = config_dict["corr_dict"]
 
     def add_time_series(self, time_series, data_type, data_corr_dict=None):
-        time_series = time_data_control(time_series)
+        check_datetime_index(time_series)
         if data_corr_dict is None:
             data_corr_dict = {}
 
