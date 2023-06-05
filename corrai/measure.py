@@ -336,9 +336,8 @@ class MeasuredDats:
         with open(file_path, encoding="utf-8") as f:
             config_dict = json.load(f)
 
-        check_config_dict(config_dict)
-        self.data_type_dict = config_dict["data_type_dict"]
-        self.corr_dict = config_dict["corr_dict"]
+        self.category_dict = config_dict["category_dict"]
+        self.category_trans = config_dict["category_trans"]
 
     def add_time_series(self, time_series, data_type, data_corr_dict=None):
         check_datetime_index(time_series)
