@@ -9,7 +9,6 @@ import datetime as dt
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import make_pipeline
 
-
 TRANSFORMER_MAP = {
     "dropna": ct.PdDropna,
     "rename_columns": ct.PdRenameColumns,
@@ -135,7 +134,7 @@ def get_mean_timestep(df):
 
 
 def add_scatter_and_gaps(
-    figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
+        figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
 ):
     figure.add_trace(
         go.Scattergl(
@@ -157,7 +156,7 @@ def add_scatter_and_gaps(
                 fill="toself",
                 showlegend=False,
                 fillcolor=f"rgba({color_rgb[0]}, {color_rgb[1]},"
-                f" {color_rgb[2]} , {alpha})",
+                          f" {color_rgb[2]} , {alpha})",
                 yaxis=yaxis,
             )
         )
@@ -165,12 +164,13 @@ def add_scatter_and_gaps(
 
 class MeasuredDats:
     def __init__(
-        self,
-        data,
-        data_type_dict=None,
-        corr_dict=None,
-        config_file_path=None,
-        gaps_timedelta=None,
+            self,
+            data,
+            category_dict=None,
+            category_transformations=None,
+            common_transformations=None,
+            config_file_path=None,
+            gaps_timedelta=None,
     ):
         """
         A class for handling time-series data with missing values.
@@ -180,13 +180,13 @@ class MeasuredDats:
         data : pandas.DataFrame
             The input data to be processed.
 
-        data_type_dict : dict, optional
+        category_dict : dict, optional
             A dictionary that maps data type categories to the 'data' columns
             that belong to that category. Default is None.
 
-        corr_dict : dict, optional
+        category_trans : dict, optional
             A dictionary that stores the correction method and parameters for each
-            'data' type category. 'corr_dict" keys must match 'data_type_dict'
+            'data' type category. 'category_trans" keys must match 'category_dict'
             keys. Default is None.
 
         config_file_path : str, optional
@@ -209,11 +209,11 @@ class MeasuredDats:
         corrected_data : pandas.DataFrame
             The data after the correction process.
 
-        data_type_dict : dict
+        category_dict : dict
             A dictionary that maps data type categories to the columns that
             belong to that category.
 
-        corr_dict : dict
+        category_trans : dict
             A dictionary that stores the correction method and parameters for
             each data type category.
 
@@ -237,7 +237,7 @@ class MeasuredDats:
             Reads the data type dictionary and correction dictionary from a J
             SON file.
 
-        add_time_series(time_series, data_type, data_corr_dict=None)
+        add_time_series(time_series, data_type, data_category_trans=None)
             Adds a new time series to the data set and updates the data type
             and correction dictionaries accordingly.
 
@@ -301,11 +301,8 @@ class MeasuredDats:
         self.corrected_data = None
 
         if config_file_path is None:
-            self.data_type_dict = data_type_dict
-            self.corr_dict = corr_dict
-            check_config_dict(
-                {"data_type_dict": data_type_dict, "corr_dict": corr_dict}
-            )
+            self.category_dict = category_dict
+            self.category_trans = category_transformations
         else:
             self.read_config_file(config_file_path)
 
@@ -318,17 +315,23 @@ class MeasuredDats:
         else:
             self.gaps_timedelta = gaps_timedelta
 
-        self.anomalies_pipe = self.make_column_transformer(category="anomalies")
-
     @property
     def columns(self):
         return self.data.columns
 
+    @property
+    def anomalies_pipe(self):
+        return self.make_column_transformer(category="anomalies")
+
+    @property
+    def columns_process_pipe(self):
+        return self.make_column_transformer(category="process")
+
     def write_config_file(self, file_path):
         with open(file_path, "w", encoding="utf-8") as f:
             to_dump = {
-                "data_type_dict": self.data_type_dict,
-                "corr_dict": self.corr_dict,
+                "category_dict": self.category_dict,
+                "category_trans": self.category_trans,
             }
             json.dump(to_dump, f, ensure_ascii=False, indent=4)
 
@@ -339,20 +342,16 @@ class MeasuredDats:
         self.category_dict = config_dict["category_dict"]
         self.category_trans = config_dict["category_trans"]
 
-    def add_time_series(self, time_series, data_type, data_corr_dict=None):
+    def add_time_series(self, time_series, data_type, data_category_trans=None):
         check_datetime_index(time_series)
-        if data_corr_dict is None:
-            data_corr_dict = {}
+        if data_category_trans is None:
+            data_category_trans = {}
 
-        if data_type in self.data_type_dict.keys():
-            self.data_type_dict[data_type] += list(time_series.columns)
+        if data_type in self.category_dict.keys():
+            self.category_dict[data_type] += list(time_series.columns)
         else:
-            self.data_type_dict[data_type] = list(time_series.columns)
-            self.corr_dict[data_type] = data_corr_dict
-
-        check_config_dict(
-            {"data_type_dict": self.data_type_dict, "corr_dict": self.corr_dict}
-        )
+            self.category_dict[data_type] = list(time_series.columns)
+            self.category_trans[data_type] = data_category_trans
 
         self.data = pd.concat([self.data, time_series], axis=1)
         self.corrected_data = pd.concat([self.corrected_data, time_series], axis=1)
@@ -365,7 +364,7 @@ class MeasuredDats:
     def make_column_transformer(self, category=None):
         if category == "anomalies":
             cat_filter = ERROR_TRANSFORMER
-        elif category == "post_process":
+        elif category == "process":
             cat_filter = [
                 name for name in TRANSFORMER_MAP.keys() if name not in ERROR_TRANSFORMER
             ]
@@ -373,10 +372,10 @@ class MeasuredDats:
             cat_filter = TRANSFORMER_MAP.keys()
 
         column_config_list = []
-        for data_type, cols in self.data_type_dict.items():
+        for data_type, cols in self.category_dict.items():
             pipe_dict = {
-                name: self.corr_dict[data_type][name]
-                for name in self.corr_dict[data_type].keys()
+                name: self.category_trans[data_type][name]
+                for name in self.category_trans[data_type].keys()
                 if name in cat_filter
             }
 
@@ -395,18 +394,17 @@ class MeasuredDats:
         ).set_output(transform="pandas")
 
     def remove_anomalies(self):
-        pipe = self.make_column_transformer(category="anomalies")
-        self.corrected_data = pipe.fit_transform(self.data)
+        self.corrected_data = self.anomalies_pipe.fit_transform(self.data)
 
     def fill_nan(self):
-        for data_type, cols in self.data_type_dict.items():
+        for data_type, cols in self.category_dict.items():
             function_map = {
                 "linear_interpolation": self._linear_interpolation,
                 "bfill": self._bfill,
                 "ffill": self._ffill,
             }
 
-            for func in self.corr_dict[data_type]["fill_nan"]:
+            for func in self.category_trans[data_type]["fill_nan"]:
                 function_map[func](cols)
 
         self.correction_journal["fill_nan"] = {
@@ -421,9 +419,9 @@ class MeasuredDats:
             timestep = get_mean_timestep(self.corrected_data)
 
         agg_arguments = {}
-        for data_type, cols in self.data_type_dict.items():
+        for data_type, cols in self.category_dict.items():
             for col in cols:
-                key = self.corr_dict[data_type]["resample"]
+                key = self.category_trans[data_type]["resample"]
                 agg_arguments[col] = self.resample_func_dict[key]
 
         resampled = self.corrected_data.resample(timestep).agg(agg_arguments)
@@ -431,19 +429,19 @@ class MeasuredDats:
 
         self.correction_journal["Resample"] = f"Resampled at {timestep}"
 
-    def _get_reversed_data_type_dict(self, cols=None):
+    def _get_reversed_category_dict(self, cols=None):
         if cols is None:
             cols = self.data.columns
 
         rev_dict = {}
         for col in cols:
-            for key, name_list in self.data_type_dict.items():
+            for key, name_list in self.category_dict.items():
                 if col in name_list:
                     rev_dict[col] = key
         return rev_dict
 
     def _get_yaxis_config(self, cols):
-        ax_dict = self._get_reversed_data_type_dict(cols=cols)
+        ax_dict = self._get_reversed_category_dict(cols=cols)
 
         ordered_set_cat = list(dict.fromkeys(ax_dict.values()))
         ax_map = {cat: f"y{i + 1}" for i, cat in enumerate(ordered_set_cat)}
@@ -476,15 +474,15 @@ class MeasuredDats:
         self.corrected_data.loc[:, cols] = filled
 
     def plot_gaps(
-        self,
-        cols=None,
-        begin=None,
-        end=None,
-        gaps_timestep=None,
-        title="Gaps plot",
-        raw_data=False,
-        color_rgb=(243, 132, 48),
-        alpha=0.5,
+            self,
+            cols=None,
+            begin=None,
+            end=None,
+            gaps_timestep=None,
+            title="Gaps plot",
+            raw_data=False,
+            color_rgb=(243, 132, 48),
+            alpha=0.5,
     ):
         if cols is None:
             cols = self.columns
@@ -497,7 +495,7 @@ class MeasuredDats:
         else:
             to_plot = select_data(self.corrected_data, cols, begin, end)
 
-        reversed_data_type = self._get_reversed_data_type_dict(cols)
+        reversed_data_type = self._get_reversed_category_dict(cols)
         cols_data_type = defaultdict(list)
         for key, value in reversed_data_type.items():
             cols_data_type[value].append(key)
@@ -539,17 +537,17 @@ class MeasuredDats:
         fig.show()
 
     def plot(
-        self,
-        cols=None,
-        title="Correction plot",
-        plot_raw=False,
-        plot_corrected=False,
-        line_corrected=True,
-        marker_corrected=True,
-        line_raw=True,
-        marker_raw=True,
-        begin=None,
-        end=None,
+            self,
+            cols=None,
+            title="Correction plot",
+            plot_raw=False,
+            plot_corrected=False,
+            line_corrected=True,
+            marker_corrected=True,
+            line_raw=True,
+            marker_raw=True,
+            begin=None,
+            end=None,
     ):
         if cols is None:
             cols = self.columns
