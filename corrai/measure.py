@@ -51,62 +51,6 @@ def darken_color(color, factor):
     return darkened_color
 
 
-def check_config_dict(config_dict):
-    """
-    Check if the input dictionary follows the expected structure and values.
-
-    Parameters:
-    -----------
-    config_dict : dict
-        A dictionary with two keys: "data_type_dict" and "corr_dict".
-
-        "data_type_dict" is a dictionary that maps categories to a list of
-        column names.
-
-        "corr_dict" is a dictionary that maps categories to a dictionary of
-        correction methods and their values.
-
-    Raises:
-    -------
-    ValueError:
-        If the input dictionary does not follow the expected structure and
-        values.
-    """
-    if not list(config_dict.keys()) == ["data_type_dict", "corr_dict"]:
-        raise ValueError("Invalid data_type or corr_dict")
-
-    categories = list(config_dict["data_type_dict"].keys())
-    corr_dict_type = list(config_dict["corr_dict"].keys())
-    for cat in categories:
-        if cat not in corr_dict_type:
-            raise ValueError("Type present in data_type " "is missing in corr_dict")
-
-    for tpe in config_dict["corr_dict"].keys():
-        to_test = list(config_dict["corr_dict"][tpe].keys())
-        for it in to_test:
-            loc_corr = config_dict["corr_dict"][tpe][it]
-
-            if it == "drop_threshold":
-                if list(loc_corr.keys()) != ["upper", "lower"]:
-                    raise ValueError(f"Invalid configuration for {tpe} minmax")
-
-            elif it == "drop_time_gradient":
-                for k in list(loc_corr.keys()):
-                    if k not in ["upper_rate", "lower_rate"]:
-                        raise ValueError(
-                            f"Invalid configuration " f"for {tpe} derivative"
-                        )
-            elif it == "fill_nan":
-                for elmt in loc_corr:
-                    if elmt not in ["linear_interpolation", "bfill", "ffill"]:
-                        raise ValueError(
-                            f"Invalid configuration " f"for {tpe} fill_nan"
-                        )
-            elif it == "resample":
-                if loc_corr not in ["mean", "sum"]:
-                    raise ValueError(f"Invalid configuration " f"for {tpe} resample")
-
-
 def select_data(df, cols=None, begin=None, end=None):
     if cols is None:
         cols = df.columns
