@@ -347,13 +347,10 @@ class MeasuredDats:
         if pipes_list is None:
             pipe = self.full_pipe
         else:
-            try:
-                pipe = make_pipeline(*[pipe_map[pipe] for pipe in pipes_list])
-            except:
-                raise ValueError("Cannot combine pipeline according to pipes_list")
+            pipe = make_pipeline(*[pipe_map[pipe] for pipe in pipes_list])
 
         if resampling_rule:
-            pipe.steps.append(['resampling', self.get_resampler(resampling_rule)])
+            pipe.steps.append(["resampling", self.get_resampler(resampling_rule)])
 
         return pipe.fit_transform(self.data)
 
@@ -382,7 +379,7 @@ class MeasuredDats:
             column_config_list, verbose_feature_names_out=False, remainder="passthrough"
         ).set_output(transform="pandas")
 
-    def get_resampler(self, rule):
+    def get_resampler(self, rule, remainder_rule="mean"):
         column_config_list = []
         for data_cat, cols in self.category_dict.items():
             try:
@@ -390,7 +387,11 @@ class MeasuredDats:
                 column_config_list.append((cols, RESAMPLE_METHS[method]))
             except KeyError:
                 pass
-        return ct.PdColumnResampler(rule=rule, columns_method=column_config_list)
+        return ct.PdColumnResampler(
+            rule=rule,
+            columns_method=column_config_list,
+            remainder=RESAMPLE_METHS[remainder_rule],
+        )
 
     def write_config_file(self, file_path):
         with open(file_path, "w", encoding="utf-8") as f:
@@ -406,19 +407,19 @@ class MeasuredDats:
             config_dict = json.load(f)
 
         self.category_dict = config_dict["category_dict"]
-        self.category_trans = config_dict["category_trans"]
+        self.category_trans = config_dict["category_transformations"]
         self.common_trans = config_dict["common_transformations"]
 
-    def add_time_series(self, time_series, data_type, data_category_trans=None):
+    def add_time_series(self, time_series, category, category_transformations=None):
         check_datetime_index(time_series)
-        if data_category_trans is None:
-            data_category_trans = {}
+        if category_transformations is None:
+            category_transformations = {}
 
-        if data_type in self.category_dict.keys():
-            self.category_dict[data_type] += list(time_series.columns)
+        if category in self.category_dict.keys():
+            self.category_dict[category] += list(time_series.columns)
         else:
-            self.category_dict[data_type] = list(time_series.columns)
-            self.category_trans[data_type] = data_category_trans
+            self.category_dict[category] = list(time_series.columns)
+            self.category_trans[category] = category_transformations
 
         self.data = pd.concat([self.data, time_series], axis=1)
 
@@ -461,6 +462,8 @@ class MeasuredDats:
         raw_data=False,
         color_rgb=(243, 132, 48),
         alpha=0.5,
+        resampling_rule=False,
+        pipes_list=None,
     ):
         if cols is None:
             cols = self.columns
@@ -471,7 +474,14 @@ class MeasuredDats:
         if raw_data:
             to_plot = select_data(self.data, cols, begin, end)
         else:
-            to_plot = select_data(self.corrected_data, cols, begin, end)
+            to_plot = select_data(
+                self.get_corrected_data(
+                    pipes_list=pipes_list, resampling_rule=resampling_rule
+                ),
+                cols,
+                begin,
+                end,
+            )
 
         reversed_data_type = self._get_reversed_category_dict(cols)
         cols_data_type = defaultdict(list)
@@ -519,19 +529,23 @@ class MeasuredDats:
         cols=None,
         title="Correction plot",
         plot_raw=False,
-        plot_corrected=False,
+        plot_corrected=True,
         line_corrected=True,
         marker_corrected=True,
         line_raw=True,
         marker_raw=True,
         begin=None,
         end=None,
+        resampling_rule=False,
+        pipes_list=None,
     ):
         if cols is None:
             cols = self.columns
 
         to_plot_raw = select_data(self.data, cols, begin, end)
-        to_plot_corr = select_data(self.corrected_data, cols, begin, end)
+        to_plot_corr = select_data(
+            self.get_corrected_data(pipes_list, resampling_rule), cols, begin, end
+        )
 
         ax_dict, layout_ax_dict = self._get_yaxis_config(cols)
 
@@ -555,9 +569,9 @@ class MeasuredDats:
             else:
                 # Generate interpolated colors for more than 5 columns
                 t = (i - 2) / (num_cols - 3)  # Interpolation parameter
-                color = self.interpolate_color(color_palette[0], color_palette[-1], t)
+                color = interpolate_color(color_palette[0], color_palette[-1], t)
 
-            dark_color = self.darken_color(color, 0.7)
+            dark_color = darken_color(color, 0.7)
 
             if line_corrected and not marker_corrected:
                 mode_corrected = "lines"
