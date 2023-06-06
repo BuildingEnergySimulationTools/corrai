@@ -7,7 +7,7 @@ from corrai.utils import as_1_column_dataframe
 from corrai.utils import check_datetime_index
 
 
-def time_gradient(data, begin=None, end=None):
+def time_gradient(data):
     """
     Calculates the time gradient of a given time series `data`
     between two optional time bounds `begin` and `end`.
@@ -17,13 +17,7 @@ def time_gradient(data, begin=None, end=None):
     data : pandas Series or DataFrame
         The time series to compute the gradient on.
         If a Series is provided, it will be converted to a DataFrame
-        with a single column.
-    begin : str or datetime-like, optional
-        Beginning time of the selection.
-        If None, defaults to the first index value of `time_series`.
-    end : str or datetime-like, optional
-        End time of the selection.
-        If None, defaults to the last index value of `time_series`.
+        with a single column
 
     Returns:
     --------
@@ -53,17 +47,9 @@ def time_gradient(data, begin=None, end=None):
     if isinstance(data, pd.Series):
         data = as_1_column_dataframe(data)
 
-    if begin is None:
-        begin = data.index[0]
-
-    if end is None:
-        end = data.index[-1]
-
-    selected_data = data.loc[begin:end, :]
-
     ts_list = []
-    for col in selected_data:
-        col_ts = selected_data[col].dropna()
+    for col in data:
+        col_ts = data[col].dropna()
 
         chrono = col_ts.index - col_ts.index[0]
         chrono_sec = chrono.to_series().dt.total_seconds()
