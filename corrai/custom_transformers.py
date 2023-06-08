@@ -662,10 +662,16 @@ class PdColumnResampler(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        transformed_X = pd.concat(
-            [X[tup[0]].resample(self.rule).agg(tup[1]) for tup in self.columns_method],
-            axis=1,
-        )
+        if self.columns_method:
+            transformed_X = pd.concat(
+                [
+                    X[tup[0]].resample(self.rule).agg(tup[1])
+                    for tup in self.columns_method
+                ],
+                axis=1,
+            )
+        else:
+            transformed_X = pd.DataFrame()
 
         if self.remainder != "drop":
             remaining_col = [
