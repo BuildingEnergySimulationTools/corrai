@@ -169,6 +169,7 @@ class MeasuredDats:
         category_dict=None,
         category_transformations=None,
         common_transformations=None,
+        transformers_list=None,
         config_file_path=None,
         gaps_timedelta=None,
     ):
@@ -315,46 +316,55 @@ class MeasuredDats:
         else:
             self.gaps_timedelta = gaps_timedelta
 
+        if transformers_list is None:
+            self.transformers_list = self.category_trans_names + self.common_trans_names
+
     @property
     def columns(self):
         return self.data.columns
 
     @property
-    def anomalies_pipe(self):
-        return self.make_column_transformer(transformation="ANOMALIES")
+    def category_trans_names(self):
+        lst = [list(val.keys()) for val in self.category_trans.values()]
+        lst = sum(lst, [])
+        lst = list(dict.fromkeys(lst))
+        return [val for val in lst if val != "RESAMPLE"]
 
     @property
-    def process_pipe(self):
-        return self.make_column_transformer(transformation="PROCESS")
+    def common_trans_names(self):
+        lst = list(self.common_trans.keys())
+        return list(dict.fromkeys(lst))
 
-    @property
-    def common_pipe(self):
-        return make_pipeline(
-            *[TRANSFORMER_MAP[trans[0]](**trans[1]) for trans in self.common_trans]
-        )
+    def get_pipeline(self, transformers_list=None, resampling_rule=False):
+        if transformers_list is None:
+            transformers_list = self.transformers_list
 
-    @property
-    def full_pipe(self):
-        return make_pipeline(self.anomalies_pipe, self.common_pipe, self.process_pipe)
-
-    def get_corrected_data(self, pipes_list=None, resampling_rule=False):
-        pipe_map = {
-            "ANOMALIES": self.anomalies_pipe,
-            "PROCESS": self.process_pipe,
-            "COMMON": self.common_pipe,
-        }
-
-        if pipes_list is None:
-            pipe = self.full_pipe
-        else:
-            pipe = make_pipeline(*[pipe_map[pipe] for pipe in pipes_list])
+        obj_list = []
+        for trans in transformers_list:
+            if trans in self.category_trans_names:
+                obj_list.append(self.get_category_transformer(trans))
+            else:
+                obj_list.append(self.get_common_transformer(trans))
+        pipe = make_pipeline(*obj_list)
 
         if resampling_rule:
             pipe.steps.append(["resampling", self.get_resampler(resampling_rule)])
 
+        return pipe
+
+    def get_corrected_data(self, transformers_list=None, resampling_rule=False):
+        pipe = self.get_pipeline(
+            transformers_list=transformers_list, resampling_rule=resampling_rule
+        )
         return pipe.fit_transform(self.data)
 
-    def make_column_transformer(self, transformation):
+    def get_common_transformer(self, transformation):
+        common_trans = self.common_trans[transformation]
+        return make_pipeline(
+            *[TRANSFORMER_MAP[trans[0]](**trans[1]) for trans in common_trans]
+        )
+
+    def get_category_transformer(self, transformation):
         column_config_list = []
         for data_cat, cols in self.category_dict.items():
             if transformation in self.category_trans[data_cat].keys():
@@ -463,7 +473,7 @@ class MeasuredDats:
         color_rgb=(243, 132, 48),
         alpha=0.5,
         resampling_rule=False,
-        pipes_list=None,
+        transformers_list=None,
     ):
         if cols is None:
             cols = self.columns
@@ -476,7 +486,7 @@ class MeasuredDats:
         else:
             to_plot = select_data(
                 self.get_corrected_data(
-                    pipes_list=pipes_list, resampling_rule=resampling_rule
+                    transformers_list=transformers_list, resampling_rule=resampling_rule
                 ),
                 cols,
                 begin,
@@ -537,14 +547,18 @@ class MeasuredDats:
         begin=None,
         end=None,
         resampling_rule=False,
-        pipes_list=None,
+        transformers_list=None,
     ):
         if cols is None:
             cols = self.columns
 
         to_plot_raw = select_data(self.data, cols, begin, end)
         to_plot_corr = select_data(
-            self.get_corrected_data(pipes_list, resampling_rule), cols, begin, end
+            self.get_corrected_data(
+                transformers_list=transformers_list, resampling_rule=resampling_rule),
+            cols,
+            begin,
+            end
         )
 
         ax_dict, layout_ax_dict = self._get_yaxis_config(cols)

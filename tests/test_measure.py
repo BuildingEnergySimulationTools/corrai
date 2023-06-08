@@ -20,8 +20,6 @@ TEST_DF = pd.DataFrame(
     },
     index=pd.date_range("2021-01-01 00:00:00", freq="H", periods=11),
 )
-
-
 @pytest.fixture(scope="session")
 def my_measure():
     tested_obj = MeasuredDats(
@@ -48,11 +46,13 @@ def my_measure():
             },
             "col_3": {},
         },
-        common_transformations=[
-            ["interpolate", {"method": "linear"}],
-            ["fill_na", {"method": "bfill"}],
-            ["fill_na", {"method": "ffill"}],
-        ],
+        common_transformations={
+            "COMMON" : [
+                ["interpolate", {"method": "linear"}],
+                ["fill_na", {"method": "bfill"}],
+                ["fill_na", {"method": "ffill"}]
+            ]
+        },
     )
 
     return tested_obj
@@ -133,7 +133,7 @@ class TestMeasuredDats:
         )
 
         assert ref_anomalies.equals(
-            my_measure.get_corrected_data(pipes_list=["ANOMALIES"])
+            my_measure.get_corrected_data(transformers_list=["ANOMALIES"])
         )
 
         ref = pd.DataFrame(
@@ -249,44 +249,21 @@ class TestMeasuredDats:
 
         assert ref.equals(gaps_describe(df))
 
-    def test_get_reversed_data_type_dict(self):
-        test = MeasuredDats(
-            data=pd.DataFrame(),
-            category_dict={
-                "cat_1": ["dumb_column"],
-                "cat_2": ["dumb_column2"],
-            },
-            category_transformations={
-                "cat_1": {},
-                "cat_2": {},
-            },
+    def test_get_reversed_data_type_dict(self, my_measure):
+        to_test = my_measure._get_reversed_category_dict(["dumb_column", "dumb_column2"])
+
+        assert to_test == {"dumb_column": "col_1", "dumb_column2": "col_2"}
+
+    def test_get_yaxis_config(self, my_measure):
+        ax_dict, layout_ax_dict = my_measure._get_yaxis_config(
+            cols=["dumb_column", "dumb_column2", "dumb_column3"]
         )
 
-        to_test = test._get_reversed_category_dict(["dumb_column", "dumb_column2"])
-
-        assert to_test == {"dumb_column": "cat_1", "dumb_column2": "cat_2"}
-
-    def test_get_yaxis_config(self):
-        test = MeasuredDats(
-            data=pd.DataFrame(),
-            category_dict={
-                "cat_1": ["dumb_column"],
-                "cat_2": ["dumb_column2"],
-            },
-            category_transformations={
-                "cat_1": {},
-                "cat_2": {},
-            },
-        )
-
-        ax_dict, layout_ax_dict = test._get_yaxis_config(
-            cols=["dumb_column", "dumb_column2"]
-        )
-
-        ax_dict_ref = {"dumb_column": "y", "dumb_column2": "y2"}
+        ax_dict_ref = {"dumb_column": "y", "dumb_column2": "y2", "dumb_column3": "y3"}
         layout_ax_dict_ref = {
-            "yaxis": {"title": "cat_1"},
-            "yaxis2": {"title": "cat_2", "side": "right"},
+            "yaxis": {"title": "col_1"},
+            "yaxis2": {"title": "col_2", "side": "right"},
+            "yaxis3": {"title": "col_3", "side": "right"},
         }
 
         assert ax_dict == ax_dict_ref
@@ -302,6 +279,7 @@ class TestMeasuredDats:
             data.copy(),
             category_dict={"dumb_type": ["col"]},
             category_transformations={"dumb_type": {}},
+            common_transformations={}
         )
 
         new_dat = pd.DataFrame(
@@ -345,7 +323,7 @@ class TestMeasuredDats:
         import datetime as dt
 
         my_measure.plot_gaps(
-            gaps_timestep=dt.timedelta(hours=1), pipes_list=["ANOMALIES"]
+            gaps_timestep=dt.timedelta(hours=1), transformers_list=["ANOMALIES"]
         )
 
     def test_plot(self, my_measure):
