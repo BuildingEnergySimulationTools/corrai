@@ -28,6 +28,10 @@ RESAMPLE_METHS = {"mean": np.mean, "sum": np.sum}
 COLOR_PALETTE = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
 
 
+def get_transformers_keys():
+    return TRANSFORMER_MAP.keys()
+
+
 def missing_values_dict(df):
     return {
         "Number_of_missing": df.count(),
