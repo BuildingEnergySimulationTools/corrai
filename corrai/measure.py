@@ -25,12 +25,25 @@ TRANSFORMER_MAP = {
 
 RESAMPLE_METHS = {"mean": np.mean, "sum": np.sum}
 
+COLOR_PALETTE = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
+
 
 def missing_values_dict(df):
     return {
         "Number_of_missing": df.count(),
         "Percent_of_missing": (1 - df.count() / df.shape[0]) * 100,
     }
+
+
+def set_multi_yaxis_layout(figure, ax_dict, axis_space):
+    nb_right_y_axis = len(set(ax_dict.values()))
+    x_right_space = 1 - axis_space * (nb_right_y_axis - 1)
+    figure.update_xaxes(domain=(0, x_right_space))
+    ax_args = {
+        f"yaxis{2 + i}": dict(position=x_right_space + i * axis_space)
+        for i in range(nb_right_y_axis)
+    }
+    figure.update_layout(**ax_args)
 
 
 def interpolate_color(color1, color2, t):
@@ -485,7 +498,7 @@ class MeasuredDats:
         end=None,
         gaps_timestep=None,
         title="Gaps plot",
-        raw_data=False,
+        plot_raw=False,
         color_rgb=(243, 132, 48),
         alpha=0.5,
         resampling_rule=False,
@@ -497,7 +510,7 @@ class MeasuredDats:
         if gaps_timestep is None:
             gaps_timestep = dt.timedelta(hours=5)
 
-        if raw_data:
+        if plot_raw:
             to_plot = select_data(self.data, cols, begin, end)
         else:
             to_plot = select_data(
@@ -547,7 +560,7 @@ class MeasuredDats:
                 orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5
             ),
         )
-
+        set_multi_yaxis_layout(figure=fig, ax_dict=ax_dict, axis_space=0.03)
         fig.show()
 
     def plot(
@@ -571,35 +584,33 @@ class MeasuredDats:
         to_plot_raw = select_data(self.data, cols, begin, end)
         to_plot_corr = select_data(
             self.get_corrected_data(
-                transformers_list=transformers_list, resampling_rule=resampling_rule),
+                transformers_list=transformers_list, resampling_rule=resampling_rule
+            ),
             cols,
             begin,
-            end
+            end,
         )
 
         ax_dict, layout_ax_dict = self._get_yaxis_config(cols)
 
         fig = go.Figure()
 
-        # Define the color palette
-        color_palette = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
-
         num_cols = len(cols)
 
         for i, col in enumerate(cols):
             if i == 0:
                 # Use the first color in the palette for the first column
-                color = color_palette[0]
+                color = COLOR_PALETTE[0]
             elif i == 1:
                 # Use the last color in the palette for the second column
-                color = color_palette[-1]
+                color = COLOR_PALETTE[-1]
             elif num_cols <= 5:
                 # Use the specified colors for up to 5 columns
-                color = color_palette[i % len(color_palette)]
+                color = COLOR_PALETTE[i % len(COLOR_PALETTE)]
             else:
                 # Generate interpolated colors for more than 5 columns
                 t = (i - 2) / (num_cols - 3)  # Interpolation parameter
-                color = interpolate_color(color_palette[0], color_palette[-1], t)
+                color = interpolate_color(COLOR_PALETTE[0], COLOR_PALETTE[-1], t)
 
             dark_color = darken_color(color, 0.7)
 
@@ -639,18 +650,11 @@ class MeasuredDats:
                 )
 
         fig.update_layout(**layout_ax_dict)
+        fig.update_layout(dict(title=title))
         fig.update_layout(
             legend=dict(
                 orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5
             ),
         )
-        fig.update_layout(dict(title=title))
-        nb_right_y_axis = len(set(ax_dict.values()))
-        x_right_space = 1 - 0.03 * (nb_right_y_axis - 1)
-        fig.update_xaxes(domain=(0, x_right_space))
-        ax_args = {
-            f"yaxis{2 + i}": dict(position=x_right_space + i * 0.03)
-            for i in range(nb_right_y_axis)
-        }
-        fig.update_layout(**ax_args)
+        set_multi_yaxis_layout(figure=fig, ax_dict=ax_dict, axis_space=0.03)
         fig.show()

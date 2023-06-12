@@ -20,6 +20,8 @@ TEST_DF = pd.DataFrame(
     },
     index=pd.date_range("2021-01-01 00:00:00", freq="H", periods=11),
 )
+
+
 @pytest.fixture(scope="session")
 def my_measure():
     tested_obj = MeasuredDats(
@@ -47,10 +49,10 @@ def my_measure():
             "col_3": {},
         },
         common_transformations={
-            "COMMON" : [
+            "COMMON": [
                 ["interpolate", {"method": "linear"}],
                 ["fill_na", {"method": "bfill"}],
-                ["fill_na", {"method": "ffill"}]
+                ["fill_na", {"method": "ffill"}],
             ]
         },
     )
@@ -250,7 +252,9 @@ class TestMeasuredDats:
         assert ref.equals(gaps_describe(df))
 
     def test_get_reversed_data_type_dict(self, my_measure):
-        to_test = my_measure._get_reversed_category_dict(["dumb_column", "dumb_column2"])
+        to_test = my_measure._get_reversed_category_dict(
+            ["dumb_column", "dumb_column2"]
+        )
 
         assert to_test == {"dumb_column": "col_1", "dumb_column2": "col_2"}
 
@@ -279,7 +283,7 @@ class TestMeasuredDats:
             data.copy(),
             category_dict={"dumb_type": ["col"]},
             category_transformations={"dumb_type": {}},
-            common_transformations={}
+            common_transformations={},
         )
 
         new_dat = pd.DataFrame(
