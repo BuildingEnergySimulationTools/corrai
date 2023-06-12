@@ -351,6 +351,8 @@ class MeasuredDats:
 
         if transformers_list is None:
             self.transformers_list = self.category_trans_names + self.common_trans_names
+        else:
+            self.transformers_list = transformers_list
 
     @property
     def columns(self):
