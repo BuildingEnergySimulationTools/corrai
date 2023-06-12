@@ -175,91 +175,85 @@ class MeasuredDats:
     ):
         """
         A class for handling time-series data with missing values.
+        Use scikit learn Pipelines to perform operations
 
         Parameters:
         -----------
-        data : pandas.DataFrame
-            The input data to be processed.
+        data (pandas.DataFrame): The measured data.
+        category_dict (dict, optional): A dictionary mapping data categories to
+            column names. Defaults to None.
+        category_transformations (dict, optional): A dictionary specifying
+            category-specific transformations. Defaults to None. The dictionary
+            keys must match the category name. For each category, a dictionary is
+            specified. The keys are the transformer name, the value is a list
+            ['transformer_map_name', {Corrai transformer args}]. Use only
+            transformers defined in TRANSFORMER_MAP. If necessary a specific key
+            "RESAMPLE" may be provided to specify an aggregation method. Method
+            must be in RESAMPLE_METHS dict. If not specified, default aggreagation
+            method is np.mean. An exemple of configuration is given below
 
-        category_dict : dict, optional
-            A dictionary that maps data type categories to the 'data' columns
-            that belong to that category. Default is None.
+        common_transformations (dict, optional): A dictionary specifying common
+            transformations. The keys are the transformer name, the value is a list
+            ['transformer_map_name', {Corrai transformer args}]. Use only
+            transformers defined in TRANSFORMER_MAP. An example of configuration
+            is given below
 
-        category_trans : dict, optional
-            A dictionary that stores the correction method and parameters for each
-            'data' type category. 'category_trans" keys must match 'category_dict'
-            keys. Default is None.
+        transformers_list (list, optional): A list of transformer names.
+            Defaults to None. A list of transformer name. The order determines the
+            order of the transformers in the pipeline. Note tha resample will always
+            be added at the end of the pipeline. If None, a default order will be
+            specified as follow ["CATEGORY_TRANSFORMER_1", ...,
+            "CATEGORY_TRANSFORMER_n", "COMMON_TRANSFORMER_1", ...,
+            "CATEGORY_TRANSFORMER_n", "RESAMPLE"]
 
-        config_file_path : str, optional
-            The path to the configuration file.
-            If specified, the data type dictionary and correction dictionary
-            will be loaded from the file. Default is None.
 
-        gaps_timedelta : pandas.Timedelta, optional
-            The maximum allowed data gap size for each data series. Gaps
-            smaller thn 'gaps_timedelta' will not be detected. They will be
-            corrected during gaps filling processes. If None, the
-            'gaps_timedelta' timestep is estimated automatically from the data
-            index mean timestep.
+        config_file_path (str, optional): The file path for reading a json
+        configuration file. Defaults to None.
 
-        Attributes:
-        ----------
-        data : pandas.DataFrame
-            The original input data.
+        gaps_timedelta (timedelta, optional): The time interval considered to
+            identify a gap. Defaults to None. if None, it will take the mean value
+            of the interval between data.index
 
-        corrected_data : pandas.DataFrame
-            The data after the correction process.
 
-        category_dict : dict
-            A dictionary that maps data type categories to the columns that
-            belong to that category.
+        Properties:
+            columns (list): Returns the column names of the data.
 
-        category_trans : dict
-            A dictionary that stores the correction method and parameters for
-            each data type category.
+            category_trans_names (list): Returns the names of category-specific
+                transformations.
 
-        correction_journal : dict
-            A dictionary that stores the history of the correction process.
-
-        gaps_timedelta : pandas.Timedelta
-            The maximum allowed gap size for each data series.
-
-        resample_func_dict : dict
-            A dictionary that maps resampling functions to the corresponding method
-            string.
+            common_trans_names (list): Returns the names of common
+                transformations.
 
         Methods:
-        -------
-        write_config_file(file_path)
-            Writes the data type dictionary and correction dictionary to a
-            JSON file.
+            get_pipeline(transformers_list=None, resampling_rule=False): Creates
+                and returns a data processing pipeline. Custom transformer list
+                may be specified. resampling_rule add a resampler to the pipeline.
 
-        read_config_file(file_path)
-            Reads the data type dictionary and correction dictionary from a J
-            SON file.
+            get_corrected_data(transformers_list=None, resampling_rule=False):
+                Applies the pipeline to the data and returns the corrected data.
+                Custom transformer list may be specified. resampling_rule add a
+                resampler to the pipeline.
 
-        add_time_series(time_series, data_type, data_category_trans=None)
-            Adds a new time series to the data set and updates the data type
-            and correction dictionaries accordingly.
+            get_common_transformer(transformation): Returns a pipeline for a
+                common transformation.
 
-        auto_correct()
-            Runs the correction process automatically.
+            get_category_transformer(transformation): Returns a pipeline for a
+                category-specific transformation.
 
-        remove_anomalies()
-            Removes the anomalies in the data set using the correction methods
-            specified  in the correction dictionary.
+            get_resampler(rule, remainder_rule="mean"): Returns a resampler for
+                data resampling.
 
-        fill_nan()
-            Fills the missing values in the data set using the correction
-            methods specified in the correction dictionary.
+            write_config_file(file_path): Writes the current configuration to a
+                file.
+            read_config_file(file_path): Reads the configuration from a file.
 
-        resample(timestep=None)
-            Resamples the data set to a specified timestep. If None, the
-            timestep is the data index mean timestep.
+            add_time_series(time_series, category, category_transformations=None):
+                Adds a time series to the data.
 
         plot_gaps(cols=None, begin=None, end=None,
             gaps_timestep=dt.timedelta(hours=5), title="Gaps plot",
-            raw_data=False, color_rgb=(243, 132, 48),  alpha=0.5):
+            raw_data=False, color_rgb=(243, 132, 48),  alpha=0.5, resampling_rule=False,
+            transformers_list=None):
             cols (list, optional): List of column names to plot. If not
                 provided, all columns will be plotted. Default is None.
             begin (str, optional): String specifying the start date for the
@@ -277,9 +271,15 @@ class MeasuredDats:
             color_rgb (tuple of int, optional): RGB color of the gaps.
                 Default is (243, 132, 48).
             alpha (float, optional): Opacity of the gaps. Default is 0.5.
+                resampling_rule: data resampling rule
+            transformers_list: transformations order list. If None it uses default
+                transformers_list
 
-        plot(cols=None, title="Correction plot", plot_raw=False,
-             begin=None, end=None)
+        plot(cols=None, title="Correction plot", begin=None, end=None, plot_raw=False,
+            plot_corrected=True, line_corrected=True, marker_corrected=True,
+            line_raw=True, marker_raw=True, resampling_rule=False,
+            transformers_list=None)
+
             Generate a plot comparing the original and corrected values of the given
             columns over the specified time range.
             cols : list of str, optional
@@ -287,15 +287,31 @@ class MeasuredDats:
                 columns are plotted.
             title : str, optional
                 The title of the plot. Defaults to "Correction plot".
-            plot_raw : bool, optional
-                If True, plot the raw values in addition to the corrected
-                values. Defaults to False.
             begin : str or datetime-like, optional
                 A string or datetime-like object specifying the start of the
                 time range to plot. If None (default), plot all data.
             end : str or datetime-like, optional
                 A string or datetime-like object specifying the end of the
                 time range to plot. If None (default), plot all data.
+            plot_raw : bool, optional
+                If True, plot the raw values
+            plot_corrected : bool, optional
+                If True, plot the corrected values .
+            line_corrected: bool, optional
+                If True, plot corrected values using lines
+            line_raw: bool, optional
+                If True, plot raw values using lines
+            marker_corrected: bool, optional
+                If True, plot corrected values using markers
+            marker_raw: bool, optional
+                If True, plot raw values using markers
+            resampling_rule: False
+                If resampling rule is specified, resample corrected data using
+                resampler and aggregation methods specified in category_transformers.
+                It will not affect raw data
+            transformers_list: list, Optional
+                transformations order list. Default None uses default
+                transformers_list
         """
 
         self.data = data.copy()
@@ -538,14 +554,14 @@ class MeasuredDats:
         self,
         cols=None,
         title="Correction plot",
+        begin=None,
+        end=None,
         plot_raw=False,
         plot_corrected=True,
         line_corrected=True,
         marker_corrected=True,
         line_raw=True,
         marker_raw=True,
-        begin=None,
-        end=None,
         resampling_rule=False,
         transformers_list=None,
     ):
