@@ -525,6 +525,7 @@ class MeasuredDats:
         alpha=0.5,
         resampling_rule=False,
         transformers_list=None,
+        axis_space=0.03
     ):
         if cols is None:
             cols = self.columns
@@ -582,7 +583,7 @@ class MeasuredDats:
                 orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5
             ),
         )
-        set_multi_yaxis_layout(figure=fig, ax_dict=ax_dict, axis_space=0.03)
+        set_multi_yaxis_layout(figure=fig, ax_dict=ax_dict, axis_space=axis_space)
         fig.show()
 
     def plot(
@@ -599,6 +600,7 @@ class MeasuredDats:
         marker_raw=True,
         resampling_rule=False,
         transformers_list=None,
+        axis_space=0.03
     ):
         if cols is None:
             cols = self.columns
@@ -678,5 +680,5 @@ class MeasuredDats:
                 orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5
             ),
         )
-        set_multi_yaxis_layout(figure=fig, ax_dict=ax_dict, axis_space=0.03)
+        set_multi_yaxis_layout(figure=fig, ax_dict=ax_dict, axis_space=axis_space)
         fig.show()
