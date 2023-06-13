@@ -4,6 +4,7 @@ import corrai.custom_transformers as ct
 import json
 from collections import defaultdict
 from corrai.utils import check_datetime_index
+from corrai.custom_transformers import PdIdentity
 import plotly.graph_objects as go
 import datetime as dt
 from sklearn.compose import ColumnTransformer
@@ -374,13 +375,16 @@ class MeasuredDats:
         if transformers_list is None:
             transformers_list = self.transformers_list
 
-        obj_list = []
-        for trans in transformers_list:
-            if trans in self.category_trans_names:
-                obj_list.append(self.get_category_transformer(trans))
-            else:
-                obj_list.append(self.get_common_transformer(trans))
-        pipe = make_pipeline(*obj_list)
+        if not transformers_list:
+            pipe = make_pipeline(*[PdIdentity()])
+        else:
+            obj_list = []
+            for trans in transformers_list:
+                if trans in self.category_trans_names:
+                    obj_list.append(self.get_category_transformer(trans))
+                else:
+                    obj_list.append(self.get_common_transformer(trans))
+            pipe = make_pipeline(*obj_list)
 
         if resampling_rule:
             pipe.steps.append(["resampling", self.get_resampler(resampling_rule)])
