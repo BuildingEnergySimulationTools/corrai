@@ -8,6 +8,7 @@ from corrai.utils import as_1_column_dataframe
 from corrai.utils import check_datetime_index
 from corrai.utils import float_to_hour
 from corrai.utils import hour_to_float
+from corrai.utils import get_reversed_dict
 
 
 class TestUtils:
@@ -82,3 +83,9 @@ class TestUtils:
         pd.testing.assert_frame_equal(
             hour_to_float(pd.DataFrame({"a": ["02:30"]})), pd.DataFrame({"a": [2.5]})
         )
+
+    def test_get_reversed_dict(self):
+        dictionary = {"a": 2, "b": 3, "c": 4}
+
+        assert get_reversed_dict(dictionary, 2) == {2: "a"}
+        assert get_reversed_dict(dictionary, [2, 3]) == {2: "a", 3: "b"}

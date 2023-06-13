@@ -3,8 +3,68 @@ import numpy as np
 import datetime as dt
 from functools import partial
 from sklearn.base import TransformerMixin, BaseEstimator
-from corrai.measure import time_gradient
+from corrai.math import time_gradient
 from scipy.ndimage import gaussian_filter1d
+
+
+class PdIdentity(TransformerMixin, BaseEstimator):
+    """
+    A custom transformer that returns the input data without any modifications.
+
+    This transformer is useful when you want to include an identity transformation step
+    in a scikit-learn pipeline, where the input data should be returned unchanged.
+
+    Parameters:
+    -----------
+    None
+
+    Methods:
+    --------
+    fit(X, y=None):
+        This method does nothing and simply returns the transformer instance.
+
+        Parameters:
+        -----------
+        X : array-like, shape (n_samples, n_features)
+            The input data.
+
+        y : array-like, shape (n_samples,), optional (default=None)
+            The target values.
+
+        Returns:
+        --------
+        self : object
+            The transformer instance itself.
+
+    transform(X):
+        This method returns the input data without any modifications.
+
+        Parameters:
+        -----------
+        X : array-like, shape (n_samples, n_features)
+            The input data.
+
+        Returns:
+        --------
+        transformed_X : array-like, shape (n_samples, n_features)
+            The input data without any modifications.
+    """
+
+    def __init__(self, how="all"):
+        self.how = how
+        self.columns = None
+        self.index = None
+
+    def get_feature_names_out(self, input_features=None):
+        return self.columns
+
+    def fit(self, X, y=None):
+        self.columns = X.columns
+        self.index = X.index
+        return self
+
+    def transform(self, X):
+        return X
 
 
 class PdDropna(TransformerMixin, BaseEstimator):
@@ -395,8 +455,7 @@ class PdTimeGradient(BaseEstimator, TransformerMixin):
 
     """
 
-    def __init__(self, dropna=True):
-        self.dropna = dropna
+    def __init__(self):
         self.columns = None
         self.index = None
 
@@ -409,19 +468,9 @@ class PdTimeGradient(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        X_transformed = []
-        for column in X.columns:
-            X_column = X[column]
-            if self.dropna:
-                original_index = X_column.index.copy()
-                X_column = X_column.dropna()
-
-            derivative = time_gradient(X_column)
-            if self.dropna:
-                derivative = derivative.reindex(original_index)
-
-            X_transformed.append(derivative)
-        return pd.concat(X_transformed, axis=1)
+        original_index = X.index.copy()
+        derivative = time_gradient(X)
+        return derivative.reindex(original_index)
 
 
 class PdFillNa(BaseEstimator, TransformerMixin):
@@ -673,10 +722,16 @@ class PdColumnResampler(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        transformed_X = pd.concat(
-            [X[tup[0]].resample(self.rule).agg(tup[1]) for tup in self.columns_method],
-            axis=1,
-        )
+        if self.columns_method:
+            transformed_X = pd.concat(
+                [
+                    X[tup[0]].resample(self.rule).agg(tup[1])
+                    for tup in self.columns_method
+                ],
+                axis=1,
+            )
+        else:
+            transformed_X = pd.DataFrame()
 
         if self.remainder != "drop":
             remaining_col = [

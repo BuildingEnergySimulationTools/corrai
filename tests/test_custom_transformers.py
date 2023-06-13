@@ -18,9 +18,17 @@ from corrai.custom_transformers import PdResampler
 from corrai.custom_transformers import PdColumnResampler
 from corrai.custom_transformers import PdAddTimeLag
 from corrai.custom_transformers import PdGaussianFilter1D
+from corrai.custom_transformers import PdIdentity
 
 
 class TestCustomTransformers:
+    def test_pd_identity(self):
+        df = pd.DataFrame({"a": [1.0]})
+
+        identity = PdIdentity()
+
+        pd.testing.assert_frame_equal(df, identity.fit_transform(df))
+
     def test_pd_dropna(self):
         df = pd.DataFrame({"a": [1.0, 2.0, np.nan], "b": [3.0, 4.0, 5.0]})
 

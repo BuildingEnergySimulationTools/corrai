@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import datetime as dt
+from collections.abc import Iterable
 
 
 def _reshape_1d(sample):
@@ -114,3 +115,26 @@ def hour_to_float(hours_string):
         return time_obj.hour + time_obj.minute / 60
 
     return apply_transformation(hours_string, s2f)
+
+
+def get_reversed_dict(dictionary, values=None):
+    """
+    Reverses the key-value pairs in a dictionary and returns a new dictionary.
+
+    :param dictionary: The original dictionary containing key-value pairs.
+
+    :param values: (iterable or any) Optional. The values to filter the reversed
+        dictionary by. If not provided, all values from the original dictionary will
+        be used. Can be an iterable or a single value.
+
+    :return: A new dictionary with reversed key-value pairs from the original
+        dictionary. The new dictionary only includes key-value pairs where the value
+        matches the specified values. If values are not provided, all key-value pairs
+        from the original dictionary are included.
+    """
+    if values is None:
+        values = dictionary.values()
+    elif not isinstance(values, Iterable):
+        values = [values]
+
+    return {val: key for key, val in dictionary.items() if val in values}

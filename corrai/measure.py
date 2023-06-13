@@ -1,190 +1,36 @@
 import numpy as np
 import pandas as pd
+import corrai.custom_transformers as ct
 import json
 from collections import defaultdict
-from scipy import integrate
+from corrai.utils import check_datetime_index
+from corrai.custom_transformers import PdIdentity
 import plotly.graph_objects as go
 import datetime as dt
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import make_pipeline
+
+TRANSFORMER_MAP = {
+    "dropna": ct.PdDropna,
+    "rename_columns": ct.PdRenameColumns,
+    "sk_transformer": ct.PdSkTransformer,
+    "drop_threshold": ct.PdDropThreshold,
+    "drop_time_gradient": ct.PdDropTimeGradient,
+    "apply_expression": ct.PdApplyExpression,
+    "time_gradient": ct.PdTimeGradient,
+    "fill_na": ct.PdFillNa,
+    "resample": ct.PdResampler,
+    "interpolate": ct.PdInterpolate,
+    "gaussian_filter": ct.PdGaussianFilter1D,
+}
+
+RESAMPLE_METHS = {"mean": np.mean, "sum": np.sum}
+
+COLOR_PALETTE = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
 
 
-def time_data_control(data):
-    """
-    Given a pandas Series or DataFrame `data`, checks that the input data
-    as a DateTimeIndex. Returns a DataFrame
-
-    Parameters:
-    -----------
-    data : pandas Series or DataFrame
-        The input data to be checked. If `data` is a pandas Series, it will be
-         converted to a DataFrame with a single column.
-
-    Returns:
-    --------
-    output : pandas DataFrame
-        A DataFrame that is guaranteed to have a pandas DateTimeIndex as
-        its index.
-
-    Raises:
-    -------
-    ValueError
-        If `data` is not a pandas Series or DataFrame.
-        If `data` has an index that is not a pandas DateTimeIndex.
-    """
-    if isinstance(data, pd.Series):
-        data = data.to_frame()
-    elif isinstance(data, pd.DataFrame):
-        pass
-    else:
-        raise ValueError(
-            f"time_series is expecting pandas"
-            f" Series or DataFrame. Got {type(data)}"
-            f"instead"
-        )
-    if not isinstance(data.index, pd.DatetimeIndex):
-        raise ValueError("time_series index must be a pandas DateTimeIndex")
-    return data
-
-
-def time_gradient(data, begin=None, end=None):
-    """
-    Calculates the time gradient of a given time series `data`
-    between two optional time bounds `begin` and `end`.
-
-    Parameters:
-    -----------
-    data : pandas Series or DataFrame
-        The time series to compute the gradient on.
-        If a Series is provided, it will be converted to a DataFrame
-        with a single column.
-    begin : str or datetime-like, optional
-        Beginning time of the selection.
-        If None, defaults to the first index value of `time_series`.
-    end : str or datetime-like, optional
-        End time of the selection.
-        If None, defaults to the last index value of `time_series`.
-
-    Returns:
-    --------
-    gradient : pandas DataFrame
-        A DataFrame containing the gradient of the input time series
-        for each column. The index will be a DatetimeIndex
-        and the columns will be the same as the input.
-
-    Raises:
-    -------
-    ValueError
-        If `time_series` is not a pandas Series or DataFrame.
-        If the index of `time_series` is not a pandas DateTimeIndex.
-
-    Notes:
-    ------
-    This function applies the `time_data_control` function to ensure that
-    the input `time_series` is formatted correctly
-    for time series analysis. Then, it selects a subset of the data between
-     `begin` and `end` if specified. Finally, the function computes
-    the gradient of each column of the subset of the data, using the
-    `np.gradient` function and the time difference between consecutive
-    data points.
-    """
-
-    data = time_data_control(data)
-
-    if begin is None:
-        begin = data.index[0]
-
-    if end is None:
-        end = data.index[-1]
-
-    selected_data = data.loc[begin:end, :]
-
-    ts_list = []
-    for col in selected_data:
-        col_ts = selected_data[col].dropna()
-
-        chrono = col_ts.index - col_ts.index[0]
-        chrono_sec = chrono.to_series().dt.total_seconds()
-
-        ts_list.append(
-            pd.Series(np.gradient(col_ts, chrono_sec), index=col_ts.index, name=col)
-        )
-
-    return pd.concat(ts_list, axis=1)
-
-
-def time_integrate(
-    data, begin=None, end=None, interpolate=True, interpolation_method="linear"
-):
-    """
-    Perform time Integration of given time series `data` between two optional
-    time bounds `begin` and `end`.
-
-    Parameters:
-    -----------
-    data : pandas Series or DataFrame
-        The time series to integrate. If a Series is provided, it will be
-        converted to a DataFrame with a single column.
-    begin : str or datetime-like, optional
-        Beginning time of the selection. If None, defaults to the first
-        index value of `data`.
-    end : str or datetime-like, optional
-        End time of the selection. If None, defaults to the last index value
-        of `data`.
-    interpolate : bool, optional
-        Whether to interpolate missing values in the input `data` before
-        integrating. If True, missing values will be filled using the specified
-         `interpolation_method`. If False, missing values will be
-         replaced with NaNs.
-    interpolation_method : str, optional
-        The interpolation method to use if `interpolate` is True. Can be one
-        of 'linear', 'nearest', 'zero', 'slinear', 'quadratic', 'cubic',
-         or 'spline'.
-
-    Returns:
-    --------
-    res_series : pandas Series
-        A Series containing the result of integrating the input time series
-        for each column. The index will be the same as the columns of
-        the input `data`.
-
-    Raises:
-    -------
-    ValueError
-        If `data` is not a pandas Series or DataFrame.
-        If the index of `data` is not a pandas DateTimeIndex.
-
-    Notes:
-    ------
-    This function applies the `time_data_control` function to ensure that the
-    input `data` is formatted correctly  for time series analysis. Then, it
-    selects a subset of the data between `begin` and `end` if specified. If
-    `interpolate` is True, missing values in the subset of the data will be
-    filled using the specified interpolation method.
-    The function then computes the integral of each column of the subset of
-    the data, using the `integrate.trapz` function and the time difference
-    between consecutive data points.
-    """
-
-    data = time_data_control(data)
-
-    if begin is None:
-        begin = data.index[0]
-
-    if end is None:
-        end = data.index[-1]
-
-    selected_ts = data.loc[begin:end, :]
-
-    if interpolate:
-        selected_ts = selected_ts.interpolate(method=interpolation_method)
-
-    chrono = (selected_ts.index - selected_ts.index[0]).to_series()
-    chrono = chrono.dt.total_seconds()
-
-    res_series = pd.Series(dtype="float64")
-    for col in data:
-        res_series[col] = integrate.trapz(selected_ts[col], chrono)
-
-    return res_series
+def get_transformers_keys():
+    return TRANSFORMER_MAP.keys()
 
 
 def missing_values_dict(df):
@@ -194,60 +40,32 @@ def missing_values_dict(df):
     }
 
 
-def check_config_dict(config_dict):
-    """
-    Check if the input dictionary follows the expected structure and values.
+def set_multi_yaxis_layout(figure, ax_dict, axis_space):
+    nb_right_y_axis = len(set(ax_dict.values()))
+    x_right_space = 1 - axis_space * (nb_right_y_axis - 1)
+    figure.update_xaxes(domain=(0, x_right_space))
+    ax_args = {
+        f"yaxis{2 + i}": dict(position=x_right_space + i * axis_space)
+        for i in range(nb_right_y_axis)
+    }
+    figure.update_layout(**ax_args)
 
-    Parameters:
-    -----------
-    config_dict : dict
-        A dictionary with two keys: "data_type_dict" and "corr_dict".
 
-        "data_type_dict" is a dictionary that maps categories to a list of
-        column names.
+def interpolate_color(color1, color2, t):
+    """Interpolate between two colors based on a parameter t"""
+    r = int((1 - t) * int(color1[1:3], 16) + t * int(color2[1:3], 16))
+    g = int((1 - t) * int(color1[3:5], 16) + t * int(color2[3:5], 16))
+    b = int((1 - t) * int(color1[5:7], 16) + t * int(color2[5:7], 16))
+    return f"#{r:02x}{g:02x}{b:02x}"
 
-        "corr_dict" is a dictionary that maps categories to a dictionary of
-        correction methods and their values.
 
-    Raises:
-    -------
-    ValueError:
-        If the input dictionary does not follow the expected structure and
-        values.
-    """
-    if not list(config_dict.keys()) == ["data_type_dict", "corr_dict"]:
-        raise ValueError("Invalid data_type or corr_dict")
-
-    categories = list(config_dict["data_type_dict"].keys())
-    corr_dict_type = list(config_dict["corr_dict"].keys())
-    for cat in categories:
-        if cat not in corr_dict_type:
-            raise ValueError("Type present in data_type " "is missing in corr_dict")
-
-    for tpe in config_dict["corr_dict"].keys():
-        to_test = list(config_dict["corr_dict"][tpe].keys())
-        for it in to_test:
-            loc_corr = config_dict["corr_dict"][tpe][it]
-
-            if it == "minmax":
-                if list(loc_corr.keys()) != ["upper", "lower"]:
-                    raise ValueError(f"Invalid configuration for {tpe} minmax")
-
-            elif it == "derivative":
-                for k in list(loc_corr.keys()):
-                    if k not in ["upper_rate", "lower_rate"]:
-                        raise ValueError(
-                            f"Invalid configuration " f"for {tpe} derivative"
-                        )
-            elif it == "fill_nan":
-                for elmt in loc_corr:
-                    if elmt not in ["linear_interpolation", "bfill", "ffill"]:
-                        raise ValueError(
-                            f"Invalid configuration " f"for {tpe} fill_nan"
-                        )
-            elif it == "resample":
-                if loc_corr not in ["mean", "sum"]:
-                    raise ValueError(f"Invalid configuration " f"for {tpe} resample")
+def darken_color(color, factor):
+    r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+    r = int(r * factor)
+    g = int(g * factor)
+    b = int(b * factor)
+    darkened_color = f"#{r:02X}{g:02X}{b:02X}"
+    return darkened_color
 
 
 def select_data(df, cols=None, begin=None, end=None):
@@ -293,12 +111,12 @@ def find_gaps(data, cols=None, timestep=None):
         specified column, as well as the overall combination of columns.
     """
 
-    data = time_data_control(data)
+    check_datetime_index(data)
     if not cols:
         cols = data.columns
 
     if not timestep:
-        timestep = auto_timestep(data)
+        timestep = get_mean_timestep(data)
 
     # Aggregate in a single columns to know overall quality
     df = data.copy()
@@ -329,7 +147,7 @@ def gaps_describe(df_in, cols=None, timestep=None):
     return pd.DataFrame({k: val.describe() for k, val in res_find_gaps.items()})
 
 
-def auto_timestep(df):
+def get_mean_timestep(df):
     return df.index.to_frame().diff().mean()[0]
 
 
@@ -342,8 +160,7 @@ def add_scatter_and_gaps(
             y=series.to_numpy().flatten(),
             mode="lines+markers",
             name=series.name,
-            yaxis=yaxis
-            # line=dict(color=f'rgb{color_rgb}')
+            yaxis=yaxis,
         )
     )
 
@@ -366,98 +183,108 @@ class MeasuredDats:
     def __init__(
         self,
         data,
-        data_type_dict=None,
-        corr_dict=None,
+        category_dict=None,
+        category_transformations=None,
+        common_transformations=None,
+        transformers_list=None,
         config_file_path=None,
         gaps_timedelta=None,
     ):
         """
         A class for handling time-series data with missing values.
+        Use scikit learn Pipelines to perform operations
 
         Parameters:
         -----------
-        data : pandas.DataFrame
-            The input data to be processed.
+        data (pandas.DataFrame): The measured data.
+        category_dict (dict, optional): A dictionary mapping data categories to
+            column names. Defaults to None.
+        category_transformations (dict, optional): A dictionary specifying
+            category-specific transformations. Defaults to None. The dictionary
+            keys must match the category name. For each category, a dictionary is
+            specified. The keys are the transformer name, the value is a list
+            ['transformer_map_name', {Corrai transformer args}]. Use only
+            transformers defined in TRANSFORMER_MAP. If necessary a specific key
+            "RESAMPLE" may be provided to specify an aggregation method. Method
+            must be in RESAMPLE_METHS dict. If not specified, default aggreagation
+            method is np.mean. An exemple of configuration is given below
 
-        data_type_dict : dict, optional
-            A dictionary that maps data type categories to the 'data' columns
-            that belong to that category. Default is None.
+        common_transformations (dict, optional): A dictionary specifying common
+            transformations. The keys are the transformer name, the value is a list
+            ['transformer_map_name', {Corrai transformer args}]. Use only
+            transformers defined in TRANSFORMER_MAP. An example of configuration
+            is given below
 
-        corr_dict : dict, optional
-            A dictionary that stores the correction method and parameters for each
-            'data' type category. 'corr_dict" keys must match 'data_type_dict'
-            keys. Default is None.
+        transformers_list (list, optional): A list of transformer names.
+            Defaults to None. A list of transformer name. The order determines the
+            order of the transformers in the pipeline. Note tha resample will always
+            be added at the end of the pipeline. If None, a default order will be
+            specified as follows: ["CATEGORY_TRANSFORMER_1", ...,
+            "CATEGORY_TRANSFORMER_n", "COMMON_TRANSFORMER_1", ...,
+            "CATEGORY_TRANSFORMER_n", "RESAMPLE"]
 
-        config_file_path : str, optional
-            The path to the configuration file.
-            If specified, the data type dictionary and correction dictionary
-            will be loaded from the file. Default is None.
 
-        gaps_timedelta : pandas.Timedelta, optional
-            The maximum allowed data gap size for each data series. Gaps
-            smaller thn 'gaps_timedelta' will not be detected. They will be
-            corrected during gaps filling processes. If None, the
-            'gaps_timedelta' timestep is estimated automatically from the data
-            index mean timestep.
+        config_file_path (str, optional): The file path for reading a json
+        configuration file. Defaults to None.
 
-        Attributes:
-        ----------
-        data : pandas.DataFrame
-            The original input data.
+        gaps_timedelta (timedelta, optional): The time interval considered to
+            identify a gap. Defaults to None. if None, it will take the mean value
+            of the interval between data.index
 
-        corrected_data : pandas.DataFrame
-            The data after the correction process.
 
-        data_type_dict : dict
-            A dictionary that maps data type categories to the columns that
-            belong to that category.
+        Properties:
+        -----------
+            columns (list): Returns the column names of the data.
 
-        corr_dict : dict
-            A dictionary that stores the correction method and parameters for
-            each data type category.
+            category_trans_names (list): Returns the names of category-specific
+                transformations.
 
-        correction_journal : dict
-            A dictionary that stores the history of the correction process.
-
-        gaps_timedelta : pandas.Timedelta
-            The maximum allowed gap size for each data series.
-
-        resample_func_dict : dict
-            A dictionary that maps resampling functions to the corresponding method
-            string.
+            common_trans_names (list): Returns the names of common
+                transformations.
 
         Methods:
-        -------
-        write_config_file(file_path)
-            Writes the data type dictionary and correction dictionary to a
-            JSON file.
+        --------
+        get_pipeline(transformers_list=None, resampling_rule=False): Creates
+            and returns a data processing pipeline. Custom transformer list
+            may be specified. resampling_rule add a resampler to the pipeline.
 
-        read_config_file(file_path)
-            Reads the data type dictionary and correction dictionary from a J
-            SON file.
+        get_corrected_data(transformers_list=None, resampling_rule=False):
+            Applies the pipeline to the data and returns the corrected data.
+            Custom transformer list may be specified. resampling_rule add a
+            resampler to the pipeline.
 
-        add_time_series(time_series, data_type, data_corr_dict=None)
-            Adds a new time series to the data set and updates the data type
-            and correction dictionaries accordingly.
+        get_common_transformer(transformation): Returns a pipeline for a
+            common transformation.
 
-        auto_correct()
-            Runs the correction process automatically.
+        get_category_transformer(transformation): Returns a pipeline for a
+            category-specific transformation.
 
-        remove_anomalies()
-            Removes the anomalies in the data set using the correction methods
-            specified  in the correction dictionary.
+        get_resampler(rule, remainder_rule="mean"): Returns a resampler for
+            data resampling.
 
-        fill_nan()
-            Fills the missing values in the data set using the correction
-            methods specified in the correction dictionary.
+        write_config_file(file_path): Writes the current configuration to a
+            file.
+        read_config_file(file_path): Reads the configuration from a file.
 
-        resample(timestep=None)
-            Resamples the data set to a specified timestep. If None, the
-            timestep is the data index mean timestep.
+        add_time_series(time_series, category, category_transformations=None):
+            Adds a time series to the data.
+
+        get_missing_value_stats(self, transformers_list=None,
+        resampling_rule=False):
+            Returns statistics on missing values for the corresponding
+            transformers_list pipeline. Number of missing values for all columns
+            and corresponding % of missing values
+
+        get_gaps_description(self, cols=None, transformers_list=None,
+            resampling_rule=False, gaps_timedelta=None)
+            returns statistics on gaps duration for specified columns for the
+            specified transformation. The column "combination" returns "aggregated"
+            gaps statistics
 
         plot_gaps(cols=None, begin=None, end=None,
             gaps_timestep=dt.timedelta(hours=5), title="Gaps plot",
-            raw_data=False, color_rgb=(243, 132, 48),  alpha=0.5):
+            raw_data=False, color_rgb=(243, 132, 48),  alpha=0.5, resampling_rule=False,
+            transformers_list=None):
             cols (list, optional): List of column names to plot. If not
                 provided, all columns will be plotted. Default is None.
             begin (str, optional): String specifying the start date for the
@@ -475,9 +302,15 @@ class MeasuredDats:
             color_rgb (tuple of int, optional): RGB color of the gaps.
                 Default is (243, 132, 48).
             alpha (float, optional): Opacity of the gaps. Default is 0.5.
+                resampling_rule: data resampling rule
+            transformers_list: transformations order list. If None it uses default
+                transformers_list
 
-        plot(cols=None, title="Correction plot", plot_raw=False,
-             begin=None, end=None)
+        plot(cols=None, title="Correction plot", begin=None, end=None, plot_raw=False,
+            plot_corrected=True, line_corrected=True, marker_corrected=True,
+            line_raw=True, marker_raw=True, resampling_rule=False,
+            transformers_list=None)
+
             Generate a plot comparing the original and corrected values of the given
             columns over the specified time range.
             cols : list of str, optional
@@ -485,49 +318,207 @@ class MeasuredDats:
                 columns are plotted.
             title : str, optional
                 The title of the plot. Defaults to "Correction plot".
-            plot_raw : bool, optional
-                If True, plot the raw values in addition to the corrected
-                values. Defaults to False.
             begin : str or datetime-like, optional
                 A string or datetime-like object specifying the start of the
                 time range to plot. If None (default), plot all data.
             end : str or datetime-like, optional
                 A string or datetime-like object specifying the end of the
                 time range to plot. If None (default), plot all data.
+            plot_raw : bool, optional
+                If True, plot the raw values
+            plot_corrected : bool, optional
+                If True, plot the corrected values .
+            line_corrected: bool, optional
+                If True, plot corrected values using lines
+            line_raw: bool, optional
+                If True, plot raw values using lines
+            marker_corrected: bool, optional
+                If True, plot corrected values using markers
+            marker_raw: bool, optional
+                If True, plot raw values using markers
+            resampling_rule: False
+                If resampling rule is specified, resample corrected data using
+                resampler and aggregation methods specified in category_transformers.
+                It will not affect raw data
+            transformers_list: list, Optional
+                transformations order list. Default None uses default
+                transformers_list
+
+        Example:
+        --------
+        >>>my_data = MeasuredDats(
+            data = raw_data,
+            category_dict = {
+                "temperatures": [
+                    'T_Wall_Ins_1', 'T_Wall_Ins_2', 'T_Ins_Ins_1', 'T_Ins_Ins_2',
+                    'T_Ins_Coat_1', 'T_Ins_Coat_2', 'T_int_1', 'T_int_2', 'T_ext',
+                    'T_garde'
+                ],
+                "illuminance": ["Lux_CW"],
+                "radiation": ["Sol_rad"]
+            },
+            category_transformations = {
+                "temperatures": {
+                    "ANOMALIES": [
+                        ["drop_threshold", {"upper": 100, "lower": -20}],
+                        ["drop_time_gradient", {"upper_rate": 2, "lower_rate": 0}]
+                    ],
+                    "RESAMPLE": 'mean',
+                },
+                "illuminance": {
+                    "ANOMALIES": [
+                        ["drop_threshold", {"upper": 1000, "lower": 0}],
+                    ],
+                    "RESAMPLE": 'mean',
+                },
+                "radiation": {
+                    "ANOMALIES": [
+                        ["drop_threshold", {"upper": 1000, "lower": 0}],
+                    ],
+                    "RESAMPLE": 'mean',
+                }
+            },
+            common_transformations={
+                "COMMON": [
+                    ["interpolate", {"method": 'linear'}],
+                    ["fill_na", {"method": 'bfill'}],
+                    ["fill_na", {"method": 'bfill'}]
+                ]
+            },
+            transformers_list=["ANOMALIES", "COMMON"]
+        )
+
+        >>>my_data.get_corrected_data()
         """
 
-        self.data = data.apply(pd.to_numeric, args=("coerce",)).copy()
-        self.corrected_data = data.apply(pd.to_numeric, args=("coerce",)).copy()
+        self.data = data.copy()
 
         if config_file_path is None:
-            self.data_type_dict = data_type_dict
-            self.corr_dict = corr_dict
-            check_config_dict(
-                {"data_type_dict": data_type_dict, "corr_dict": corr_dict}
-            )
+            self.category_dict = category_dict
+            self.category_trans = category_transformations
+            self.common_trans = common_transformations
         else:
             self.read_config_file(config_file_path)
 
-        self.correction_journal = {
-            "Entries": data.shape[0],
-            "Init": missing_values_dict(data),
-        }
         if gaps_timedelta is None:
-            self.gaps_timedelta = auto_timestep(self.data)
+            self.gaps_timedelta = get_mean_timestep(self.data)
         else:
             self.gaps_timedelta = gaps_timedelta
 
-        self.resample_func_dict = {"mean": np.mean, "sum": np.sum}
+        if transformers_list is None:
+            self.transformers_list = self.category_trans_names + self.common_trans_names
+        else:
+            self.transformers_list = transformers_list
 
     @property
     def columns(self):
         return self.data.columns
 
+    @property
+    def category_trans_names(self):
+        lst = [list(val.keys()) for val in self.category_trans.values()]
+        lst = sum(lst, [])
+        lst = list(dict.fromkeys(lst))
+        return [val for val in lst if val != "RESAMPLE"]
+
+    @property
+    def common_trans_names(self):
+        lst = list(self.common_trans.keys())
+        return list(dict.fromkeys(lst))
+
+    def get_missing_value_stats(self, transformers_list=None, resampling_rule=False):
+        data = self.get_corrected_data(transformers_list, resampling_rule)
+        return missing_values_dict(data)
+
+    def get_gaps_description(
+        self,
+        cols=None,
+        transformers_list=None,
+        resampling_rule=False,
+        gaps_timedelta=None,
+    ):
+        if gaps_timedelta is None:
+            gaps_timedelta = self.gaps_timedelta
+        data = self.get_corrected_data(transformers_list, resampling_rule)
+        return gaps_describe(df_in=data, cols=cols, timestep=gaps_timedelta)
+
+    def get_pipeline(self, transformers_list=None, resampling_rule=False):
+        if transformers_list is None:
+            transformers_list = self.transformers_list
+
+        if not transformers_list:
+            pipe = make_pipeline(*[PdIdentity()])
+        else:
+            obj_list = []
+            for trans in transformers_list:
+                if trans in self.category_trans_names:
+                    obj_list.append(self.get_category_transformer(trans))
+                else:
+                    obj_list.append(self.get_common_transformer(trans))
+            pipe = make_pipeline(*obj_list)
+
+        if resampling_rule:
+            pipe.steps.append(["resampling", self.get_resampler(resampling_rule)])
+
+        return pipe
+
+    def get_corrected_data(self, transformers_list=None, resampling_rule=False):
+        pipe = self.get_pipeline(
+            transformers_list=transformers_list, resampling_rule=resampling_rule
+        )
+        return pipe.fit_transform(self.data)
+
+    def get_common_transformer(self, transformation):
+        common_trans = self.common_trans[transformation]
+        return make_pipeline(
+            *[TRANSFORMER_MAP[trans[0]](**trans[1]) for trans in common_trans]
+        )
+
+    def get_category_transformer(self, transformation):
+        column_config_list = []
+        for data_cat, cols in self.category_dict.items():
+            if transformation in self.category_trans[data_cat].keys():
+                transformations = self.category_trans[data_cat][transformation]
+            else:
+                transformations = []
+            if transformations:
+                column_config_list.append(
+                    (
+                        f"{transformation}_{data_cat}",
+                        make_pipeline(
+                            *[
+                                TRANSFORMER_MAP[trans[0]](**trans[1])
+                                for trans in transformations
+                            ]
+                        ),
+                        cols,
+                    )
+                )
+
+        return ColumnTransformer(
+            column_config_list, verbose_feature_names_out=False, remainder="passthrough"
+        ).set_output(transform="pandas")
+
+    def get_resampler(self, rule, remainder_rule="mean"):
+        column_config_list = []
+        for data_cat, cols in self.category_dict.items():
+            try:
+                method = self.category_trans[data_cat]["RESAMPLE"]
+                column_config_list.append((cols, RESAMPLE_METHS[method]))
+            except KeyError:
+                pass
+        return ct.PdColumnResampler(
+            rule=rule,
+            columns_method=column_config_list,
+            remainder=RESAMPLE_METHS[remainder_rule],
+        )
+
     def write_config_file(self, file_path):
         with open(file_path, "w", encoding="utf-8") as f:
             to_dump = {
-                "data_type_dict": self.data_type_dict,
-                "corr_dict": self.corr_dict,
+                "category_dict": self.category_dict,
+                "category_transformations": self.category_trans,
+                "common_transformations": self.common_trans,
             }
             json.dump(to_dump, f, ensure_ascii=False, indent=4)
 
@@ -535,94 +526,36 @@ class MeasuredDats:
         with open(file_path, encoding="utf-8") as f:
             config_dict = json.load(f)
 
-        check_config_dict(config_dict)
-        self.data_type_dict = config_dict["data_type_dict"]
-        self.corr_dict = config_dict["corr_dict"]
+        self.category_dict = config_dict["category_dict"]
+        self.category_trans = config_dict["category_transformations"]
+        self.common_trans = config_dict["common_transformations"]
 
-    def add_time_series(self, time_series, data_type, data_corr_dict=None):
-        time_series = time_data_control(time_series)
-        if data_corr_dict is None:
-            data_corr_dict = {}
+    def add_time_series(self, time_series, category, category_transformations=None):
+        check_datetime_index(time_series)
+        if category_transformations is None:
+            category_transformations = {}
 
-        if data_type in self.data_type_dict.keys():
-            self.data_type_dict[data_type] += list(time_series.columns)
+        if category in self.category_dict.keys():
+            self.category_dict[category] += list(time_series.columns)
         else:
-            self.data_type_dict[data_type] = list(time_series.columns)
-            self.corr_dict[data_type] = data_corr_dict
-
-        check_config_dict(
-            {"data_type_dict": self.data_type_dict, "corr_dict": self.corr_dict}
-        )
+            self.category_dict[category] = list(time_series.columns)
+            self.category_trans[category] = category_transformations
 
         self.data = pd.concat([self.data, time_series], axis=1)
-        self.corrected_data = pd.concat([self.corrected_data, time_series], axis=1)
 
-    def auto_correct(self):
-        self.remove_anomalies()
-        self.fill_nan()
-        self.resample()
-
-    def remove_anomalies(self):
-        for data_type, cols in self.data_type_dict.items():
-            if "minmax" in self.corr_dict[data_type].keys():
-                self._minmax_corr(cols=cols, **self.corr_dict[data_type]["minmax"])
-            if "derivative" in self.corr_dict[data_type].keys():
-                self._derivative_corr(
-                    cols=cols, **self.corr_dict[data_type]["derivative"]
-                )
-        self.correction_journal["remove_anomalies"] = {
-            "missing_values": missing_values_dict(self.corrected_data),
-            "gaps_stats": gaps_describe(
-                self.corrected_data, timestep=self.gaps_timedelta
-            ),
-        }
-
-    def fill_nan(self):
-        for data_type, cols in self.data_type_dict.items():
-            function_map = {
-                "linear_interpolation": self._linear_interpolation,
-                "bfill": self._bfill,
-                "ffill": self._ffill,
-            }
-
-            for func in self.corr_dict[data_type]["fill_nan"]:
-                function_map[func](cols)
-
-        self.correction_journal["fill_nan"] = {
-            "missing_values": missing_values_dict(self.corrected_data),
-            "gaps_stats": gaps_describe(
-                self.corrected_data, timestep=self.gaps_timedelta
-            ),
-        }
-
-    def resample(self, timestep=None):
-        if not timestep:
-            timestep = auto_timestep(self.corrected_data)
-
-        agg_arguments = {}
-        for data_type, cols in self.data_type_dict.items():
-            for col in cols:
-                key = self.corr_dict[data_type]["resample"]
-                agg_arguments[col] = self.resample_func_dict[key]
-
-        resampled = self.corrected_data.resample(timestep).agg(agg_arguments)
-        self.corrected_data = resampled
-
-        self.correction_journal["Resample"] = f"Resampled at {timestep}"
-
-    def _get_reversed_data_type_dict(self, cols=None):
+    def _get_reversed_category_dict(self, cols=None):
         if cols is None:
             cols = self.data.columns
 
         rev_dict = {}
         for col in cols:
-            for key, name_list in self.data_type_dict.items():
+            for key, name_list in self.category_dict.items():
                 if col in name_list:
                     rev_dict[col] = key
         return rev_dict
 
     def _get_yaxis_config(self, cols):
-        ax_dict = self._get_reversed_data_type_dict(cols=cols)
+        ax_dict = self._get_reversed_category_dict(cols=cols)
 
         ordered_set_cat = list(dict.fromkeys(ax_dict.values()))
         ax_map = {cat: f"y{i + 1}" for i, cat in enumerate(ordered_set_cat)}
@@ -639,43 +572,6 @@ class MeasuredDats:
 
         return ax_dict, layout_ax_dict
 
-    def _minmax_corr(self, cols, upper, lower):
-        df = self.corrected_data.loc[:, cols]
-        upper_mask = df > upper
-        lower_mask = df < lower
-        mask = np.logical_or(upper_mask, lower_mask)
-        self.corrected_data[mask] = np.nan
-
-    def _derivative_corr(self, cols, upper_rate, lower_rate):
-        df = self.corrected_data.loc[:, cols]
-        time_delta = df.index.to_series().diff().dt.total_seconds()
-        abs_der = abs(df.diff().divide(time_delta, axis=0))
-        abs_der_two = abs(df.diff(periods=2).divide(time_delta, axis=0))
-
-        mask_constant = abs_der <= lower_rate
-        mask_der = abs_der >= upper_rate
-        mask_der_two = abs_der_two >= upper_rate
-
-        mask_to_remove = np.logical_and(mask_der, mask_der_two)
-        mask_to_remove = np.logical_or(mask_to_remove, mask_constant)
-
-        self.corrected_data[mask_to_remove] = np.nan
-
-    def _linear_interpolation(self, cols):
-        self._interpolate(cols, method="linear")
-
-    def _interpolate(self, cols, method):
-        inter = self.corrected_data.loc[:, cols].interpolate(method=method)
-        self.corrected_data.loc[:, cols] = inter
-
-    def _ffill(self, cols):
-        filled = self.corrected_data.loc[:, cols].fillna(method="ffill")
-        self.corrected_data.loc[:, cols] = filled
-
-    def _bfill(self, cols):
-        filled = self.corrected_data.loc[:, cols].fillna(method="bfill")
-        self.corrected_data.loc[:, cols] = filled
-
     def plot_gaps(
         self,
         cols=None,
@@ -683,9 +579,12 @@ class MeasuredDats:
         end=None,
         gaps_timestep=None,
         title="Gaps plot",
-        raw_data=False,
+        plot_raw=False,
         color_rgb=(243, 132, 48),
         alpha=0.5,
+        resampling_rule=False,
+        transformers_list=None,
+        axis_space=0.03,
     ):
         if cols is None:
             cols = self.columns
@@ -693,12 +592,19 @@ class MeasuredDats:
         if gaps_timestep is None:
             gaps_timestep = dt.timedelta(hours=5)
 
-        if raw_data:
+        if plot_raw:
             to_plot = select_data(self.data, cols, begin, end)
         else:
-            to_plot = select_data(self.corrected_data, cols, begin, end)
+            to_plot = select_data(
+                self.get_corrected_data(
+                    transformers_list=transformers_list, resampling_rule=resampling_rule
+                ),
+                cols,
+                begin,
+                end,
+            )
 
-        reversed_data_type = self._get_reversed_data_type_dict(cols)
+        reversed_data_type = self._get_reversed_category_dict(cols)
         cols_data_type = defaultdict(list)
         for key, value in reversed_data_type.items():
             cols_data_type[value].append(key)
@@ -736,53 +642,60 @@ class MeasuredDats:
                 orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5
             ),
         )
-
+        set_multi_yaxis_layout(figure=fig, ax_dict=ax_dict, axis_space=axis_space)
         fig.show()
 
     def plot(
         self,
         cols=None,
         title="Correction plot",
+        begin=None,
+        end=None,
         plot_raw=False,
-        plot_corrected=False,
+        plot_corrected=True,
         line_corrected=True,
         marker_corrected=True,
         line_raw=True,
         marker_raw=True,
-        begin=None,
-        end=None,
+        resampling_rule=False,
+        transformers_list=None,
+        axis_space=0.03,
     ):
         if cols is None:
             cols = self.columns
 
         to_plot_raw = select_data(self.data, cols, begin, end)
-        to_plot_corr = select_data(self.corrected_data, cols, begin, end)
+        to_plot_corr = select_data(
+            self.get_corrected_data(
+                transformers_list=transformers_list, resampling_rule=resampling_rule
+            ),
+            cols,
+            begin,
+            end,
+        )
 
         ax_dict, layout_ax_dict = self._get_yaxis_config(cols)
 
         fig = go.Figure()
-
-        # Define the color palette
-        color_palette = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
 
         num_cols = len(cols)
 
         for i, col in enumerate(cols):
             if i == 0:
                 # Use the first color in the palette for the first column
-                color = color_palette[0]
+                color = COLOR_PALETTE[0]
             elif i == 1:
                 # Use the last color in the palette for the second column
-                color = color_palette[-1]
+                color = COLOR_PALETTE[-1]
             elif num_cols <= 5:
                 # Use the specified colors for up to 5 columns
-                color = color_palette[i % len(color_palette)]
+                color = COLOR_PALETTE[i % len(COLOR_PALETTE)]
             else:
                 # Generate interpolated colors for more than 5 columns
                 t = (i - 2) / (num_cols - 3)  # Interpolation parameter
-                color = self.interpolate_color(color_palette[0], color_palette[-1], t)
+                color = interpolate_color(COLOR_PALETTE[0], COLOR_PALETTE[-1], t)
 
-            dark_color = self.darken_color(color, 0.7)
+            dark_color = darken_color(color, 0.7)
 
             if line_corrected and not marker_corrected:
                 mode_corrected = "lines"
@@ -820,33 +733,11 @@ class MeasuredDats:
                 )
 
         fig.update_layout(**layout_ax_dict)
+        fig.update_layout(dict(title=title))
         fig.update_layout(
             legend=dict(
                 orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5
             ),
         )
-        fig.update_layout(dict(title=title))
-        nb_right_y_axis = len(set(ax_dict.values()))
-        x_right_space = 1 - 0.03 * (nb_right_y_axis - 1)
-        fig.update_xaxes(domain=(0, x_right_space))
-        ax_args = {
-            f"yaxis{2 + i}": dict(position=x_right_space + i * 0.03)
-            for i in range(nb_right_y_axis)
-        }
-        fig.update_layout(**ax_args)
+        set_multi_yaxis_layout(figure=fig, ax_dict=ax_dict, axis_space=axis_space)
         fig.show()
-
-    def interpolate_color(self, color1, color2, t):
-        """Interpolate between two colors based on a parameter t"""
-        r = int((1 - t) * int(color1[1:3], 16) + t * int(color2[1:3], 16))
-        g = int((1 - t) * int(color1[3:5], 16) + t * int(color2[3:5], 16))
-        b = int((1 - t) * int(color1[5:7], 16) + t * int(color2[5:7], 16))
-        return f"#{r:02x}{g:02x}{b:02x}"
-
-    def darken_color(self, color, factor):
-        r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
-        r = int(r * factor)
-        g = int(g * factor)
-        b = int(b * factor)
-        darkened_color = f"#{r:02X}{g:02X}{b:02X}"
-        return darkened_color
