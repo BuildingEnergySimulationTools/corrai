@@ -341,10 +341,6 @@ class MeasuredDats:
         else:
             self.read_config_file(config_file_path)
 
-        self.correction_journal = {
-            "Entries": data.shape[0],
-            "Init": missing_values_dict(data),
-        }
         if gaps_timedelta is None:
             self.gaps_timedelta = get_mean_timestep(self.data)
         else:
@@ -370,6 +366,22 @@ class MeasuredDats:
     def common_trans_names(self):
         lst = list(self.common_trans.keys())
         return list(dict.fromkeys(lst))
+
+    def get_missing_value_stats(self, transformers_list=None, resampling_rule=False):
+        data = self.get_corrected_data(transformers_list, resampling_rule)
+        return missing_values_dict(data)
+
+    def get_gaps_description(
+        self,
+        cols=None,
+        transformers_list=None,
+        resampling_rule=False,
+        gaps_timedelta=None,
+    ):
+        if gaps_timedelta is None:
+            gaps_timedelta = self.gaps_timedelta
+        data = self.get_corrected_data(transformers_list, resampling_rule)
+        return gaps_describe(df_in=data, cols=cols, timestep=gaps_timedelta)
 
     def get_pipeline(self, transformers_list=None, resampling_rule=False):
         if transformers_list is None:
