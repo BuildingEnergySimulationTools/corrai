@@ -160,8 +160,7 @@ def add_scatter_and_gaps(
             y=series.to_numpy().flatten(),
             mode="lines+markers",
             name=series.name,
-            yaxis=yaxis
-            # line=dict(color=f'rgb{color_rgb}')
+            yaxis=yaxis,
         )
     )
 
@@ -220,7 +219,7 @@ class MeasuredDats:
             Defaults to None. A list of transformer name. The order determines the
             order of the transformers in the pipeline. Note tha resample will always
             be added at the end of the pipeline. If None, a default order will be
-            specified as follow ["CATEGORY_TRANSFORMER_1", ...,
+            specified as follows: ["CATEGORY_TRANSFORMER_1", ...,
             "CATEGORY_TRANSFORMER_n", "COMMON_TRANSFORMER_1", ...,
             "CATEGORY_TRANSFORMER_n", "RESAMPLE"]
 
@@ -234,6 +233,7 @@ class MeasuredDats:
 
 
         Properties:
+        -----------
             columns (list): Returns the column names of the data.
 
             category_trans_names (list): Returns the names of category-specific
@@ -243,30 +243,43 @@ class MeasuredDats:
                 transformations.
 
         Methods:
-            get_pipeline(transformers_list=None, resampling_rule=False): Creates
-                and returns a data processing pipeline. Custom transformer list
-                may be specified. resampling_rule add a resampler to the pipeline.
+        --------
+        get_pipeline(transformers_list=None, resampling_rule=False): Creates
+            and returns a data processing pipeline. Custom transformer list
+            may be specified. resampling_rule add a resampler to the pipeline.
 
-            get_corrected_data(transformers_list=None, resampling_rule=False):
-                Applies the pipeline to the data and returns the corrected data.
-                Custom transformer list may be specified. resampling_rule add a
-                resampler to the pipeline.
+        get_corrected_data(transformers_list=None, resampling_rule=False):
+            Applies the pipeline to the data and returns the corrected data.
+            Custom transformer list may be specified. resampling_rule add a
+            resampler to the pipeline.
 
-            get_common_transformer(transformation): Returns a pipeline for a
-                common transformation.
+        get_common_transformer(transformation): Returns a pipeline for a
+            common transformation.
 
-            get_category_transformer(transformation): Returns a pipeline for a
-                category-specific transformation.
+        get_category_transformer(transformation): Returns a pipeline for a
+            category-specific transformation.
 
-            get_resampler(rule, remainder_rule="mean"): Returns a resampler for
-                data resampling.
+        get_resampler(rule, remainder_rule="mean"): Returns a resampler for
+            data resampling.
 
-            write_config_file(file_path): Writes the current configuration to a
-                file.
-            read_config_file(file_path): Reads the configuration from a file.
+        write_config_file(file_path): Writes the current configuration to a
+            file.
+        read_config_file(file_path): Reads the configuration from a file.
 
-            add_time_series(time_series, category, category_transformations=None):
-                Adds a time series to the data.
+        add_time_series(time_series, category, category_transformations=None):
+            Adds a time series to the data.
+
+        get_missing_value_stats(self, transformers_list=None,
+        resampling_rule=False):
+            Returns statistics on missing values for the corresponding
+            transformers_list pipeline. Number of missing values for all columns
+            and corresponding % of missing values
+
+        get_gaps_description(self, cols=None, transformers_list=None,
+            resampling_rule=False, gaps_timedelta=None)
+            returns statistics on gaps duration for specified columns for the
+            specified transformation. The column "combination" returns "aggregated"
+            gaps statistics
 
         plot_gaps(cols=None, begin=None, end=None,
             gaps_timestep=dt.timedelta(hours=5), title="Gaps plot",
@@ -330,6 +343,52 @@ class MeasuredDats:
             transformers_list: list, Optional
                 transformations order list. Default None uses default
                 transformers_list
+
+        Example:
+        --------
+        >>>my_data = MeasuredDats(
+            data = raw_data,
+            category_dict = {
+                "temperatures": [
+                    'T_Wall_Ins_1', 'T_Wall_Ins_2', 'T_Ins_Ins_1', 'T_Ins_Ins_2',
+                    'T_Ins_Coat_1', 'T_Ins_Coat_2', 'T_int_1', 'T_int_2', 'T_ext',
+                    'T_garde'
+                ],
+                "illuminance": ["Lux_CW"],
+                "radiation": ["Sol_rad"]
+            },
+            category_transformations = {
+                "temperatures": {
+                    "ANOMALIES": [
+                        ["drop_threshold", {"upper": 100, "lower": -20}],
+                        ["drop_time_gradient", {"upper_rate": 2, "lower_rate": 0}]
+                    ],
+                    "RESAMPLE": 'mean',
+                },
+                "illuminance": {
+                    "ANOMALIES": [
+                        ["drop_threshold", {"upper": 1000, "lower": 0}],
+                    ],
+                    "RESAMPLE": 'mean',
+                },
+                "radiation": {
+                    "ANOMALIES": [
+                        ["drop_threshold", {"upper": 1000, "lower": 0}],
+                    ],
+                    "RESAMPLE": 'mean',
+                }
+            },
+            common_transformations={
+                "COMMON": [
+                    ["interpolate", {"method": 'linear'}],
+                    ["fill_na", {"method": 'bfill'}],
+                    ["fill_na", {"method": 'bfill'}]
+                ]
+            },
+            transformers_list=["ANOMALIES", "COMMON"]
+        )
+
+        >>>my_data.get_corrected_data()
         """
 
         self.data = data.copy()
@@ -525,7 +584,7 @@ class MeasuredDats:
         alpha=0.5,
         resampling_rule=False,
         transformers_list=None,
-        axis_space=0.03
+        axis_space=0.03,
     ):
         if cols is None:
             cols = self.columns
@@ -600,7 +659,7 @@ class MeasuredDats:
         marker_raw=True,
         resampling_rule=False,
         transformers_list=None,
-        axis_space=0.03
+        axis_space=0.03,
     ):
         if cols is None:
             cols = self.columns
