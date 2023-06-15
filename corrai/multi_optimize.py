@@ -58,7 +58,13 @@ class MyProblem(ElementwiseProblem):
     """
 
     def __init__(
-        self, parameters, obj_func_list, func_list, function_names, constraint_names
+            self,
+            parameters,
+            obj_func_list,
+            func_list,
+            function_names,
+            constraint_names,
+            obj_func_type_model=None
     ):
         self.parameters = parameters
         if len(obj_func_list) == 0 and len(func_list) == 0:
@@ -66,6 +72,7 @@ class MyProblem(ElementwiseProblem):
                 "At least one of obj_func_list or func_list should be provided"
             )
         self.obj_func_list = obj_func_list
+        self.obj_func_type_model = obj_func_type_model
         self.func_list = func_list
         self.function_names = function_names
         self.constraint_names = constraint_names
@@ -80,11 +87,26 @@ class MyProblem(ElementwiseProblem):
 
     def _evaluate(self, x, out, *args, **kwargs):
         current_param = {param["name"]: val for param, val in zip(self.parameters, x)}
-        res = pd.concat(
-            [m.function(current_param) for m in self.obj_func_list]
-            + [pyf(current_param) for pyf in self.func_list]
-        )
+        if self.obj_func_type_model == "real_model" or self.obj_func_type_model is None:
+            res = pd.concat(
+                [m.function(current_param) for m in self.obj_func_list]
+                + [pyf(current_param) for pyf in self.func_list]
+            )
+            # out["F"] = list(res[self.function_names])
+            # out["G"] = list(res[self.constraint_names])
 
+        elif self.obj_func_type_model == "surrogate_model":
+            res = pd.concat(
+                [m.function_surrogate(current_param) for m in self.obj_func_list]
+                + [pyf(current_param) for pyf in self.func_list]
+            )
+            # out["F"] = list(res[self.function_names])
+            # out["G"] = list(res[self.constraint_names])
+
+        # res = pd.concat(
+        #     [m.function(current_param) for m in self.obj_func_list]
+        #     + [pyf(current_param) for pyf in self.func_list]
+        # )
         out["F"] = list(res[self.function_names])
         out["G"] = list(res[self.constraint_names])
 
@@ -150,9 +172,14 @@ class MyMixedProblem(ElementwiseProblem):
         (if the problem has constraints to be satisfied at all).
     """
 
-    def __init__(
-        self, parameters, obj_func_list, func_list, function_names, constraint_names
-    ):
+    def __init__(self,
+                 parameters,
+                 obj_func_list,
+                 func_list,
+                 function_names,
+                 constraint_names,
+                 obj_func_type_model=None,
+                 ):
         global var
         self.parameters = parameters
         if len(obj_func_list) == 0 and len(func_list) == 0:
@@ -161,6 +188,7 @@ class MyMixedProblem(ElementwiseProblem):
             )
         self.obj_func_list = obj_func_list
         self.func_list = func_list
+        self.obj_func_type_model = obj_func_type_model
         self.function_names = function_names
         self.constraint_names = constraint_names
         variable_string = {}
