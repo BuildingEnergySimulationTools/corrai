@@ -606,7 +606,6 @@ class GreyWaterConsumption:
             raise ValueError("Start and end values must be valid timestamps.")
 
         date_index = pd.date_range(start=start, end=end, freq="H")
-
         if self.seed is not None:
             rs = RandomState(MT19937(SeedSequence(self.seed)))
         else:
@@ -642,15 +641,21 @@ class GreyWaterConsumption:
                     index = index + space
                     k = k + 1
 
-        if self.washing_machine and self.dish_washer is True:
+        if self.washing_machine and self.dish_washer :
             data = [dish_distribution, washing_distribution]
-        elif self.washing_machine is True and self.dish_washer is not True:
+            data= list(map(list, zip(*data)))
+            columns = ["Q_dish","Q_washer"]
+        elif self.washing_machine and self.dish_washer is not True:
             data = washing_distribution
+            columns = ["Q_washer"]
         else:
             data = dish_distribution
+            columns = ["Q_dish"]
 
         df = pd.DataFrame(
-            data=data, index=date_index, columns=["Q_dish", "Q_washer"]
+            data=data,
+            index=date_index,
+            columns=columns
         )
 
         return(df)
