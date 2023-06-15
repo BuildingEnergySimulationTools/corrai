@@ -572,3 +572,85 @@ class Scheduler:
         df = df.shift(-1)
         df = df.fillna(method="ffill")
         return df.resample(freq).mean()
+
+
+class GreyWaterConsumption:
+    def __init__(
+            self,
+            n_people,
+            seed=False,
+            dish_washer=True,
+            washing_machine=True,
+            v_water_dish=13,
+            v_water_clothes=50,
+            cycles_clothes_pers=89,
+            cycles_dish_pers=83,
+            duration_dish =4,
+            duration_clothes=2
+    ):
+        self.n_people = n_people
+        self.v_water_dish = v_water_dish
+        self.v_water_clothes = v_water_clothes
+        self.cycles_clothes_pers = cycles_clothes_pers
+        self.cycles_dish_pers = cycles_dish_pers
+        self.duration_dish = duration_dish
+        self.duration_clothes = duration_clothes
+        self.seed = seed
+        self.dish_washer = dish_washer
+        self.washing_machine = washing_machine
+
+    def get_GWdistribution(self, start, end):
+
+        global dish_distribution, washing_distribution
+        if not pd.Timestamp(start) or not pd.Timestamp(end):
+            raise ValueError("Start and end values must be valid timestamps.")
+
+        date_index = pd.date_range(start=start, end=end, freq="H")
+
+        if self.seed is not None:
+            rs = RandomState(MT19937(SeedSequence(self.seed)))
+        else:
+            rs = RandomState()
+
+        # calculation for dishwasher - vaisselle
+        if self.dish_washer is True:
+            Qwater_dish = self.v_water_clothes / self.duration_clothes
+            dish_distribution = [0] * len(date_index)
+            for i in range(self.n_people):
+                k = 0
+                index = rs.randint(0, 120)
+                while index < (len(date_index)-4) and k < self.cycles_dish_pers:
+                    dish_distribution[(index)] = dish_distribution[index] + Qwater_dish
+                    dish_distribution[index + 1] = dish_distribution[index + 1] + Qwater_dish
+                    dish_distribution[index + 1] = dish_distribution[index + 2] + Qwater_dish
+                    dish_distribution[index + 1] = dish_distribution[index + 3] + Qwater_dish
+                    space = rs.randint(72, 120)
+                    index = index + space
+                    k = k+1
+
+        # calculation for washing machine (lave-linge)
+        if self.washing_machine is True:
+            Qwater_clothes = self.v_water_dish / self.duration_dish
+            washing_distribution = [0] * len(date_index)
+            for i in range(self.n_people):
+                k = 0
+                index = rs.randint(0, 120)
+                while index < (len(date_index)-2) and k < self.cycles_dish_pers:
+                    washing_distribution[index] = washing_distribution[index] + Qwater_clothes
+                    washing_distribution[index + 1] = washing_distribution[index + 1]
+                    space = rs.randint(72, 120)
+                    index = index + space
+                    k = k + 1
+
+        if self.washing_machine and self.dish_washer is True:
+            data = [dish_distribution, washing_distribution]
+        elif self.washing_machine is True and self.dish_washer is not True:
+            data = washing_distribution
+        else:
+            data = dish_distribution
+
+        df = pd.DataFrame(
+            data=data, index=date_index, columns=["Q_dish", "Q_washer"]
+        )
+
+        return(df)
