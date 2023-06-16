@@ -576,34 +576,48 @@ class Scheduler:
 
 class GreyWaterConsumption:
     """
-        A class to calculate the distribution of greywater consumption based on various factors.
+    A class to calculate the distribution of greywater
+    consumption based on various factors.
 
-        Args:
-            n_people (int): Number of people in the household.
-            seed (bool, optional): Whether to use a seed for random number generation. Defaults to False.
-            dish_washer (bool, optional): Whether the household has a dishwasher. Defaults to True.
-            washing_machine (bool, optional): Whether the household has a washing machine. Defaults to True.
-            v_water_dish (int, optional): Volume of water used by the dishwasher (in liters). Defaults to 13.
-            v_water_clothes (int, optional): Volume of water used by the washing machine (in liters). Defaults to 50.
-            cycles_clothes_pers (int, optional): Number of washing machine cycles per person per year. Defaults to 89.
-            cycles_dish_pers (int, optional): Number of dishwasher cycles per person per year. Defaults to 83.
-            duration_dish (int, optional): Duration of a dishwasher cycle (in hours). Defaults to 4.
-            duration_clothes (int, optional): Duration of a washing machine cycle (in hours). Defaults to 2.
+    Args:
+        n_people (int): Number of people in the household.
+        seed (bool, optional): Whether to use a seed for random
+         number generation. Defaults to False.
+        dish_washer (bool, optional): Whether the household has
+        a dishwasher. Defaults to True.
+        washing_machine (bool, optional): Whether the household has
+        a washing machine. Defaults to True.
+        v_water_dish (int, optional): Volume of water used
+        by the dishwasher (in liters). Defaults to 13.
+        v_water_clothes (int, optional): Volume of water used by
+        the washing machine (in liters). Defaults to 50.
+        cycles_clothes_pers (int, optional): Number of washing machine
+        cycles per person per year. Defaults to 89.
+        cycles_dish_pers (int, optional): Number of dishwasher cycles
+        per person per year. Defaults to 83.
+        duration_dish (int, optional): Duration of a dishwasher
+         cycle (in hours). Defaults to 4.
+        duration_clothes (int, optional): Duration of a washing
+         machine cycle (in hours). Defaults to 2.
 
-        Raises:
-            ValueError: If both dish_washer and washing_machine are False.
+    Raises:
+        ValueError: If both dish_washer and washing_machine are False.
 
-        Methods:
-            get_GWdistribution(start, end):
-                Calculates the distribution of greywater consumption over a given time period.
+    Methods:
+        get_GWdistribution(start, end):
+            Calculates the distribution of greywater
+            consumption over a given time period.
 
-                Args:
-                    start (str): Start date of the time period (format: 'YYYY-MM-DD').
-                    end (str): End date of the time period (format: 'YYYY-MM-DD').
+            Args:
+                start (str): Start date of the time period
+                (format: 'YYYY-MM-DD').
+                end (str): End date of the time period
+                (format: 'YYYY-MM-DD').
 
-                Returns:
-                    pd.DataFrame: DataFrame containing the greywater consumption distribution with timestamps as index.
-        """
+            Returns:
+                pd.DataFrame: DataFrame containing the greywater
+                consumption distribution with timestamps as index.
+    """
 
     def __init__(
         self,
@@ -643,7 +657,8 @@ class GreyWaterConsumption:
             end (str): End date of the time period (format: 'YYYY-MM-DD').
 
         Returns:
-            pd.DataFrame: DataFrame containing the greywater consumption distribution with timestamps as index.
+            pd.DataFrame: DataFrame containing the greywater consumption
+            distribution with timestamps as index.
         """
 
         global dish_distribution, washing_distribution
