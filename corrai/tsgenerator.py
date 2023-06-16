@@ -674,7 +674,7 @@ class GreyWaterConsumption:
             dish_distribution = [0] * len(date_index)
             tot_cycles_dish_pers = int(self.cycles_dish_pers / 365 * len(date_index))
 
-            for _i in range(self.n_people):
+            for _ in range(self.n_people):
                 k = 0  # number of cycles
                 index = rs.randint(0, 120)  # time of start of cycles
                 while index < (len(date_index) - 4) and k < tot_cycles_dish_pers:
@@ -698,7 +698,7 @@ class GreyWaterConsumption:
             washing_distribution = [0] * len(date_index)
             tot_cycles_dish_pers = int(self.cycles_clothes_pers / 365 * len(date_index))
 
-            for _i in range(self.n_people):
+            for _ in range(self.n_people):
                 k = 0
                 index = rs.randint(0, 120)
                 while index < (len(date_index) - 2) and k < tot_cycles_dish_pers:
