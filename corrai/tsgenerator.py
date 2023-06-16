@@ -573,19 +573,20 @@ class Scheduler:
         df = df.fillna(method="ffill")
         return df.resample(freq).mean()
 
+
 class GreyWaterConsumption:
     def __init__(
-            self,
-            n_people,
-            seed=False,
-            dish_washer=True,
-            washing_machine=True,
-            v_water_dish=13,
-            v_water_clothes=50,
-            cycles_clothes_pers=89, # per year
-            cycles_dish_pers=83, # per year
-            duration_dish=4,
-            duration_clothes=2
+        self,
+        n_people,
+        seed=False,
+        dish_washer=True,
+        washing_machine=True,
+        v_water_dish=13,
+        v_water_clothes=50,
+        cycles_clothes_pers=89,  # per year
+        cycles_dish_pers=83,  # per year
+        duration_dish=4,
+        duration_clothes=2,
     ):
         self.n_people = n_people
         self.v_water_dish = v_water_dish
@@ -598,13 +599,13 @@ class GreyWaterConsumption:
         self.dish_washer = dish_washer
         self.washing_machine = washing_machine
 
+        if not dish_washer and not washing_machine:
+            raise ValueError(
+                "At least one of washing machine or dish washer must be True"
+            )
+
     def get_GWdistribution(self, start, end):
-
         global dish_distribution, washing_distribution
-
-        if not pd.Timestamp(start) or not pd.Timestamp(end):
-            raise ValueError("Start and end values must be valid timestamps.")
-
         date_index = pd.date_range(start=start, end=end, freq="H")
         if self.seed is not None:
             rs = RandomState(MT19937(SeedSequence(self.seed)))
@@ -615,51 +616,59 @@ class GreyWaterConsumption:
         if self.dish_washer is True:
             Qwater_dish = self.v_water_clothes / self.duration_clothes
             dish_distribution = [0] * len(date_index)
-            tot_cycles_dish_pers = int(self.cycles_dish_pers/365*len(date_index))
+            tot_cycles_dish_pers = int(self.cycles_dish_pers / 365 * len(date_index))
 
             for i in range(self.n_people):
-                k = 0 # number of cycles
-                index = rs.randint(0, 120) # time of start of cycles
-                while index < (len(date_index)-4) and k < tot_cycles_dish_pers:
+                k = 0  # number of cycles
+                index = rs.randint(0, 120)  # time of start of cycles
+                while index < (len(date_index) - 4) and k < tot_cycles_dish_pers:
                     dish_distribution[(index)] = dish_distribution[index] + Qwater_dish
-                    dish_distribution[index + 1] = dish_distribution[index + 1] + Qwater_dish
-                    dish_distribution[index + 1] = dish_distribution[index + 2] + Qwater_dish
-                    dish_distribution[index + 1] = dish_distribution[index + 3] + Qwater_dish
-                    space = rs.randint(72, 120) # day 3 to day 5
+                    dish_distribution[index + 1] = (
+                        dish_distribution[index + 1] + Qwater_dish
+                    )
+                    dish_distribution[index + 1] = (
+                        dish_distribution[index + 2] + Qwater_dish
+                    )
+                    dish_distribution[index + 1] = (
+                        dish_distribution[index + 3] + Qwater_dish
+                    )
+                    space = rs.randint(72, 120)  # day 3 to day 5
                     index = index + space
-                    k = k+1
+                    k = k + 1
 
         # calculation for washing machine
         if self.washing_machine is True:
             Qwater_clothes = self.v_water_dish / self.duration_dish
             washing_distribution = [0] * len(date_index)
-            tot_cycles_dish_pers = int(self.cycles_clothes_pers/365*len(date_index))
+            tot_cycles_dish_pers = int(self.cycles_clothes_pers / 365 * len(date_index))
 
             for i in range(self.n_people):
                 k = 0
                 index = rs.randint(0, 120)
-                while index < (len(date_index)-2) and k < tot_cycles_dish_pers:
-                    washing_distribution[index] = washing_distribution[index] + Qwater_clothes
+                while index < (len(date_index) - 2) and k < tot_cycles_dish_pers:
+                    washing_distribution[index] = (
+                        washing_distribution[index] + Qwater_clothes
+                    )
                     washing_distribution[index + 1] = washing_distribution[index + 1]
                     space = rs.randint(72, 120)
                     index = index + space
                     k = k + 1
 
-        if self.washing_machine and self.dish_washer :
+        if self.washing_machine and self.dish_washer:
             data = [dish_distribution, washing_distribution]
-            data= list(map(list, zip(*data)))
+            data = list(map(list, zip(*data)))
             columns = ["Q_dish", "Q_washer"]
         elif self.washing_machine and self.dish_washer is not True:
             data = washing_distribution
             columns = ["Q_washer"]
+        elif self.washing_machine is not True and self.dish_washer is not True:
+            data = []
+            columns = []
+            print(data, columns)
         else:
             data = dish_distribution
             columns = ["Q_dish"]
 
-        df = pd.DataFrame(
-            data=data,
-            index=date_index,
-            columns=columns
-        )
+        df = pd.DataFrame(data=data, index=date_index, columns=columns)
 
-        return(df)
+        return df

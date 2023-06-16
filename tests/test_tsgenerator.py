@@ -144,7 +144,6 @@ class TestDHWaterConsumption:
 
 
 class TestGreyWaterConsumption:
-
     def test_get_GWdistribution(self):
         gwc = GreyWaterConsumption(
             n_people=12,
@@ -154,7 +153,7 @@ class TestGreyWaterConsumption:
             cycles_clothes_pers=89,  # per year
             cycles_dish_pers=83,  # per year
             duration_dish=4,
-            duration_clothes=2
+            duration_clothes=2,
         )
 
         df = pd.DataFrame(
@@ -165,14 +164,9 @@ class TestGreyWaterConsumption:
 
         gw = gwc.get_GWdistribution(start=start, end=end)
 
-        assert np.isclose(
-            gw["Q_dish"].sum(),54850.0, rtol=0.05
-        )
+        assert np.isclose(gw["Q_dish"].sum(), 54850.0, rtol=0.05)
 
-        assert np.isclose(
-            gw["Q_washer"].sum(),3565.25, rtol=0.05
-        )
-
+        assert np.isclose(gw["Q_washer"].sum(), 3565.25, rtol=0.05)
 
     def test_warning_error(self):
         with pytest.raises(ValueError):
