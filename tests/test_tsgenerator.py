@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
-from corrai.tsgenerator import DHWaterConsumption
+from corrai.tsgenerator import DHWaterConsumption, GreyWaterConsumption
 from corrai.tsgenerator import Scheduler
 import datetime as dt
 from pathlib import Path
+import pytest
 
 FILES_PATH = Path(__file__).parent / "resources"
 
@@ -140,3 +141,37 @@ class TestDHWaterConsumption:
         df = sched.get_dataframe(freq="H")
 
         pd.testing.assert_frame_equal(df, ref)
+
+
+class TestGreyWaterConsumption:
+    def test_get_GWdistribution(self):
+        gwc = GreyWaterConsumption(
+            n_people=12,
+            seed=42,
+            v_water_dish=13,
+            v_water_clothes=50,
+            cycles_clothes_pers=89,  # per year
+            cycles_dish_pers=83,  # per year
+            duration_dish=4,
+            duration_clothes=2,
+        )
+
+        df = pd.DataFrame(
+            index=pd.date_range("2020-01-01 00:00:00", freq="H", periods=8760)
+        )
+        start = df.index[0]
+        end = df.index[-1]
+
+        gw = gwc.get_GWdistribution(start=start, end=end)
+
+        assert np.isclose(gw["Q_dish"].sum(), 54850.0, rtol=0.05)
+
+        assert np.isclose(gw["Q_washer"].sum(), 3565.25, rtol=0.05)
+
+    def test_warning_error(self):
+        with pytest.raises(ValueError):
+            GreyWaterConsumption(
+                n_people=24,
+                dish_washer=False,
+                washing_machine=False,
+            )
