@@ -58,12 +58,12 @@ class MyProblem(ElementwiseProblem):
     """
 
     def __init__(
-            self,
-            parameters,
-            obj_func_list,
-            func_list,
-            function_names,
-            constraint_names,
+        self,
+        parameters,
+        obj_func_list,
+        func_list,
+        function_names,
+        constraint_names,
     ):
         self.parameters = parameters
         if len(obj_func_list) == 0 and len(func_list) == 0:
@@ -154,13 +154,14 @@ class MyMixedProblem(ElementwiseProblem):
         (if the problem has constraints to be satisfied at all).
     """
 
-    def __init__(self,
-                 parameters,
-                 obj_func_list,
-                 func_list,
-                 function_names,
-                 constraint_names,
-                 ):
+    def __init__(
+        self,
+        parameters,
+        obj_func_list,
+        func_list,
+        function_names,
+        constraint_names,
+    ):
         global var
         self.parameters = parameters
         if len(obj_func_list) == 0 and len(func_list) == 0:
