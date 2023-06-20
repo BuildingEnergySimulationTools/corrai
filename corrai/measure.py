@@ -580,7 +580,7 @@ class MeasuredDats:
         gaps_timestep=None,
         title="Gaps plot",
         plot_raw=False,
-        color_rgb=(243, 132, 48),
+        color_rgb=(100, 100, 100),
         alpha=0.5,
         resampling_rule=False,
         transformers_list=None,
