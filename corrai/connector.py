@@ -11,8 +11,6 @@ class ScikitFunction:
     - surrogate (object): The surrogate object used for prediction.
     - param_list (list): A list of parameter names.
     - indicators (list, optional): A list of indicator names. Defaults to None.
-    - agg_methods_dict (dict, optional): A dictionary mapping indicator names to aggregation methods.
-    Defaults to None.
 
     Attributes:
     - simulator (object): The simulator object used for the function.
