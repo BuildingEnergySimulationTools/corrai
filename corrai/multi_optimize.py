@@ -58,7 +58,12 @@ class MyProblem(ElementwiseProblem):
     """
 
     def __init__(
-        self, parameters, obj_func_list, func_list, function_names, constraint_names
+        self,
+        parameters,
+        obj_func_list,
+        func_list,
+        function_names,
+        constraint_names,
     ):
         self.parameters = parameters
         if len(obj_func_list) == 0 and len(func_list) == 0:
@@ -84,7 +89,6 @@ class MyProblem(ElementwiseProblem):
             [m.function(current_param) for m in self.obj_func_list]
             + [pyf(current_param) for pyf in self.func_list]
         )
-
         out["F"] = list(res[self.function_names])
         out["G"] = list(res[self.constraint_names])
 
@@ -151,7 +155,12 @@ class MyMixedProblem(ElementwiseProblem):
     """
 
     def __init__(
-        self, parameters, obj_func_list, func_list, function_names, constraint_names
+        self,
+        parameters,
+        obj_func_list,
+        func_list,
+        function_names,
+        constraint_names,
     ):
         global var
         self.parameters = parameters
