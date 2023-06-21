@@ -192,9 +192,9 @@ class TestCustomTransformers:
 
         ref = pd.DataFrame(
             {
-                "col2": [0.56239, 0.47789],
-                "col1": [2.0, 7.0],
                 "col0": [400.0, 900.0],
+                "col1": [2.0, 7.0],
+                "col2": [0.56239, 0.47789],
                 "col3": [9.69910, 5.24756],
             },
             index=pd.DatetimeIndex(
