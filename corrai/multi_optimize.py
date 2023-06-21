@@ -92,7 +92,7 @@ class MyProblem(ElementwiseProblem):
         out["F"] = list(res[self.function_names])
         out["G"] = list(res[self.constraint_names])
 
-    def plot_pcp(self, res, ref):
+    def plot_pcp(self, res, ref, bounds=False):
         data_dict = {
             param["name"]: res.X[:, i]
             for param, i in zip(self.parameters, range(res.X.shape[1]))
@@ -101,7 +101,13 @@ class MyProblem(ElementwiseProblem):
             {self.function_names[i]: res.F[:, i] for i in range(res.F.shape[1])}
         )
 
-        plot_parcoord(data_dict=data_dict, colorby=ref)
+        plot_parcoord(
+            data_dict=data_dict,
+            bounds=bounds,
+            parameters=self.parameters,
+            colorby=ref,
+            obj_res=res.F,
+        )
 
 
 class MyMixedProblem(ElementwiseProblem):
@@ -193,7 +199,7 @@ class MyMixedProblem(ElementwiseProblem):
             n_ieq_constr=len(constraint_names),
         )
 
-    def plot_pcp(self, res, ref):  # à tester avec binaires, non floats, etc.
+    def plot_pcp(self, res, ref, bounds=False):
         data_dict = {
             param["name"]: res.X[:, i]
             for param, i in zip(self.parameters, range(res.X.shape[1]))
@@ -202,12 +208,31 @@ class MyMixedProblem(ElementwiseProblem):
             {self.function_names[i]: res.F[:, i] for i in range(res.F.shape[1])}
         )
 
-        plot_parcoord(data_dict=data_dict, colorby=ref)
+        plot_parcoord(
+            data_dict=data_dict,
+            bounds=bounds,
+            parameters=self.parameters,
+            colorby=ref,
+            obj_res=res.F,
+        )
 
 
-def plot_parcoord(data_dict, colorby=None, colorscale="Electric"):
+def plot_parcoord(data_dict, bounds, parameters, obj_res, colorby=None):
     # Define the color palette
+    global range
     color_palette = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
+
+    if bounds:
+        range_down = [p["interval"][0] for i, p in enumerate(parameters)]
+        range_down.extend(obj_res.min(axis=0))
+        range_up = [p["interval"][-1] for i, p in enumerate(parameters)]
+        range_up.extend(obj_res.max(axis=0))
+        ranges = [[range_down[i], range_up[i]] for i in range(len(range_up))]
+
+    else:
+        ranges = [
+            [data_dict[par].min(), data_dict[par].max()] for par in data_dict.keys()
+        ]
 
     fig = go.Figure(
         data=go.Parcoords(
@@ -220,11 +245,11 @@ def plot_parcoord(data_dict, colorby=None, colorscale="Electric"):
             ),
             dimensions=[
                 {
-                    "range": [data_dict[par].min(), data_dict[par].max()],
+                    "range": r,
                     "label": par,
                     "values": data_dict[par],
                 }
-                for par in data_dict.keys()
+                for par, r in zip(data_dict.keys(), ranges)
             ],
         )
     )
