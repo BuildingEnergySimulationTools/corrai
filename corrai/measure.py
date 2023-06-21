@@ -186,6 +186,7 @@ class MeasuredDats:
         category_dict=None,
         category_transformations=None,
         common_transformations=None,
+        resampler_agg_methods=None,
         transformers_list=None,
         config_file_path=None,
         gaps_timedelta=None,
@@ -397,6 +398,7 @@ class MeasuredDats:
             self.category_dict = category_dict
             self.category_trans = category_transformations
             self.common_trans = common_transformations
+            self.resampler_agg_methods = resampler_agg_methods
         else:
             self.read_config_file(config_file_path)
 
@@ -418,8 +420,7 @@ class MeasuredDats:
     def category_trans_names(self):
         lst = [list(val.keys()) for val in self.category_trans.values()]
         lst = sum(lst, [])
-        lst = list(dict.fromkeys(lst))
-        return [val for val in lst if val != "RESAMPLE"]
+        return list(dict.fromkeys(lst))
 
     @property
     def common_trans_names(self):
@@ -444,23 +445,30 @@ class MeasuredDats:
 
     def get_pipeline(self, transformers_list=None, resampling_rule=False):
         if transformers_list is None:
-            transformers_list = self.transformers_list
+            transformers_list = self.transformers_list.copy()
+
+        if "RESAMPLER" in transformers_list and not resampling_rule:
+            raise ValueError(
+                "RESAMPLER is present in transformers_list but no rule"
+                "have been specified. use resampling_rule argument"
+            )
+
+        if resampling_rule and "RESAMPLER" not in transformers_list:
+            transformers_list += ["RESAMPLER"]
 
         if not transformers_list:
-            pipe = make_pipeline(*[PdIdentity()])
+            obj_list = [PdIdentity()]
         else:
             obj_list = []
             for trans in transformers_list:
                 if trans in self.category_trans_names:
                     obj_list.append(self.get_category_transformer(trans))
+                elif trans == "RESAMPLER":
+                    obj_list.append(self.get_resampler(resampling_rule))
                 else:
                     obj_list.append(self.get_common_transformer(trans))
-            pipe = make_pipeline(*obj_list)
 
-        if resampling_rule:
-            pipe.steps.append(["resampling", self.get_resampler(resampling_rule)])
-
-        return pipe
+        return make_pipeline(*obj_list)
 
     def get_corrected_data(self, transformers_list=None, resampling_rule=False):
         pipe = self.get_pipeline(
@@ -503,7 +511,7 @@ class MeasuredDats:
         column_config_list = []
         for data_cat, cols in self.category_dict.items():
             try:
-                method = self.category_trans[data_cat]["RESAMPLE"]
+                method = self.resampler_agg_methods[data_cat]
                 column_config_list.append((cols, RESAMPLE_METHS[method]))
             except KeyError:
                 pass
