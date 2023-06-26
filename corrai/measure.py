@@ -526,10 +526,7 @@ class MeasuredDats:
                 pass
 
         if not column_config_list:
-            return ct.PdResampler(
-                rule=rule,
-                method=np.mean
-            )
+            return ct.PdResampler(rule=rule, method=np.mean)
         else:
             return ct.PdColumnResampler(
                 rule=rule,
