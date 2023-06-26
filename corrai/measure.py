@@ -398,7 +398,10 @@ class MeasuredDats:
             self.category_dict = category_dict
             self.category_trans = category_transformations
             self.common_trans = common_transformations
-            self.resampler_agg_methods = resampler_agg_methods
+            if resampler_agg_methods is None:
+                self.resampler_agg_methods = {}
+            else:
+                self.resampler_agg_methods = resampler_agg_methods
         else:
             self.read_config_file(config_file_path)
 
@@ -515,11 +518,18 @@ class MeasuredDats:
                 column_config_list.append((cols, RESAMPLE_METHS[method]))
             except KeyError:
                 pass
-        return ct.PdColumnResampler(
-            rule=rule,
-            columns_method=column_config_list,
-            remainder=RESAMPLE_METHS[remainder_rule],
-        )
+
+        if not column_config_list:
+            return ct.PdResampler(
+                rule=rule,
+                method=np.mean
+            )
+        else:
+            return ct.PdColumnResampler(
+                rule=rule,
+                columns_method=column_config_list,
+                remainder=RESAMPLE_METHS[remainder_rule],
+            )
 
     def write_config_file(self, file_path):
         with open(file_path, "w", encoding="utf-8") as f:
