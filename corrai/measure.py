@@ -216,6 +216,12 @@ class MeasuredDats:
             transformers defined in TRANSFORMER_MAP. An example of configuration
             is given below
 
+        resampler_agg_methods (dict, optional): A dictionary specifying the aggrgation
+            method for the categories. Method must be corrai.measure RESAMPLE_METHS
+            dict keys(). If no method is provided for a category, default method
+            is numpy mean. Default value for this parameter is an empty dict, meaning
+            aggregation method will be numpy mean for all categories.
+
         transformers_list (list, optional): A list of transformer names.
             Defaults to None. A list of transformer name. The order determines the
             order of the transformers in the pipeline. Note tha resample will always
@@ -364,19 +370,16 @@ class MeasuredDats:
                         ["drop_threshold", {"upper": 100, "lower": -20}],
                         ["drop_time_gradient", {"upper_rate": 2, "lower_rate": 0}]
                     ],
-                    "RESAMPLE": 'mean',
                 },
                 "illuminance": {
                     "ANOMALIES": [
                         ["drop_threshold", {"upper": 1000, "lower": 0}],
                     ],
-                    "RESAMPLE": 'mean',
                 },
                 "radiation": {
                     "ANOMALIES": [
                         ["drop_threshold", {"upper": 1000, "lower": 0}],
                     ],
-                    "RESAMPLE": 'mean',
                 }
             },
             common_transformations={
@@ -385,6 +388,9 @@ class MeasuredDats:
                     ["fill_na", {"method": 'bfill'}],
                     ["fill_na", {"method": 'bfill'}]
                 ]
+            },
+            resampler_agg_methods={
+                "radiation": "sum" # Method is just an example.
             },
             transformers_list=["ANOMALIES", "COMMON"]
         )
