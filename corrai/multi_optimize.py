@@ -168,7 +168,6 @@ class MyMixedProblem(ElementwiseProblem):
         function_names,
         constraint_names,
     ):
-        global var
         self.parameters = parameters
         if len(obj_func_list) == 0 and len(func_list) == 0:
             raise ValueError(
@@ -190,6 +189,10 @@ class MyMixedProblem(ElementwiseProblem):
                 var = Choice(options=bounds)
             elif vtype == "Binary":
                 var = Binary()
+            else:
+                raise ValueError(
+                    "Unknown vtype. Choose one of 'Integer', 'Real', 'Choice', "
+                    "'Binary'")
             variable_string[name] = var
 
         super().__init__(
@@ -219,7 +222,6 @@ class MyMixedProblem(ElementwiseProblem):
 
 def plot_parcoord(data_dict, bounds, parameters, obj_res, colorby=None):
     # Define the color palette
-    global range
     color_palette = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
 
     if bounds:
