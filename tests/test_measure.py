@@ -38,13 +38,11 @@ def my_measure():
                     ["drop_time_gradient", {"lower_rate": 0, "upper_rate": 0.004}],
                 ],
                 "PROCESS": [["apply_expression", {"expression": "X * 2"}]],
-                "RESAMPLE": "mean",
             },
             "col_2": {
                 "ANOMALIES": [
                     ["drop_threshold", {"upper": 500, "lower": 0}],
                 ],
-                "RESAMPLE": "sum",
             },
             "col_3": {},
         },
@@ -55,6 +53,7 @@ def my_measure():
                 ["fill_na", {"method": "ffill"}],
             ]
         },
+        resampler_agg_methods={"col_2": "sum"},
     )
 
     return tested_obj

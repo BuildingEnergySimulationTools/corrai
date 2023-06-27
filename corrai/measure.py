@@ -186,6 +186,7 @@ class MeasuredDats:
         category_dict=None,
         category_transformations=None,
         common_transformations=None,
+        resampler_agg_methods=None,
         transformers_list=None,
         config_file_path=None,
         gaps_timedelta=None,
@@ -214,6 +215,12 @@ class MeasuredDats:
             ['transformer_map_name', {Corrai transformer args}]. Use only
             transformers defined in TRANSFORMER_MAP. An example of configuration
             is given below
+
+        resampler_agg_methods (dict, optional): A dictionary specifying the aggrgation
+            method for the categories. Method must be corrai.measure RESAMPLE_METHS
+            dict keys(). If no method is provided for a category, default method
+            is numpy mean. Default value for this parameter is an empty dict, meaning
+            aggregation method will be numpy mean for all categories.
 
         transformers_list (list, optional): A list of transformer names.
             Defaults to None. A list of transformer name. The order determines the
@@ -363,19 +370,16 @@ class MeasuredDats:
                         ["drop_threshold", {"upper": 100, "lower": -20}],
                         ["drop_time_gradient", {"upper_rate": 2, "lower_rate": 0}]
                     ],
-                    "RESAMPLE": 'mean',
                 },
                 "illuminance": {
                     "ANOMALIES": [
                         ["drop_threshold", {"upper": 1000, "lower": 0}],
                     ],
-                    "RESAMPLE": 'mean',
                 },
                 "radiation": {
                     "ANOMALIES": [
                         ["drop_threshold", {"upper": 1000, "lower": 0}],
                     ],
-                    "RESAMPLE": 'mean',
                 }
             },
             common_transformations={
@@ -384,6 +388,9 @@ class MeasuredDats:
                     ["fill_na", {"method": 'bfill'}],
                     ["fill_na", {"method": 'bfill'}]
                 ]
+            },
+            resampler_agg_methods={
+                "radiation": "sum" # Method is just an example.
             },
             transformers_list=["ANOMALIES", "COMMON"]
         )
@@ -397,6 +404,10 @@ class MeasuredDats:
             self.category_dict = category_dict
             self.category_trans = category_transformations
             self.common_trans = common_transformations
+            if resampler_agg_methods is None:
+                self.resampler_agg_methods = {}
+            else:
+                self.resampler_agg_methods = resampler_agg_methods
         else:
             self.read_config_file(config_file_path)
 
@@ -418,8 +429,7 @@ class MeasuredDats:
     def category_trans_names(self):
         lst = [list(val.keys()) for val in self.category_trans.values()]
         lst = sum(lst, [])
-        lst = list(dict.fromkeys(lst))
-        return [val for val in lst if val != "RESAMPLE"]
+        return list(dict.fromkeys(lst))
 
     @property
     def common_trans_names(self):
@@ -444,23 +454,30 @@ class MeasuredDats:
 
     def get_pipeline(self, transformers_list=None, resampling_rule=False):
         if transformers_list is None:
-            transformers_list = self.transformers_list
+            transformers_list = self.transformers_list.copy()
+
+        if "RESAMPLER" in transformers_list and not resampling_rule:
+            raise ValueError(
+                "RESAMPLER is present in transformers_list but no rule"
+                "have been specified. use resampling_rule argument"
+            )
+
+        if resampling_rule and "RESAMPLER" not in transformers_list:
+            transformers_list += ["RESAMPLER"]
 
         if not transformers_list:
-            pipe = make_pipeline(*[PdIdentity()])
+            obj_list = [PdIdentity()]
         else:
             obj_list = []
             for trans in transformers_list:
                 if trans in self.category_trans_names:
                     obj_list.append(self.get_category_transformer(trans))
+                elif trans == "RESAMPLER":
+                    obj_list.append(self.get_resampler(resampling_rule))
                 else:
                     obj_list.append(self.get_common_transformer(trans))
-            pipe = make_pipeline(*obj_list)
 
-        if resampling_rule:
-            pipe.steps.append(["resampling", self.get_resampler(resampling_rule)])
-
-        return pipe
+        return make_pipeline(*obj_list)
 
     def get_corrected_data(self, transformers_list=None, resampling_rule=False):
         pipe = self.get_pipeline(
@@ -503,15 +520,19 @@ class MeasuredDats:
         column_config_list = []
         for data_cat, cols in self.category_dict.items():
             try:
-                method = self.category_trans[data_cat]["RESAMPLE"]
+                method = self.resampler_agg_methods[data_cat]
                 column_config_list.append((cols, RESAMPLE_METHS[method]))
             except KeyError:
                 pass
-        return ct.PdColumnResampler(
-            rule=rule,
-            columns_method=column_config_list,
-            remainder=RESAMPLE_METHS[remainder_rule],
-        )
+
+        if not column_config_list:
+            return ct.PdResampler(rule=rule, method=np.mean)
+        else:
+            return ct.PdColumnResampler(
+                rule=rule,
+                columns_method=column_config_list,
+                remainder=RESAMPLE_METHS[remainder_rule],
+            )
 
     def write_config_file(self, file_path):
         with open(file_path, "w", encoding="utf-8") as f:

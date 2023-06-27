@@ -745,7 +745,7 @@ class PdColumnResampler(BaseEstimator, TransformerMixin):
                 axis=1,
             )
 
-        return transformed_X
+        return transformed_X[self.columns]
 
     def get_feature_names_out(self):
         # Return the names of the new features created in transform()
