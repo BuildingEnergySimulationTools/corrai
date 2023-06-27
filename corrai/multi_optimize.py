@@ -192,7 +192,8 @@ class MyMixedProblem(ElementwiseProblem):
             else:
                 raise ValueError(
                     "Unknown vtype. Choose one of 'Integer', 'Real', 'Choice', "
-                    "'Binary'")
+                    "'Binary'"
+                )
             variable_string[name] = var
 
         super().__init__(
