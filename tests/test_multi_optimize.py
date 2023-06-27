@@ -29,7 +29,7 @@ def py_func_rosen(x_dict):
     )
 
 
-class MyObject_BinhandKorn1:
+class MyObjectBinhandKorn1:
     def function(self, x):
         f1 = 4 * x["x"] ** 2 + 4 * x["y"] ** 2
         f2 = (x["x"] - 5) ** 2 + (x["y"] - 5) ** 2
@@ -37,13 +37,13 @@ class MyObject_BinhandKorn1:
         return pd.Series([f1, f2, g1], index=["f1", "f2", "g1"])
 
 
-class MyObject_BinhandKorn2:
+class MyObjectBinhandKorn2:
     def function(self, x):
         g2 = 7.7 - (x["x"] - 8) ** 2 - (x["y"] + 3) ** 2
         return pd.Series([g2], index=["g2"])
 
 
-class MyObject_mixed:
+class MyObjectMixed:
     def function(self, x):
         f1 = x["z"] ** 2 + x["y"] ** 2
         f2 = (x["z"] + 2) ** 2 + (x["y"] - 1) ** 2
@@ -85,8 +85,8 @@ class TestMyProblem:
             {"name": "y", "interval": (0, 3)},
         ]
 
-        obj1 = MyObject_BinhandKorn1()
-        obj2 = MyObject_BinhandKorn2()
+        obj1 = MyObjectBinhandKorn1()
+        obj2 = MyObjectBinhandKorn2()
 
         problem = MyProblem(
             parameters=param,
@@ -166,7 +166,7 @@ class TestMyProblem:
             {"name": "z", "interval": (-5, 5), "type": "Real"},
         ]
 
-        obj = MyObject_mixed()
+        obj = MyObjectMixed()
 
         problem = MyMixedProblem(
             parameters=param,
@@ -180,16 +180,20 @@ class TestMyProblem:
 
         res = minimize(problem, algorithm, ("n_gen", 10), seed=1, verbose=False)
 
-        np.array_equal(
+        assert np.array_equal(
             res.X,
             np.array(
                 [
-                    {"b": False, "x": "nothing", "y": 0, "z": -0.9193284996322444},
-                    {"b": True, "x": "nothing", "y": 0, "z": -0.031853402754111526},
-                    {"b": False, "x": "multiply", "y": 0, "z": 0.11304433422108318},
-                    {"b": False, "x": "nothing", "y": 0, "z": -2.9032762721742804},
-                    {"b": False, "x": "nothing", "y": 0, "z": -0.5998932514007078},
-                    {"b": True, "x": "nothing", "y": 0, "z": -0.10011235296152621},
+                    {'b': False, 'x': 'nothing', 'y': -1, 'z': -3.171895287195006},
+                    {'b': True, 'x': 'nothing', 'y': -2, 'z': 1.0010167049586345},
+                    {'b': True, 'x': 'multiply', 'y': -2, 'z': 0.594271468177376},
+                    {'b': True, 'x': 'nothing', 'y': -2, 'z': 1.491494211693306},
+                    {'b': True, 'x': 'nothing', 'y': -1, 'z': 1.1853058250031823},
+                    {'b': False, 'x': 'nothing', 'y': -1, 'z': -3.111139359237738},
+                    {'b': False, 'x': 'nothing', 'y': -2, 'z': 1.0010167049586345},
+                    {'b': False, 'x': 'nothing', 'y': -2, 'z': 2.180903989956362},
+                    {'b': True, 'x': 'nothing', 'y': -1, 'z': -3.9194731168372825},
+                    {'b': True, 'x': 'nothing', 'y': -2, 'z': -3.1857699746328842},
                 ]
             ),
         )
