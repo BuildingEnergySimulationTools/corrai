@@ -203,6 +203,15 @@ class MyMixedProblem(ElementwiseProblem):
             n_ieq_constr=len(constraint_names),
         )
 
+    def _evaluate(self, X, out, *args, **kwargs):
+        res = pd.concat(
+            [m.function(X) for m in self.obj_func_list]
+            + [pyf(X) for pyf in self.func_list]
+        )
+
+        out["F"] = list(res[self.function_names])
+        out["G"] = list(res[self.constraint_names])
+
     def plot_pcp(self, res, ref, bounds=False):
         data_dict = {
             param["name"]: res.X[:, i]
