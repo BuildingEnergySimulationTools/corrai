@@ -661,7 +661,6 @@ class GreyWaterConsumption:
             distribution with timestamps as index.
         """
 
-        global dish_distribution, washing_distribution
         date_index = pd.date_range(start=start, end=end, freq="H")
         if self.seed is not None:
             rs = RandomState(MT19937(SeedSequence(self.seed)))
@@ -714,13 +713,9 @@ class GreyWaterConsumption:
             data = [dish_distribution, washing_distribution]
             data = list(map(list, zip(*data)))
             columns = ["Q_dish", "Q_washer"]
-        elif self.washing_machine and self.dish_washer is not True:
+        elif self.washing_machine and not self.dish_washer:
             data = washing_distribution
             columns = ["Q_washer"]
-        elif self.washing_machine is not True and self.dish_washer is not True:
-            data = []
-            columns = []
-            print(data, columns)
         else:
             data = dish_distribution
             columns = ["Q_dish"]
