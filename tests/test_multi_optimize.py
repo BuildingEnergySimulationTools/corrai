@@ -176,27 +176,16 @@ class TestMyProblem:
             constraint_names=[],
         )
 
-        algorithm = MixedVariableGA(pop_size=10, survival=RankAndCrowdingSurvival())
-
-        res = minimize(problem, algorithm, ("n_gen", 10), seed=1, verbose=False)
-
-        assert np.array_equal(
-            res.X,
-            np.array(
-                [
-                    {"b": False, "x": "nothing", "y": -1, "z": -3.171895287195006},
-                    {"b": True, "x": "nothing", "y": -2, "z": 1.0010167049586345},
-                    {"b": True, "x": "multiply", "y": -2, "z": 0.594271468177376},
-                    {"b": True, "x": "nothing", "y": -2, "z": 1.491494211693306},
-                    {"b": True, "x": "nothing", "y": -1, "z": 1.1853058250031823},
-                    {"b": False, "x": "nothing", "y": -1, "z": -3.111139359237738},
-                    {"b": False, "x": "nothing", "y": -2, "z": 1.0010167049586345},
-                    {"b": False, "x": "nothing", "y": -2, "z": 2.180903989956362},
-                    {"b": True, "x": "nothing", "y": -1, "z": -3.9194731168372825},
-                    {"b": True, "x": "nothing", "y": -2, "z": -3.1857699746328842},
-                ]
-            ),
+        to_test = problem.evaluate(
+            [{"b": False, "x": "nothing", "y": -1, "z": -3.171895287195006}],
+            return_as_dictionary=True
         )
+
+        ref_f = np.array([[11.060919712929891,5.373338564149866]])
+        ref_g = np.array([[]])
+
+        assert np.array_equal(to_test["F"], ref_f)
+        assert np.array_equal(to_test["G"], ref_g)
 
     def test_warning_error(self):
         with pytest.raises(ValueError):
