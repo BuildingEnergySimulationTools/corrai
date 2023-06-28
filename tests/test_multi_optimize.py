@@ -15,8 +15,6 @@ from pymoo.operators.sampling.rnd import IntegerRandomSampling
 from pymoo.algorithms.soo.nonconvex.de import DE
 from pymoo.operators.sampling.lhs import LHS
 from pymoo.optimize import minimize
-from pymoo.algorithms.moo.nsga2 import RankAndCrowdingSurvival
-from pymoo.core.mixed import MixedVariableGA
 
 
 PACKAGE_DIR = Path(__file__).parent / "TestLib"
@@ -178,10 +176,10 @@ class TestMyProblem:
 
         to_test = problem.evaluate(
             [{"b": False, "x": "nothing", "y": -1, "z": -3.171895287195006}],
-            return_as_dictionary=True
+            return_as_dictionary=True,
         )
 
-        ref_f = np.array([[11.060919712929891,5.373338564149866]])
+        ref_f = np.array([[11.060919712929891, 5.373338564149866]])
         ref_g = np.array([[]])
 
         assert np.array_equal(to_test["F"], ref_f)
