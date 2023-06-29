@@ -28,7 +28,7 @@ setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=[
         "numpy>=1.21.3",
         "pandas>=1.3.4,<2",
