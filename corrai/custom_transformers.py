@@ -510,7 +510,7 @@ class PdFillNa(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        return X.fillna(method=self.method)
+        return X.fillna(value=self.value, method=self.method)
 
 
 class PdResampler(BaseEstimator, TransformerMixin):

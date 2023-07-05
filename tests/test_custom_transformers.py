@@ -160,7 +160,16 @@ class TestCustomTransformers:
         )
 
         filler = PdFillNa(method="bfill")
+        pd.testing.assert_frame_equal(ref, filler.fit_transform(test))
 
+        ref = pd.DataFrame(
+            {
+                "cpt1": [0.0, 0.0, 2.0, 2.0, 0.0, 3.0],
+                "cpt2": [0.0, 1.0, 2.0, 2.0, 0.0, 3.0],
+            }
+        )
+
+        filler = PdFillNa(value=0.0)
         pd.testing.assert_frame_equal(ref, filler.fit_transform(test))
 
     def test_pd_resampler(self):
