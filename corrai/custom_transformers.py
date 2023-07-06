@@ -5,7 +5,26 @@ from functools import partial
 from sklearn.base import TransformerMixin, BaseEstimator
 from corrai.math import time_gradient
 from scipy.ndimage import gaussian_filter1d
+from abc import ABC, abstractmethod
 
+
+class PdTransformerBC(TransformerMixin, BaseEstimator, ABC):
+    def __init__(self):
+        self.columns = None
+        self.index = None
+
+    def get_feature_names_out(self, input_features=None):
+        return self.columns
+
+    @abstractmethod
+    def fit(self, X, y=None):
+        """Operations happening during fitting process"""
+        pass
+
+    @abstractmethod
+    def transform(self, X):
+        """Operations happening during transforming process"""
+        pass
 
 class PdIdentity(TransformerMixin, BaseEstimator):
     """
