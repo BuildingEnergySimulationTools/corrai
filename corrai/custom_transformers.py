@@ -26,7 +26,8 @@ class PdTransformerBC(TransformerMixin, BaseEstimator, ABC):
         """Operations happening during transforming process"""
         pass
 
-class PdIdentity(TransformerMixin, BaseEstimator):
+
+class PdIdentity(PdTransformerBC):
     """
     A custom transformer that returns the input data without any modifications.
 
@@ -69,13 +70,8 @@ class PdIdentity(TransformerMixin, BaseEstimator):
             The input data without any modifications.
     """
 
-    def __init__(self, how="all"):
-        self.how = how
-        self.columns = None
-        self.index = None
-
-    def get_feature_names_out(self, input_features=None):
-        return self.columns
+    def __init__(self):
+        super().__init__()
 
     def fit(self, X, y=None):
         self.columns = X.columns
@@ -802,11 +798,11 @@ class PdAddTimeLag(BaseEstimator, TransformerMixin):
     """
 
     def __init__(
-        self,
-        time_lag,
-        features_to_lag=None,
-        feature_marker=None,
-        drop_resulting_nan=False,
+            self,
+            time_lag,
+            features_to_lag=None,
+            feature_marker=None,
+            drop_resulting_nan=False,
     ):
         if not isinstance(time_lag, dt.timedelta):
             raise ValueError(

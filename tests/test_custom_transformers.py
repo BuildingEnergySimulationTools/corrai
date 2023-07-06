@@ -26,8 +26,10 @@ class TestCustomTransformers:
         df = pd.DataFrame({"a": [1.0]})
 
         identity = PdIdentity()
+        res = identity.fit_transform(df)
 
-        pd.testing.assert_frame_equal(df, identity.fit_transform(df))
+        assert df.columns == identity.get_feature_names_out()
+        pd.testing.assert_frame_equal(df, res)
 
     def test_pd_dropna(self):
         df = pd.DataFrame({"a": [1.0, 2.0, np.nan], "b": [3.0, 4.0, 5.0]})
