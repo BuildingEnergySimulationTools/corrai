@@ -3,6 +3,21 @@ import pandas as pd
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Integer, Real, Choice, Binary
 import plotly.graph_objs as go
+from abc import ABC, abstractmethod
+
+
+class MoProblemABC(ABC):
+    def __init__(
+        self,
+        param_list,
+        indicators,
+    ):
+        self.param_list = param_list
+        self.indicators = indicators
+
+    @abstractmethod
+    def function(self, x_dict):
+        pass
 
 
 # TODO Add permutation variables to MyMixedProblem
