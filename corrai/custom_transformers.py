@@ -82,7 +82,7 @@ class PdIdentity(PdTransformerBC):
         return X
 
 
-class PdDropna(TransformerMixin, BaseEstimator):
+class PdDropna(PdTransformerBC):
     """A class to drop NaN values in a Pandas DataFrame.
 
     Parameters
@@ -110,12 +110,8 @@ class PdDropna(TransformerMixin, BaseEstimator):
     """
 
     def __init__(self, how="all"):
+        super().__init__()
         self.how = how
-        self.columns = None
-        self.index = None
-
-    def get_feature_names_out(self, input_features=None):
-        return self.columns
 
     def fit(self, X, y=None):
         self.columns = X.columns
@@ -126,7 +122,7 @@ class PdDropna(TransformerMixin, BaseEstimator):
         return X.dropna(how=self.how)
 
 
-class PdRenameColumns(TransformerMixin, BaseEstimator):
+class PdRenameColumns(PdTransformerBC):
     """
     Scikit-learn transformer that renames columns of a Pandas DataFrame.
 
@@ -156,12 +152,8 @@ class PdRenameColumns(TransformerMixin, BaseEstimator):
     """
 
     def __init__(self, new_names):
+        super().__init__()
         self.new_names = new_names
-        self.columns = None
-        self.index = None
-
-    def get_feature_names_out(self, input_features=None):
-        return self.columns
 
     def fit(self, X, y=None):
         self.columns = X.columns
@@ -182,7 +174,7 @@ class PdRenameColumns(TransformerMixin, BaseEstimator):
         return X
 
 
-class PdSkTransformer(TransformerMixin, BaseEstimator):
+class PdSkTransformer(PdTransformerBC):
     """A transformer class to apply scikit transformers on a pandas DataFrame
 
     This class takes in a scikit-learn transformers as input and applies the
@@ -215,12 +207,8 @@ class PdSkTransformer(TransformerMixin, BaseEstimator):
     """
 
     def __init__(self, transformer):
+        super().__init__()
         self.transformer = transformer
-        self.columns = None
-        self.index = None
-
-    def get_feature_names_out(self, input_features=None):
-        return self.columns
 
     def fit(self, X, y=None):
         self.transformer.fit(X)
@@ -242,7 +230,7 @@ class PdSkTransformer(TransformerMixin, BaseEstimator):
         )
 
 
-class PdDropThreshold(BaseEstimator, TransformerMixin):
+class PdDropThreshold(PdTransformerBC):
     """Class replacing values in a pandas DataFrame by NaN based on
     threshold values.
 
@@ -277,13 +265,9 @@ class PdDropThreshold(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, upper=None, lower=None):
+        super().__init__()
         self.lower = lower
         self.upper = upper
-        self.columns = None
-        self.index = None
-
-    def get_feature_names_out(self, input_features=None):
-        return self.columns
 
     def fit(self, X, y=None):
         self.columns = X.columns
@@ -310,7 +294,7 @@ class PdDropThreshold(BaseEstimator, TransformerMixin):
         return X
 
 
-class PdDropTimeGradient(BaseEstimator, TransformerMixin):
+class PdDropTimeGradient(PdTransformerBC):
     """
     A transformer that removes values in a DataFrame based on the time gradient.
 
@@ -348,14 +332,10 @@ class PdDropTimeGradient(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, dropna=True, upper_rate=None, lower_rate=None):
+        super().__init__()
         self.dropna = dropna
         self.upper_rate = upper_rate
         self.lower_rate = lower_rate
-        self.columns = None
-        self.index = None
-
-    def get_feature_names_out(self, input_features=None):
-        return self.columns
 
     def fit(self, X, y=None):
         self.columns = X.columns
@@ -403,7 +383,7 @@ class PdDropTimeGradient(BaseEstimator, TransformerMixin):
         return pd.concat(X_transformed, axis=1)
 
 
-class PdApplyExpression(TransformerMixin, BaseEstimator):
+class PdApplyExpression(PdTransformerBC):
     """A transformer class to apply a mathematical expression on a Pandas
     DataFrame.
 
@@ -428,12 +408,8 @@ class PdApplyExpression(TransformerMixin, BaseEstimator):
     """
 
     def __init__(self, expression):
+        super().__init__()
         self.expression = expression
-        self.columns = None
-        self.index = None
-
-    def get_feature_names_out(self, input_features=None):
-        return self.columns
 
     def fit(self, X, y=None):
         self.columns = X.columns
@@ -444,7 +420,7 @@ class PdApplyExpression(TransformerMixin, BaseEstimator):
         return eval(self.expression)
 
 
-class PdTimeGradient(BaseEstimator, TransformerMixin):
+class PdTimeGradient(PdTransformerBC):
     """
     A class to calculate the time gradient of a pandas DataFrame,
      which is the derivative of the data with respect to time.
@@ -471,11 +447,7 @@ class PdTimeGradient(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self):
-        self.columns = None
-        self.index = None
-
-    def get_feature_names_out(self, input_features=None):
-        return self.columns
+        super().__init__()
 
     def fit(self, X, y=None):
         self.columns = X.columns
@@ -488,7 +460,7 @@ class PdTimeGradient(BaseEstimator, TransformerMixin):
         return derivative.reindex(original_index)
 
 
-class PdFillNa(BaseEstimator, TransformerMixin):
+class PdFillNa(PdTransformerBC):
     """
     A class that extends scikit-learn's TransformerMixin and BaseEstimator
     to fill missing values in a Pandas DataFrame.
@@ -511,13 +483,9 @@ class PdFillNa(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, value=None, method=None):
+        super().__init__()
         self.value = value
         self.method = method
-        self.columns = None
-        self.index = None
-
-    def get_feature_names_out(self, input_features=None):
-        return self.columns
 
     def fit(self, X, y=None):
         self.columns = X.columns
@@ -528,7 +496,7 @@ class PdFillNa(BaseEstimator, TransformerMixin):
         return X.fillna(value=self.value, method=self.method)
 
 
-class PdResampler(BaseEstimator, TransformerMixin):
+class PdResampler(PdTransformerBC):
     """A transformer class that resamples a Pandas DataFrame
 
     This class performs resampling on a Pandas DataFrame using the specified
@@ -574,13 +542,10 @@ class PdResampler(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, rule, method=None):
+        super().__init__()
         self.rule = rule
         self.method = method
-        self.columns = None
         self.resampled_index = None
-
-    def get_feature_names_out(self, input_features=None):
-        return self.columns
 
     def fit(self, X, y=None):
         self.columns = X.columns
@@ -594,7 +559,7 @@ class PdResampler(BaseEstimator, TransformerMixin):
         return X_resampled
 
 
-class PdInterpolate(BaseEstimator, TransformerMixin):
+class PdInterpolate(PdTransformerBC):
     """A class that implements interpolation of missing values in
      a Pandas DataFrame.
 
@@ -631,12 +596,8 @@ class PdInterpolate(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, method=None):
+        super().__init__()
         self.method = method
-        self.columns = None
-        self.index = None
-
-    def get_feature_names_out(self, input_features=None):
-        return self.columns
 
     def fit(self, X, y=None):
         self.columns = X.columns
@@ -647,7 +608,7 @@ class PdInterpolate(BaseEstimator, TransformerMixin):
         return X.interpolate(method=self.method)
 
 
-class PdColumnResampler(BaseEstimator, TransformerMixin):
+class PdColumnResampler(PdTransformerBC):
     """Resample time series data in a pandas DataFrame based on different
     resampling methods for different columns.
 
@@ -691,10 +652,10 @@ class PdColumnResampler(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, rule, columns_method, remainder="drop"):
+        super().__init__()
         self.rule = rule
         self.columns_method = columns_method
         self.resampled_index = None
-        self.columns = None
 
         if remainder != "drop" and not callable(remainder):
             raise ValueError(
@@ -762,12 +723,8 @@ class PdColumnResampler(BaseEstimator, TransformerMixin):
 
         return transformed_X[self.columns]
 
-    def get_feature_names_out(self):
-        # Return the names of the new features created in transform()
-        return self.columns
 
-
-class PdAddTimeLag(BaseEstimator, TransformerMixin):
+class PdAddTimeLag(PdTransformerBC):
     """
      PdAddTimeLag - A transformer that adds lagged features to a pandas
      DataFrame.
@@ -798,12 +755,13 @@ class PdAddTimeLag(BaseEstimator, TransformerMixin):
     """
 
     def __init__(
-            self,
-            time_lag,
-            features_to_lag=None,
-            feature_marker=None,
-            drop_resulting_nan=False,
+        self,
+        time_lag,
+        features_to_lag=None,
+        feature_marker=None,
+        drop_resulting_nan=False,
     ):
+        super().__init__()
         if not isinstance(time_lag, dt.timedelta):
             raise ValueError(
                 "Invalid time_lag value. You must provide "
@@ -835,7 +793,7 @@ class PdAddTimeLag(BaseEstimator, TransformerMixin):
         return X_transformed
 
 
-class PdGaussianFilter1D(BaseEstimator, TransformerMixin):
+class PdGaussianFilter1D(PdTransformerBC):
     """
     A transformer that applies a 1D Gaussian filter to a Pandas DataFrame.
     The Gaussian filter is a widely used smoothing filter that effectively
@@ -886,14 +844,10 @@ class PdGaussianFilter1D(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, sigma=5, mode="nearest", truncate=4.0):
+        super().__init__()
         self.sigma = sigma
         self.mode = mode
         self.truncate = truncate
-        self.columns = None
-        self.index = None
-
-    def get_feature_names_out(self, input_features=None):
-        return self.columns
 
     def fit(self, X, y=None):
         self.columns = X.columns
