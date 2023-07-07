@@ -865,3 +865,81 @@ class PdGaussianFilter1D(PdTransformerBC):
         )
 
         return X.apply(gauss_filter)
+
+
+class PdCombineColumns(PdTransformerBC):
+    """
+    A class that combines multiple columns in a pandas DataFrame using a specified
+    function.
+
+    Parameters
+    ----------
+        columns_to_combine (list or None): A list of column names to combine.
+            If None, all columns will be combined.
+        function (callable or None): A function or method to apply for combining
+            columns.
+        function_kwargs (dict or None): Additional keyword arguments to pass to the
+            combining function.
+        drop_columns (bool): If True, the original columns to combine will be dropped
+            from the DataFrame. If False, the original columns will be retained.
+        label_name (str): The name of the new column that will store the combined
+            values.
+
+    Attributes
+    ----------
+        columns : list
+            The column names of the input DataFrame.
+        index : pandas.Index
+            The index of the input DataFrame.
+
+    Methods
+    -------
+        get_feature_names_out(input_features=None)
+            Get output feature names for the transformed data.
+        fit(X, y=None)
+            Fit the transformer to the input data.
+        transform(X, y=None)
+            Transform the input data by applying the function
+    """
+
+    def __init__(
+        self,
+        columns_to_combine=None,
+        function=None,
+        function_kwargs=None,
+        drop_columns=False,
+        label_name="combined",
+    ):
+        super().__init__()
+        if function_kwargs is None:
+            function_kwargs = {}
+        self.function_kwargs = function_kwargs
+        self.columns_to_combine = columns_to_combine
+        self.function = function
+        self.drop_columns = drop_columns
+        self.label_name = label_name
+
+    def fit(self, X, y=None):
+        self.columns = X.columns
+        self.index = X.index
+        for lab in self.columns_to_combine:
+            if lab not in self.columns:
+                raise ValueError(f"{lab} is not found in X DataFrame columns")
+        return self
+
+    def transform(self, X):
+        X_transformed = X.copy()
+        if self.drop_columns:
+            col_to_return = [
+                col for col in self.columns if col not in self.columns_to_combine
+            ]
+        else:
+            col_to_return = list(self.columns)
+
+        X_transformed[self.label_name] = self.function(
+            X_transformed[self.columns_to_combine], **self.function_kwargs
+        )
+
+        col_to_return.append(self.label_name)
+
+        return X_transformed[col_to_return]

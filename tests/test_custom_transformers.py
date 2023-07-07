@@ -19,6 +19,7 @@ from corrai.custom_transformers import PdColumnResampler
 from corrai.custom_transformers import PdAddTimeLag
 from corrai.custom_transformers import PdGaussianFilter1D
 from corrai.custom_transformers import PdIdentity
+from corrai.custom_transformers import PdCombineColumns
 
 
 class TestCustomTransformers:
@@ -278,3 +279,23 @@ class TestCustomTransformers:
         )
 
         assert list(to_test.columns) == list(df.columns)
+
+    def test_pd_combine_columns(self):
+        x_in = pd.DataFrame({"a": [1, 2], "b": [1, 2], "c": [1, 2]})
+
+        trans = PdCombineColumns(
+            columns_to_combine=["a", "b"],
+            function=np.sum,
+            function_kwargs={"axis": 1},
+            drop_columns=True,
+        )
+
+        pd.testing.assert_frame_equal(
+            trans.fit_transform(x_in), pd.DataFrame({"c": [1, 2], "combined": [2, 4]})
+        )
+
+        ref = x_in.copy()
+        ref["combined"] = [2, 4]
+        trans.drop_columns = False
+
+        pd.testing.assert_frame_equal(trans.fit_transform(x_in), ref)
