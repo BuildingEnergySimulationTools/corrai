@@ -550,6 +550,7 @@ class MeasuredDats:
         self.category_dict = config_dict["category_dict"]
         self.category_trans = config_dict["category_transformations"]
         self.common_trans = config_dict["common_transformations"]
+        self.transformers_list = config_dict["transformers_list"]
 
     def add_time_series(self, time_series, category, category_transformations=None):
         check_datetime_index(time_series)
