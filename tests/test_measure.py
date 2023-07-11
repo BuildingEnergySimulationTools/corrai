@@ -72,6 +72,7 @@ class TestMeasuredDats:
         assert to_test.category_dict == my_measure.category_dict
         assert to_test.category_trans == my_measure.category_trans
         assert to_test.common_trans == my_measure.common_trans
+        assert to_test.transformers_list == my_measure.transformers_list
 
     def test_select_data(self):
         df = pd.DataFrame(
