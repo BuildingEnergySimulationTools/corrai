@@ -6,18 +6,20 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
-## Measured Data Exploration and Enrichment
+## Measured Data Exploration for Physical and Mathematical Models 
 
-This Python library is designed to handle measured data from test benches or Building Energy Management Systems (BEMS). It offers a range of features to help identify and correct measurement errors, fill gaps in data, and perform analysis using artificial intelligence (AI) tools. 
+This Python library is designed to handle measured data from test benches or Building Energy Management Systems (BEMS). 
+It offers physical model calibration frameworks and original AI methods.
 
 ## Features
 
 The library includes the following features:
-
-- **Error identification :** basic error detection such as unrealistic values or unrealistic variations.
-
-- **Data gap filling:**  basic correction methods for filling gaps in the data, allowing users to generate a more complete dataset.
+- **Data cleaning:** Based on [Pandas](https://pandas.pydata.org/), it uses [Scikit-learn](https://scikit-learn.org/stable/) framework
+to simplify data cleaning process through the creation of pipelines for time series.
 
 - **Data plotting:** generate plots of measured data, visualize gaps and filling methods effects.
 
-- **AI tools for fault detection and energy analysis:** The library includes artificial intelligence tools for fault detection and energy consumption analysis. These tools can help identify anomalies in the data and generate insights into energy usage patterns.
+- **Physical model calibration:** Provides base class to define calibration problem, uses [Pymoo](https://pymoo.org/) optimization method for parameters identification.
+- **Building usage modeling:** Domestic Hot water consumption, grey water use ...
+- **AI tools for HVAC FDD:** The library includes artificial intelligence tools for 
+Heating Ventilating and Air Conditioning (HVAC) systems fault detection and diagnostics (FDD).
