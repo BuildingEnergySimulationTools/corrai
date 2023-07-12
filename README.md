@@ -14,9 +14,9 @@ It offers physical model calibration frameworks and original AI methods.
 The library includes the following features:
 - **Data cleaning:** Based on [Pandas](https://pandas.pydata.org/), it uses [Scikit-learn](https://scikit-learn.org/stable/) framework
 to simplify data cleaning process through the creation of pipelines for time series.
-- **Data plotting:** generates plots of measured data, visualizes gaps and cleaning methods effects.
-- **Physical model calibration:** Provides base class to define calibration problem, uses [Pymoo](https://pymoo.org/) optimization method for parameters identification.
+- **Data plotting:** Generates plots of measured data, visualizes gaps and cleaning methods effects.
+- **Physical model calibration:** Provides base class to define calibration problem, uses [Pymoo](https://pymoo.org/) optimization methods for parameters identification.
 - **Building usage modeling:** Generates time series of occupancy-related usage 
 (Domestic Hot water consumption, grey water use...).
 - **AI tools for HVAC FDD:** Includes artificial intelligence tools for 
-Heating Ventilating and Air Conditioning (HVAC) systems fault detection and diagnostics (FDD).
+Heating Ventilation and Air Conditioning (HVAC) systems fault detection and diagnostics (FDD).
