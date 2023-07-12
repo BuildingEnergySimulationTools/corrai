@@ -404,6 +404,14 @@ class MeasuredDats:
             self.category_dict = category_dict
             self.category_trans = category_transformations
             self.common_trans = common_transformations
+
+            if transformers_list is None:
+                self.transformers_list = (
+                    self.category_trans_names + self.common_trans_names
+                )
+            else:
+                self.transformers_list = transformers_list
+
             if resampler_agg_methods is None:
                 self.resampler_agg_methods = {}
             else:
@@ -415,11 +423,6 @@ class MeasuredDats:
             self.gaps_timedelta = get_mean_timestep(self.data)
         else:
             self.gaps_timedelta = gaps_timedelta
-
-        if transformers_list is None:
-            self.transformers_list = self.category_trans_names + self.common_trans_names
-        else:
-            self.transformers_list = transformers_list
 
     @property
     def columns(self):

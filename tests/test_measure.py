@@ -5,6 +5,7 @@ from corrai.measure import MeasuredDats
 from corrai.measure import missing_values_dict
 from corrai.measure import gaps_describe
 from corrai.measure import select_data
+from copy import deepcopy
 
 from pathlib import Path
 
@@ -63,16 +64,19 @@ class TestMeasuredDats:
     def test_rw_config_file(self, my_measure, tmp_path_factory):
         test_save_path = tmp_path_factory.mktemp("save")
 
-        my_measure.write_config_file(test_save_path / "save.json")
+        my_measure_loc = deepcopy(my_measure)
+        my_measure_loc.transformers_list = ["PROCESS", "COMMON"]
+
+        my_measure_loc.write_config_file(test_save_path / "save.json")
 
         to_test = MeasuredDats(
             data=TEST_DF, config_file_path=test_save_path / "save.json"
         )
 
-        assert to_test.category_dict == my_measure.category_dict
-        assert to_test.category_trans == my_measure.category_trans
-        assert to_test.common_trans == my_measure.common_trans
-        assert to_test.transformers_list == my_measure.transformers_list
+        assert to_test.category_dict == my_measure_loc.category_dict
+        assert to_test.category_trans == my_measure_loc.category_trans
+        assert to_test.common_trans == my_measure_loc.common_trans
+        assert to_test.transformers_list == my_measure_loc.transformers_list
 
     def test_select_data(self):
         df = pd.DataFrame(
