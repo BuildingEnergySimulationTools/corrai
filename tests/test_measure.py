@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import json
 
 from corrai.measure import MeasuredDats
 from corrai.measure import missing_values_dict
@@ -66,7 +67,6 @@ class TestMeasuredDats:
 
         my_measure_loc = deepcopy(my_measure)
         my_measure_loc.transformers_list = ["PROCESS", "COMMON"]
-
         my_measure_loc.write_config_file(test_save_path / "save.json")
 
         to_test = MeasuredDats(
@@ -77,6 +77,18 @@ class TestMeasuredDats:
         assert to_test.category_trans == my_measure_loc.category_trans
         assert to_test.common_trans == my_measure_loc.common_trans
         assert to_test.transformers_list == my_measure_loc.transformers_list
+
+        with open(test_save_path / "save.json", "w", encoding="utf-8") as f:
+            json.dump({}, f, ensure_ascii=False, indent=4)
+
+        to_test = MeasuredDats(
+            data=TEST_DF, config_file_path=test_save_path / "save.json"
+        )
+
+        assert to_test.category_dict == {"data": TEST_DF.columns}
+        assert to_test.category_trans == {}
+        assert to_test.common_trans == {}
+        assert to_test.transformers_list == []
 
     def test_select_data(self):
         df = pd.DataFrame(

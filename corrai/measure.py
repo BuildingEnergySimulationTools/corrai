@@ -189,7 +189,6 @@ class MeasuredDats:
         resampler_agg_methods=None,
         transformers_list=None,
         config_file_path=None,
-        gaps_timedelta=None,
     ):
         """
         A class for handling time-series data with missing values.
@@ -233,10 +232,6 @@ class MeasuredDats:
 
         config_file_path (str, optional): The file path for reading a json
         configuration file. Defaults to None.
-
-        gaps_timedelta (timedelta, optional): The time interval considered to
-            identify a gap. Defaults to None. if None, it will take the mean value
-            of the interval between data.index
 
 
         Properties:
@@ -397,32 +392,32 @@ class MeasuredDats:
 
         >>>my_data.get_corrected_data()
         """
-
-        self.data = data.copy()
+        check_datetime_index(data)
+        self.data = data
 
         if config_file_path is None:
             self.category_dict = category_dict
             self.category_trans = category_transformations
             self.common_trans = common_transformations
-
-            if transformers_list is None:
-                self.transformers_list = (
-                    self.category_trans_names + self.common_trans_names
-                )
-            else:
-                self.transformers_list = transformers_list
-
-            if resampler_agg_methods is None:
-                self.resampler_agg_methods = {}
-            else:
-                self.resampler_agg_methods = resampler_agg_methods
+            self.transformers_list = transformers_list
+            self.resampler_agg_methods = resampler_agg_methods
         else:
             self.read_config_file(config_file_path)
 
-        if gaps_timedelta is None:
-            self.gaps_timedelta = get_mean_timestep(self.data)
-        else:
-            self.gaps_timedelta = gaps_timedelta
+        if self.category_dict is None:
+            self.category_dict = {"data": data.columns}
+
+        if self.category_trans is None:
+            self.category_trans = {}
+
+        if self.common_trans is None:
+            self.common_trans = {}
+
+        if self.transformers_list is None:
+            self.transformers_list = self.category_trans_names + self.common_trans_names
+
+        if self.resampler_agg_methods is None:
+            self.resampler_agg_methods = {}
 
     @property
     def columns(self):
@@ -451,7 +446,7 @@ class MeasuredDats:
         gaps_timedelta=None,
     ):
         if gaps_timedelta is None:
-            gaps_timedelta = self.gaps_timedelta
+            gaps_timedelta = get_mean_timestep(self.data)
         data = self.get_corrected_data(transformers_list, resampling_rule)
         return gaps_describe(df_in=data, cols=cols, timestep=gaps_timedelta)
 
@@ -497,23 +492,24 @@ class MeasuredDats:
     def get_category_transformer(self, transformation):
         column_config_list = []
         for data_cat, cols in self.category_dict.items():
-            if transformation in self.category_trans[data_cat].keys():
-                transformations = self.category_trans[data_cat][transformation]
-            else:
-                transformations = []
-            if transformations:
-                column_config_list.append(
-                    (
-                        f"{transformation}_{data_cat}",
-                        make_pipeline(
-                            *[
-                                TRANSFORMER_MAP[trans[0]](**trans[1])
-                                for trans in transformations
-                            ]
-                        ),
-                        cols,
+            if data_cat in self.category_trans.keys():
+                if transformation in self.category_trans[data_cat].keys():
+                    transformations = self.category_trans[data_cat][transformation]
+                else:
+                    transformations = []
+                if transformations:
+                    column_config_list.append(
+                        (
+                            f"{transformation}_{data_cat}",
+                            make_pipeline(
+                                *[
+                                    TRANSFORMER_MAP[trans[0]](**trans[1])
+                                    for trans in transformations
+                                ]
+                            ),
+                            cols,
+                        )
                     )
-                )
 
         return ColumnTransformer(
             column_config_list, verbose_feature_names_out=False, remainder="passthrough"
@@ -544,6 +540,7 @@ class MeasuredDats:
                 "category_transformations": self.category_trans,
                 "common_transformations": self.common_trans,
                 "transformers_list": self.transformers_list,
+                "resampler_agg_methods": self.resampler_agg_methods,
             }
             json.dump(to_dump, f, ensure_ascii=False, indent=4)
 
@@ -551,10 +548,18 @@ class MeasuredDats:
         with open(file_path, encoding="utf-8") as f:
             config_dict = json.load(f)
 
-        self.category_dict = config_dict["category_dict"]
-        self.category_trans = config_dict["category_transformations"]
-        self.common_trans = config_dict["common_transformations"]
-        self.transformers_list = config_dict["transformers_list"]
+        attribute_list = [
+            ("category_dict", "category_dict"),
+            ("category_transformations", "category_trans"),
+            ("common_transformations", "common_trans"),
+            ("transformers_list", "transformers_list"),
+            ("resampler_agg_methods", "resampler_agg_methods"),
+        ]
+        for attr in attribute_list:
+            try:
+                setattr(self, attr[1], config_dict[attr[0]])
+            except KeyError:
+                setattr(self, attr[1], None)
 
     def add_time_series(self, time_series, category, category_transformations=None):
         check_datetime_index(time_series)
