@@ -404,6 +404,15 @@ class MeasuredDats:
         else:
             self.read_config_file(config_file_path)
 
+        if self.category_dict is None:
+            self.category_dict = {"data": data.columns}
+
+        if self.category_trans is None:
+            self.category_trans = {}
+
+        if self.common_trans is None:
+            self.common_trans = {}
+
         if self.transformers_list is None:
             self.transformers_list = (
                     self.category_trans_names + self.common_trans_names
