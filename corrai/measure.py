@@ -393,7 +393,7 @@ class MeasuredDats:
         >>>my_data.get_corrected_data()
         """
 
-        self.data = data.copy()
+        self.data = data
 
         if config_file_path is None:
             self.category_dict = category_dict
