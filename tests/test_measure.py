@@ -90,7 +90,6 @@ class TestMeasuredDats:
         assert to_test.common_trans == {}
         assert to_test.transformers_list == []
 
-
     def test_select_data(self):
         df = pd.DataFrame(
             {
