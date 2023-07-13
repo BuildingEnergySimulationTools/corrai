@@ -152,7 +152,7 @@ def get_mean_timestep(df):
 
 
 def add_scatter_and_gaps(
-        figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
+    figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
 ):
     figure.add_trace(
         go.Scattergl(
@@ -173,7 +173,7 @@ def add_scatter_and_gaps(
                 fill="toself",
                 showlegend=False,
                 fillcolor=f"rgba({color_rgb[0]}, {color_rgb[1]},"
-                          f" {color_rgb[2]} , {alpha})",
+                f" {color_rgb[2]} , {alpha})",
                 yaxis=yaxis,
             )
         )
@@ -181,14 +181,14 @@ def add_scatter_and_gaps(
 
 class MeasuredDats:
     def __init__(
-            self,
-            data,
-            category_dict=None,
-            category_transformations=None,
-            common_transformations=None,
-            resampler_agg_methods=None,
-            transformers_list=None,
-            config_file_path=None,
+        self,
+        data,
+        category_dict=None,
+        category_transformations=None,
+        common_transformations=None,
+        resampler_agg_methods=None,
+        transformers_list=None,
+        config_file_path=None,
     ):
         """
         A class for handling time-series data with missing values.
@@ -414,9 +414,7 @@ class MeasuredDats:
             self.common_trans = {}
 
         if self.transformers_list is None:
-            self.transformers_list = (
-                    self.category_trans_names + self.common_trans_names
-            )
+            self.transformers_list = self.category_trans_names + self.common_trans_names
 
         if self.resampler_agg_methods is None:
             self.resampler_agg_methods = {}
@@ -441,11 +439,11 @@ class MeasuredDats:
         return missing_values_dict(data)
 
     def get_gaps_description(
-            self,
-            cols=None,
-            transformers_list=None,
-            resampling_rule=False,
-            gaps_timedelta=None,
+        self,
+        cols=None,
+        transformers_list=None,
+        resampling_rule=False,
+        gaps_timedelta=None,
     ):
         if gaps_timedelta is None:
             gaps_timedelta = get_mean_timestep(self.data)
@@ -606,18 +604,18 @@ class MeasuredDats:
         return ax_dict, layout_ax_dict
 
     def plot_gaps(
-            self,
-            cols=None,
-            begin=None,
-            end=None,
-            gaps_timestep=None,
-            title="Gaps plot",
-            plot_raw=False,
-            color_rgb=(100, 100, 100),
-            alpha=0.5,
-            resampling_rule=False,
-            transformers_list=None,
-            axis_space=0.03,
+        self,
+        cols=None,
+        begin=None,
+        end=None,
+        gaps_timestep=None,
+        title="Gaps plot",
+        plot_raw=False,
+        color_rgb=(100, 100, 100),
+        alpha=0.5,
+        resampling_rule=False,
+        transformers_list=None,
+        axis_space=0.03,
     ):
         if cols is None:
             cols = self.columns
@@ -679,20 +677,20 @@ class MeasuredDats:
         fig.show()
 
     def plot(
-            self,
-            cols=None,
-            title="Correction plot",
-            begin=None,
-            end=None,
-            plot_raw=False,
-            plot_corrected=True,
-            line_corrected=True,
-            marker_corrected=True,
-            line_raw=True,
-            marker_raw=True,
-            resampling_rule=False,
-            transformers_list=None,
-            axis_space=0.03,
+        self,
+        cols=None,
+        title="Correction plot",
+        begin=None,
+        end=None,
+        plot_raw=False,
+        plot_corrected=True,
+        line_corrected=True,
+        marker_corrected=True,
+        line_raw=True,
+        marker_raw=True,
+        resampling_rule=False,
+        transformers_list=None,
+        axis_space=0.03,
     ):
         if cols is None:
             cols = self.columns
