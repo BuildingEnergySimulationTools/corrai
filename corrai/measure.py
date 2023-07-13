@@ -392,7 +392,7 @@ class MeasuredDats:
 
         >>>my_data.get_corrected_data()
         """
-
+        check_datetime_index(data)
         self.data = data
 
         if config_file_path is None:
