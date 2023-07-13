@@ -152,7 +152,7 @@ def get_mean_timestep(df):
 
 
 def add_scatter_and_gaps(
-    figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
+        figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
 ):
     figure.add_trace(
         go.Scattergl(
@@ -173,7 +173,7 @@ def add_scatter_and_gaps(
                 fill="toself",
                 showlegend=False,
                 fillcolor=f"rgba({color_rgb[0]}, {color_rgb[1]},"
-                f" {color_rgb[2]} , {alpha})",
+                          f" {color_rgb[2]} , {alpha})",
                 yaxis=yaxis,
             )
         )
@@ -181,15 +181,15 @@ def add_scatter_and_gaps(
 
 class MeasuredDats:
     def __init__(
-        self,
-        data,
-        category_dict=None,
-        category_transformations=None,
-        common_transformations=None,
-        resampler_agg_methods=None,
-        transformers_list=None,
-        config_file_path=None,
-        gaps_timedelta=None,
+            self,
+            data,
+            category_dict=None,
+            category_transformations=None,
+            common_transformations=None,
+            resampler_agg_methods=None,
+            transformers_list=None,
+            config_file_path=None,
+            gaps_timedelta=None,
     ):
         """
         A class for handling time-series data with missing values.
@@ -404,25 +404,22 @@ class MeasuredDats:
             self.category_dict = category_dict
             self.category_trans = category_transformations
             self.common_trans = common_transformations
-
-            if transformers_list is None:
-                self.transformers_list = (
-                    self.category_trans_names + self.common_trans_names
-                )
-            else:
-                self.transformers_list = transformers_list
-
-            if resampler_agg_methods is None:
-                self.resampler_agg_methods = {}
-            else:
-                self.resampler_agg_methods = resampler_agg_methods
+            self.transformers_list = transformers_list
+            self.resampler_agg_methods = resampler_agg_methods
+            self.gaps_timedelta = gaps_timedelta
         else:
             self.read_config_file(config_file_path)
 
-        if gaps_timedelta is None:
+        if self.transformers_list is None:
+            self.transformers_list = (
+                    self.category_trans_names + self.common_trans_names
+            )
+
+        if self.resampler_agg_methods is None:
+            self.resampler_agg_methods = {}
+
+        if self.gaps_timedelta is None:
             self.gaps_timedelta = get_mean_timestep(self.data)
-        else:
-            self.gaps_timedelta = gaps_timedelta
 
     @property
     def columns(self):
@@ -444,11 +441,11 @@ class MeasuredDats:
         return missing_values_dict(data)
 
     def get_gaps_description(
-        self,
-        cols=None,
-        transformers_list=None,
-        resampling_rule=False,
-        gaps_timedelta=None,
+            self,
+            cols=None,
+            transformers_list=None,
+            resampling_rule=False,
+            gaps_timedelta=None,
     ):
         if gaps_timedelta is None:
             gaps_timedelta = self.gaps_timedelta
@@ -544,6 +541,8 @@ class MeasuredDats:
                 "category_transformations": self.category_trans,
                 "common_transformations": self.common_trans,
                 "transformers_list": self.transformers_list,
+                "resampler_agg_methods": self.resampler_agg_methods,
+                "gaps_timedelta": self.gaps_timedelta
             }
             json.dump(to_dump, f, ensure_ascii=False, indent=4)
 
@@ -551,10 +550,19 @@ class MeasuredDats:
         with open(file_path, encoding="utf-8") as f:
             config_dict = json.load(f)
 
-        self.category_dict = config_dict["category_dict"]
-        self.category_trans = config_dict["category_transformations"]
-        self.common_trans = config_dict["common_transformations"]
-        self.transformers_list = config_dict["transformers_list"]
+        attribute_list = [
+            ("category_dict", "category_dict"),
+            ("category_transformations", "category_trans"),
+            ("common_transformations", "common_trans"),
+            ("transformers_list", "transformers_list"),
+            ("resampler_agg_methods", "resampler_agg_methods"),
+            ("gaps_timedelta", "gaps_timedelta")
+        ]
+        for attr in attribute_list:
+            try:
+                setattr(self, attr[1], config_dict[attr[0]])
+            except KeyError:
+                setattr(self, attr[1], None)
 
     def add_time_series(self, time_series, category, category_transformations=None):
         check_datetime_index(time_series)
@@ -599,18 +607,18 @@ class MeasuredDats:
         return ax_dict, layout_ax_dict
 
     def plot_gaps(
-        self,
-        cols=None,
-        begin=None,
-        end=None,
-        gaps_timestep=None,
-        title="Gaps plot",
-        plot_raw=False,
-        color_rgb=(100, 100, 100),
-        alpha=0.5,
-        resampling_rule=False,
-        transformers_list=None,
-        axis_space=0.03,
+            self,
+            cols=None,
+            begin=None,
+            end=None,
+            gaps_timestep=None,
+            title="Gaps plot",
+            plot_raw=False,
+            color_rgb=(100, 100, 100),
+            alpha=0.5,
+            resampling_rule=False,
+            transformers_list=None,
+            axis_space=0.03,
     ):
         if cols is None:
             cols = self.columns
@@ -672,20 +680,20 @@ class MeasuredDats:
         fig.show()
 
     def plot(
-        self,
-        cols=None,
-        title="Correction plot",
-        begin=None,
-        end=None,
-        plot_raw=False,
-        plot_corrected=True,
-        line_corrected=True,
-        marker_corrected=True,
-        line_raw=True,
-        marker_raw=True,
-        resampling_rule=False,
-        transformers_list=None,
-        axis_space=0.03,
+            self,
+            cols=None,
+            title="Correction plot",
+            begin=None,
+            end=None,
+            plot_raw=False,
+            plot_corrected=True,
+            line_corrected=True,
+            marker_corrected=True,
+            line_raw=True,
+            marker_raw=True,
+            resampling_rule=False,
+            transformers_list=None,
+            axis_space=0.03,
     ):
         if cols is None:
             cols = self.columns
