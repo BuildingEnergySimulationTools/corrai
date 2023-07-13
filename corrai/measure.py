@@ -234,10 +234,6 @@ class MeasuredDats:
         config_file_path (str, optional): The file path for reading a json
         configuration file. Defaults to None.
 
-        gaps_timedelta (timedelta, optional): The time interval considered to
-            identify a gap. Defaults to None. if None, it will take the mean value
-            of the interval between data.index
-
 
         Properties:
         -----------
@@ -406,7 +402,6 @@ class MeasuredDats:
             self.common_trans = common_transformations
             self.transformers_list = transformers_list
             self.resampler_agg_methods = resampler_agg_methods
-            self.gaps_timedelta = gaps_timedelta
         else:
             self.read_config_file(config_file_path)
 
@@ -417,9 +412,6 @@ class MeasuredDats:
 
         if self.resampler_agg_methods is None:
             self.resampler_agg_methods = {}
-
-        if self.gaps_timedelta is None:
-            self.gaps_timedelta = get_mean_timestep(self.data)
 
     @property
     def columns(self):
@@ -448,7 +440,7 @@ class MeasuredDats:
             gaps_timedelta=None,
     ):
         if gaps_timedelta is None:
-            gaps_timedelta = self.gaps_timedelta
+            gaps_timedelta = get_mean_timestep(self.data)
         data = self.get_corrected_data(transformers_list, resampling_rule)
         return gaps_describe(df_in=data, cols=cols, timestep=gaps_timedelta)
 
@@ -542,7 +534,6 @@ class MeasuredDats:
                 "common_transformations": self.common_trans,
                 "transformers_list": self.transformers_list,
                 "resampler_agg_methods": self.resampler_agg_methods,
-                "gaps_timedelta": self.gaps_timedelta
             }
             json.dump(to_dump, f, ensure_ascii=False, indent=4)
 
@@ -556,7 +547,6 @@ class MeasuredDats:
             ("common_transformations", "common_trans"),
             ("transformers_list", "transformers_list"),
             ("resampler_agg_methods", "resampler_agg_methods"),
-            ("gaps_timedelta", "gaps_timedelta")
         ]
         for attr in attribute_list:
             try:
