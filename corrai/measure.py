@@ -494,23 +494,24 @@ class MeasuredDats:
     def get_category_transformer(self, transformation):
         column_config_list = []
         for data_cat, cols in self.category_dict.items():
-            if transformation in self.category_trans[data_cat].keys():
-                transformations = self.category_trans[data_cat][transformation]
-            else:
-                transformations = []
-            if transformations:
-                column_config_list.append(
-                    (
-                        f"{transformation}_{data_cat}",
-                        make_pipeline(
-                            *[
-                                TRANSFORMER_MAP[trans[0]](**trans[1])
-                                for trans in transformations
-                            ]
-                        ),
-                        cols,
+            if data_cat in self.category_trans.keys():
+                if transformation in self.category_trans[data_cat].keys():
+                    transformations = self.category_trans[data_cat][transformation]
+                else:
+                    transformations = []
+                if transformations:
+                    column_config_list.append(
+                        (
+                            f"{transformation}_{data_cat}",
+                            make_pipeline(
+                                *[
+                                    TRANSFORMER_MAP[trans[0]](**trans[1])
+                                    for trans in transformations
+                                ]
+                            ),
+                            cols,
+                        )
                     )
-                )
 
         return ColumnTransformer(
             column_config_list, verbose_feature_names_out=False, remainder="passthrough"
