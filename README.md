@@ -23,3 +23,14 @@ to simplify data cleaning process through the creation of pipelines for time ser
 (Domestic Hot water consumption, grey water use...).
 - **AI tools for HVAC FDD:** Includes artificial intelligence tools for 
 Heating Ventilation and Air Conditioning (HVAC) systems fault detection and diagnostics (FDD).
+
+## Getting started
+The source code is currently hosted on GitHub at: https://github.com/BuildingEnergySimulationTools/corrai
+
+Tutorials are available in the dedicated folder. 
+
+Released version are available at the Python Package Index (PyPI):
+```
+# PyPI
+pip install corrai
+```
