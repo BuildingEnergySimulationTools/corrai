@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/BuildingEnergySimulationTools/corrai/blob/main/logo_corrai.svg" alt="CorrAI" width="200"/>
+  <img src="https://raw.githubusercontent.com/BuildingEnergySimulationTools/corrai/main/logo_corrai.svg" alt="CorrAI" width="200"/>
 </p>
 
 [![Static Badge](https://img.shields.io/badge/version-0.1.0-orange)](https://pypi.org/project/corrai/)
