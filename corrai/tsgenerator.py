@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import math
+
 from numpy.random import MT19937
 from numpy.random import RandomState, SeedSequence
 
@@ -427,6 +429,112 @@ class DHWaterConsumption:
         to_return = to_return[: len(periods)]
         to_return.columns = ["consoECS_RE2020"]
         return to_return
+
+    def recherche_start(self, liste):
+        for i in range(len(liste)):
+            if not math.isnan(liste[i]):
+                return (i)
+
+    def recherche_end(self, liste):
+        for i in range(len(liste)):
+            if not math.isnan(liste[len(liste) - i - 1]):
+                return (len(liste) - i - 1)
+
+    def day_randomizer(self,
+                       coefficient,
+                       nb_used,
+                       volume):
+
+        list_int = [0] * len(coefficient)
+        idx_start = self.recherche_start(coefficient["coef"])
+        idx_end = self.recherche_end(coefficient["coef"])
+        for i in range(self.n_dwellings * nb_used):
+            k = np.random.randint(low=idx_start,
+                                  high=idx_end)
+            list_int[k] += volume
+
+        return (list_int)
+
+    def costic_random_cold_water_distribution(self,
+                                              start,
+                                              end):
+
+        self.v_water_tot = self.v_per_dwelling * 100 / 40
+        self.v_washbasin = self.v_water_tot * 13 / 100
+        self.v_sink_cook = self.v_water_tot * 7 / 100
+        self.v_sink_dishes = self.v_water_tot * 4 / 100
+        self.v_sink_wash = self.v_water_tot * 6 / 100
+
+        # =============================================================================
+        #         attention à corriger le nombre de L/j fonction de la demade appelée pour l'ECS
+        # =============================================================================
+
+        nb_washbassin = round(self.v_washbasin / self.v_washbassin_used)
+        nb_sinkcook = round(self.v_sink_cook / self.v_sinkcook_used)
+        nb_sinkdishes = round(self.v_sink_dishes / self.v_sinkdishes_used)
+        nb_sinkwash = round(self.v_sink_wash / self.v_sinkwash_used)
+
+        coef = self.get_coefficient_calc_from_period(start, end)
+
+        coefficient = coef.mask(coef["coef"] < 0.5)
+        coefficient = coefficient.resample("T").fillna('ffill').fillna(float('nan'))
+
+        liste_washbassin = []
+        liste_sinkcook = []
+        liste_sinkdishes = []
+        liste_sinkwash = []
+
+        for i in range((end - start).days):
+            liste_washbassin += self.day_randomizer(
+                coefficient=coefficient[
+                    coefficient.index.date == coefficient.index.date[0]
+                    ],
+                nb_used=nb_washbassin,
+                volume=self.v_washbassin_used
+
+            )
+
+            liste_sinkcook += self.day_randomizer(
+                coefficient=coefficient[
+                    coefficient.index.date == coefficient.index.date[0]
+                    ],
+                nb_used=nb_sinkcook,
+                volume=self.v_sinkcook_used
+            )
+
+            liste_sinkdishes += self.day_randomizer(
+                coefficient=coefficient[
+                    coefficient.index.date == coefficient.index.date[0]
+                    ],
+                nb_used=nb_sinkdishes,
+                volume=self.v_sinkdishes_used
+            )
+
+            liste_sinkwash += self.day_randomizer(
+                coefficient=coefficient[
+                    coefficient.index.date == coefficient.index.date[0]
+                    ],
+                nb_used=nb_sinkwash,
+                volume=self.v_sinkwash_used
+            )
+
+        liste_washbassin.append(0)
+        liste_sinkcook.append(0)
+        liste_sinkdishes.append(0)
+        liste_sinkwash.append(0)
+
+        df_co = coefficient.copy()
+        df_co["consoLAVABO_COSTIC_random"] = liste_washbassin
+        df_co["consoEVIERcuisine_COSTIC_random"] = liste_sinkcook
+        df_co["consoEVIERvaisselle_COSTIC_random"] = liste_sinkdishes
+        df_co["consoEVIERnettoyage_COSTIC_random"] = liste_sinkwash
+
+        df_co.drop(df_co.index[-1], inplace=True)
+
+        return df_co[["consoLAVABO_COSTIC_random",
+                      "consoEVIERcuisine_COSTIC_random",
+                      "consoEVIERvaisselle_COSTIC_random",
+                      "consoEVIERnettoyage_COSTIC_random"]]
 
 
 class Scheduler:
