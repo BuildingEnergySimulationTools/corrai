@@ -1127,30 +1127,3 @@ class PdTimeWindow(PdTransformerBC):
         )
 
         return x_transformed, y_transformed
-
-        # Try refactor with this ###############
-
-        # if self.features_coord is None:
-        #     raise ValueError(
-        #         "Cannot perform transformation, TimeWindow has not been fitted yet")
-        #
-        # def transform_data(coord, indices, input_width, output_width):
-        #     feat_names = [X.columns[i] for i in indices]
-        #     trans_col = [f"{feat}_n{i}" for feat in feat_names for i in
-        #                  range(input_width)]
-        #     trans_index = [X.index[idx[0]] for idx in coord]
-        #     data_transformed = np.array(
-        #         [
-        #             X.iloc[sli[0]: sli[1] + 1, indices].to_numpy().T.flatten()
-        #             for sli in coord
-        #         ]
-        #     )
-        #     return pd.DataFrame(
-        #       data_transformed, columns=trans_col, index=trans_index)
-        #
-        # x_transformed = transform_data(self.features_coord, self.features_indices,
-        #                                self.feat_input_width, 1)
-        # y_transformed = transform_data(self.labels_coord, self.label_indices, 1,
-        #                                self.label_output_width)
-        #
-        # return x_transformed, y_transformed
