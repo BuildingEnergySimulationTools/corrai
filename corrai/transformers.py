@@ -1004,3 +1004,126 @@ class PdCombineColumns(PdTransformerBC):
         col_to_return.append(self.label_name)
 
         return X_transformed[col_to_return]
+
+
+class PdTimeWindow(PdTransformerBC):
+    def __init__(
+        self,
+        feat_input_width,
+        label_output_width,
+        labels_names,
+        feat_label_shift=None,
+        sampling_shift=None,
+    ):
+        super().__init__()
+        self.feat_input_width = feat_input_width
+        self.label_output_width = label_output_width
+        if feat_label_shift is None:
+            self.feat_label_shift = feat_input_width
+        else:
+            self.feat_label_shift = feat_label_shift
+        if sampling_shift is None:
+            self.sampling_shift = self.feat_label_shift
+        else:
+            self.sampling_shift = sampling_shift
+
+        self.single_draw_len = self.feat_label_shift + self.label_output_width
+        self.feat_base_slice = np.array([0, self.feat_input_width - 1])
+        self.lab_base_slice = np.array(
+            [self.feat_label_shift, self.feat_label_shift - 1 + self.label_output_width]
+        )
+
+        if isinstance(labels_names, str):
+            self.labels_names = [labels_names]
+        else:
+            self.labels_names = labels_names
+
+        # Available after fitting
+        self.x_length = None
+        self.label_indices = None
+        self.features_indices = None
+        self.sample_length = None
+        self.features_coord = None
+        self.labels_coord = None
+
+    def fit(self, X, y=None):
+        self.x_length = X.shape[0]
+        self.label_indices = np.array(
+            [i for i, col in enumerate(X.columns) if col in self.labels_names]
+        )
+        self.features_indices = np.array(
+            [i for i in range(len(X.columns)) if i not in self.label_indices]
+        )
+
+        self.sample_length = (
+            1 + (self.x_length - self.single_draw_len) // self.sampling_shift
+        )
+
+        self.features_coord = np.array(
+            [
+                self.feat_base_slice + i
+                for i in range(
+                    0, (self.x_length - self.single_draw_len) + 1, self.sampling_shift
+                )
+            ]
+        )
+
+        self.labels_coord = np.array(
+            [
+                self.lab_base_slice + i
+                for i in range(
+                    0, (self.x_length - self.single_draw_len) + 1, self.sampling_shift
+                )
+            ]
+        )
+
+        return self
+
+    def transform(self, X):
+        if self.features_coord is None:
+            raise ValueError(
+                "Cannot perform transformation, TimeWindow has not been fitted yet"
+            )
+
+        feat_names = [X.columns[i] for i in self.features_indices]
+        X_trans_col = [
+            [f"{feat}_n{i}" for i in range(self.feat_input_width)]
+            for feat in feat_names
+        ]
+        X_trans_col = sum(X_trans_col, [])
+        X_trans_index = [X.index[idx[0]] for idx in self.features_coord]
+        x_transformed = pd.DataFrame(
+            np.array(
+                [
+                    X.iloc[sli[0] : sli[1] + 1, self.features_indices]
+                    .to_numpy()
+                    .T.flatten()
+                    for sli in self.features_coord
+                ]
+            ),
+            columns=X_trans_col,
+            index=X_trans_index,
+        )
+
+        label_names = [X.columns[i] for i in self.label_indices]
+        y_trans_col = [
+            [f"{feat}_n{i}" for i in range(self.label_output_width)]
+            for feat in label_names
+        ]
+        y_trans_col = sum(y_trans_col, [])
+        y_trans_index = [X.index[idx[0]] for idx in self.labels_coord]
+
+        y_transformed = pd.DataFrame(
+            np.array(
+                [
+                    X.iloc[sli[0] : sli[1] + 1, self.label_indices]
+                    .to_numpy()
+                    .T.flatten()
+                    for sli in self.labels_coord
+                ]
+            ),
+            columns=y_trans_col,
+            index=y_trans_index,
+        )
+
+        return x_transformed, y_transformed
