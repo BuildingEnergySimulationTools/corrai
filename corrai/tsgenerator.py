@@ -385,6 +385,11 @@ class DHWaterConsumption:
     def costic_random_shower_distribution(
             self, start=None, end=None, optional_columns=False, seed=None
     ):
+        if not self.method == "COSTIC":
+            raise ValueError(
+                "Method has to be COSTIC for random shower distribution"
+            )
+
         if seed is not None:
             rs = RandomState(MT19937(SeedSequence(seed)))
         else:
@@ -392,7 +397,7 @@ class DHWaterConsumption:
 
         periods = pd.date_range(start=start, end=end, freq="T")
         df_costic = self.costic_shower_distribution(start, end)
-        df_costic["nb_shower"] = df_costic["consoECS_COSTIC"] / self.v_used
+        df_costic["nb_shower"] = df_costic["Q_ECS_COSTIC"] / self.v_used
         df_costic["t_shower_per_hour"] = df_costic["nb_shower"] * self.t_shower
         df_costic["nb_shower_int"] = np.round(df_costic["nb_shower"]).astype(int)
 
@@ -418,11 +423,11 @@ class DHWaterConsumption:
             columns=["shower_per_minute"],
         )
 
-        df_costic_random["Q_ECS_COSTIC_random"] = (
+        df_costic_random["Q_ECS_COSTIC_rd"] = (
                 df_costic_random["shower_per_minute"] * self.v_used / self.t_shower
         )
-        df_costic_random["Q_ECS_COSTIC_random"] = df_costic_random[
-            "Q_ECS_COSTIC_random"
+        df_costic_random["Q_ECS_COSTIC_rd"] = df_costic_random[
+            "Q_ECS_COSTIC_rd"
         ].astype(float)
 
         self.df_costic_random = df_costic_random
@@ -430,7 +435,7 @@ class DHWaterConsumption:
         if optional_columns:
             return df_costic_random
         else:
-            return df_costic_random[["Q_ECS_COSTIC_random"]]
+            return df_costic_random[["Q_ECS_COSTIC_rd"]]
 
     def re2020_shower_distribution(self, start, end):
         periods = pd.date_range(start=start, end=end, freq="H")
@@ -490,6 +495,10 @@ class DHWaterConsumption:
                                               start,
                                               end,
                                               seed=False):
+        if not self.method == "COSTIC":
+            raise ValueError(
+                "Method has to be COSTIC for random cold water distribution"
+            )
 
         self.seed = seed
         nb_washbasin = round(self.v_washbasin / self.v_washbasin_used)
@@ -547,17 +556,17 @@ class DHWaterConsumption:
         list_sinkwash.append(0)
 
         df_co = coefficient.copy()
-        df_co["Q_washbasin_COSTIC_random"] = list_washbasin
-        df_co["Q_sink_cook_COSTIC_random"] = list_sinkcook
-        df_co["Q_sink_dishes_COSTIC_random"] = list_sinkdishes
-        df_co["Q_sink_cleaning_COSTIC_random"] = list_sinkwash
+        df_co["Q_washbasin_COSTIC_rd"] = list_washbasin
+        df_co["Q_sink_cook_COSTIC_rd"] = list_sinkcook
+        df_co["Q_sink_dishes_COSTIC_rd"] = list_sinkdishes
+        df_co["Q_sink_cleaning_COSTIC_rd"] = list_sinkwash
 
         df_co.drop(df_co.index[-1], inplace=True)
 
-        return df_co[["Q_washbasin_COSTIC_random",
-                      "Q_sink_cook_COSTIC_random",
-                      "Q_sink_dishes_COSTIC_random",
-                      "Q_sink_cleaning_COSTIC_random"]]
+        return df_co[["Q_washbasin_COSTIC_rd",
+                      "Q_sink_cook_COSTIC_rd",
+                      "Q_sink_dishes_COSTIC_rd",
+                      "Q_sink_cleaning_COSTIC_rd"]]
 
 
 class Scheduler:
