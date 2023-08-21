@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from corrai.tsgenerator import DHWaterConsumption, GreyWaterConsumption
+from corrai.tsgenerator import DomesticWaterConsumption
 from corrai.tsgenerator import Scheduler
 import datetime as dt
 from pathlib import Path
@@ -9,7 +9,7 @@ import pytest
 FILES_PATH = Path(__file__).parent / "resources"
 
 
-class TestDHWaterConsumption:
+class TestDomesticWaterConsumption:
     def test_get_coefficient_calc_from_period(self):
         df = pd.DataFrame(
             index=pd.date_range("2023-01-01 00:00:00", freq="H", periods=8760)
@@ -18,7 +18,7 @@ class TestDHWaterConsumption:
         end = df.index[-1]
 
         # test COSTIC
-        dhw1 = DHWaterConsumption(n_dwellings=50)
+        dhw1 = DomesticWaterConsumption(n_dwellings=50)
         dhw1.get_coefficient_calc_from_period(start=start, end=end)
         assert round(dhw1.df_coefficient.loc["2023-04-05 00:00", "coef"], 4) == round(
             1.06 * 0.264 * 1.00, 4
@@ -31,7 +31,7 @@ class TestDHWaterConsumption:
         )
 
         # #test RE2020
-        dhw2 = DHWaterConsumption(n_dwellings=50, method="RE2020")
+        dhw2 = DomesticWaterConsumption(n_dwellings=50, method="RE2020")
         dhw2.get_coefficient_calc_from_period(start=start, end=end)
         assert round(dhw2.df_coefficient.loc["2023-04-05 00:00", "coef"], 4) == round(
             0 * 0.95, 4
@@ -43,8 +43,8 @@ class TestDHWaterConsumption:
             0.011 * 0.95, 4
         )
 
-    def test_get_coefficient_calc_from_period_2(self):
-        dhw = DHWaterConsumption(n_dwellings=50)
+    def test_costic_random_distribution(self):
+        dhw = DomesticWaterConsumption(n_dwellings=50)
         start = dt.datetime(2022, 1, 1, 0, 0, 0)
         end = dt.datetime(2024, 10, 20, 1, 0, 0)
         df = dhw.costic_random_shower_distribution(start=start, end=end, seed=42)
@@ -52,14 +52,12 @@ class TestDHWaterConsumption:
         # Check if the sum of random water consumption  distribution is about equal
         # to total estimated consumption
         total_consoECS_COSTIC = dhw.costic_shower_distribution(start=start, end=end)[
-            "consoECS_COSTIC"
+            "Q_ECS_COSTIC"
         ].sum()
-        assert np.isclose(
-            df["consoECS_COSTIC_random"].sum(), total_consoECS_COSTIC, rtol=0.05
-        )
+        assert np.isclose(df["Q_ECS_COSTIC_rd"].sum(), total_consoECS_COSTIC, rtol=0.05)
 
     def test_re2020_shower_distribution(self):
-        dhw = DHWaterConsumption(
+        dhw = DomesticWaterConsumption(
             n_dwellings=50, s_moy_dwelling=49.6, s_tot_building=2480, method="RE2020"
         )
         start = dt.datetime(2022, 1, 1, 0, 0, 0)
@@ -67,25 +65,73 @@ class TestDHWaterConsumption:
         df = dhw.re2020_shower_distribution(start=start, end=end)
 
         # check Wednesday in April
-        assert np.isclose(df.loc["2023-04-05 00:00", "consoECS_RE2020"], 0, rtol=0.05)
+        assert np.isclose(df.loc["2023-04-05 00:00", "Q_ECS_RE2020"], 0, rtol=0.05)
         # check Saturday in August
-        assert np.isclose(
-            df.loc["2023-08-26 20:00", "consoECS_RE2020"], 285.5, rtol=0.05
-        )
+        assert np.isclose(df.loc["2023-08-26 20:00", "Q_ECS_RE2020"], 285.5, rtol=0.05)
         # check Sunday in September
-        assert np.isclose(
-            df.loc["2023-09-10 08:00", "consoECS_RE2020"], 752.7, rtol=0.05
-        )
+        assert np.isclose(df.loc["2023-09-10 08:00", "Q_ECS_RE2020"], 752.7, rtol=0.05)
 
-        dhw = DHWaterConsumption(
+        dhw = DomesticWaterConsumption(
             n_dwellings=12, s_moy_dwelling=72, s_tot_building=1000, method="RE2020"
         )
         df = dhw.re2020_shower_distribution(start=start, end=end)
 
         # check Sunday in September
-        assert np.isclose(
-            df.loc["2023-09-10 08:00", "consoECS_RE2020"], 261.3, rtol=0.05
+        assert np.isclose(df.loc["2023-09-10 08:00", "Q_ECS_RE2020"], 261.3, rtol=0.05)
+
+    def test_appliances_water_distribution(self):
+        dhw = DomesticWaterConsumption(n_dwellings=6)
+
+        df = pd.DataFrame(
+            index=pd.date_range("2020-01-01 00:00:00", freq="H", periods=8760)
         )
+        start = df.index[0]
+        end = df.index[-1]
+
+        gw = dhw.appliances_water_distribution(start=start, end=end, seed=42)
+
+        assert np.isclose(gw["Q_dish"].sum(), 54850.0, rtol=0.05)
+
+        assert np.isclose(gw["Q_washer"].sum(), 3565.25, rtol=0.05)
+
+    def test_day_randomizer(self):
+        gw = DomesticWaterConsumption(n_dwellings=100, method="COSTIC")
+
+        day1 = 1
+        day2 = 20
+        # TODO: nb days related to dimension issue
+        nb_day = day2 - day1 + 2
+
+        start = dt.datetime(2022, 1, day1, 0, 0, 0)
+        end = dt.datetime(2022, 1, day2, 0, 0, 0)
+
+        # Calculate the expected sum
+        test = gw.costic_random_cold_water_distribution(start, end)
+        expected_sum = round(gw.v_washbasin) * gw.n_dwellings * nb_day
+
+        # Calculate the real sum
+        real_sum = sum(test["Q_washbasin_COSTIC_rd"])
+        # Verify that the sum of the result_list matches the expected_sum
+        assert np.isclose(real_sum, expected_sum, rtol=0.05)
+
+    def test_warning_errors(self):
+        df = pd.DataFrame(
+            index=pd.date_range("2020-01-01 00:00:00", freq="H", periods=8760)
+        )
+        start = df.index[0]
+        end = df.index[-1]
+
+        dhw0 = DomesticWaterConsumption(n_dwellings=6, method="RE2020")
+
+        with pytest.raises(ValueError):
+            dhw0.costic_random_cold_water_distribution(start=start, end=end)
+
+        dhw1 = DomesticWaterConsumption(n_dwellings=6)
+
+        with pytest.raises(ValueError):
+            dhw1.appliances_water_distribution(
+                dish_washer=False, washing_machine=False, start=start, end=end
+            )
 
     def test_scheduler(self):
         schedule_dict = {
@@ -141,37 +187,3 @@ class TestDHWaterConsumption:
         df = sched.get_dataframe(freq="H")
 
         pd.testing.assert_frame_equal(df, ref)
-
-
-class TestGreyWaterConsumption:
-    def test_get_GWdistribution(self):
-        gwc = GreyWaterConsumption(
-            n_people=12,
-            seed=42,
-            v_water_dish=13,
-            v_water_clothes=50,
-            cycles_clothes_pers=89,  # per year
-            cycles_dish_pers=83,  # per year
-            duration_dish=4,
-            duration_clothes=2,
-        )
-
-        df = pd.DataFrame(
-            index=pd.date_range("2020-01-01 00:00:00", freq="H", periods=8760)
-        )
-        start = df.index[0]
-        end = df.index[-1]
-
-        gw = gwc.get_GWdistribution(start=start, end=end)
-
-        assert np.isclose(gw["Q_dish"].sum(), 54850.0, rtol=0.05)
-
-        assert np.isclose(gw["Q_washer"].sum(), 3565.25, rtol=0.05)
-
-    def test_warning_error(self):
-        with pytest.raises(ValueError):
-            GreyWaterConsumption(
-                n_people=24,
-                dish_washer=False,
-                washing_machine=False,
-            )

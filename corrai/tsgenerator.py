@@ -327,7 +327,7 @@ class DomesticWaterConsumption:
     def get_coefficient_calc_from_period(self, start, end):
         """
         Calculates the coefficients for hot water consumption
-        based on thechosen method within the given time period.
+        based on the chosen method within the given time period.
 
         Args:
             start (str): Start date of the time period (format: 'YYYY-MM-DD').
@@ -696,7 +696,6 @@ class DomesticWaterConsumption:
         for i in range(self.n_dwellings * nb_used):
             k = rs.randint(low=idx_start, high=idx_end + 1)
             list_int[k] += volume
-
         return list_int
 
     def costic_random_cold_water_distribution(
