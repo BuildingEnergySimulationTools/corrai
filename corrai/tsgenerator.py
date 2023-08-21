@@ -298,6 +298,7 @@ class DHWaterConsumption:
             self.coefficients = coefficients_RE2020
 
         self.v_used = self.t_shower * self.d_shower
+        ## intégré en dur : à adapter !!!
         self.v_washbassin_used = 10
         self.v_sinkcook_used = 10.5
         self.v_sinkdishes_used = 30
@@ -385,7 +386,7 @@ class DHWaterConsumption:
             starts = h[:nb_shower]
             distribution = np.zeros(60)
             for start_shower in starts:
-                distribution[start_shower : start_shower + self.t_shower] += 1
+                distribution[start_shower: start_shower + self.t_shower] += 1
             distribution_list.append(distribution)
 
         df_costic_random = pd.DataFrame(
@@ -462,6 +463,7 @@ class DHWaterConsumption:
     def costic_random_cold_water_distribution(self,
                                               start,
                                               end):
+        ## codé en dur également ici : à changer
 
         self.v_water_tot = self.v_per_dwelling * 100 / 40
         self.v_washbasin = self.v_water_tot * 13 / 100
@@ -473,7 +475,7 @@ class DHWaterConsumption:
         #         attention à corriger le nombre de L/j fonction de la demade appelée pour l'ECS
         # =============================================================================
 
-        nb_washbassin = round(self.v_washbasin / self.v_washbassin_used)
+        nb_washbasin = round(self.v_washbasin / self.v_washbassin_used)
         nb_sinkcook = round(self.v_sink_cook / self.v_sinkcook_used)
         nb_sinkdishes = round(self.v_sink_dishes / self.v_sinkdishes_used)
         nb_sinkcleaning = round(self.v_sink_cleaning / self.v_sinkcleaning_used)
@@ -481,22 +483,21 @@ class DHWaterConsumption:
         coef = self.get_coefficient_calc_from_period(start, end)
 
         coefficient = coef.mask(coef["coef"] < 0.5)
-        coefficient = coefficient.resample("T").fillna('ffill').fillna(float('nan'))
+        coefficient = coefficient.resample("T").fillna('ffill').fillna(float("0"))
 
-        list_washbassin = []
+        list_washbasin = []
         list_sinkcook = []
         list_sinkdishes = []
         list_sinkwash = []
 
         for i in range((end - start).days):
-            list_washbassin += self.day_randomizer(
+            list_washbasin += self.day_randomizer(
                 coefficient=coefficient[
                     coefficient.index.date == coefficient.index.date[0]
                     ],
-                nb_used=nb_washbassin,
+                nb_used=nb_washbasin,
                 volume=self.v_washbassin_used,
             )
-
             list_sinkcook += self.day_randomizer(
                 coefficient=coefficient[
                     coefficient.index.date == coefficient.index.date[0]
@@ -504,6 +505,7 @@ class DHWaterConsumption:
                 nb_used=nb_sinkcook,
                 volume=self.v_sinkcook_used,
             )
+
 
             list_sinkdishes += self.day_randomizer(
                 coefficient=coefficient[
@@ -521,13 +523,13 @@ class DHWaterConsumption:
                 volume=self.v_sinkcleaning_used,
             )
 
-        list_washbassin.append(0)
+        list_washbasin.append(0)
         list_sinkcook.append(0)
         list_sinkdishes.append(0)
         list_sinkwash.append(0)
 
         df_co = coefficient.copy()
-        df_co["Q_washbasin_COSTIC_random"] = list_washbassin
+        df_co["Q_washbasin_COSTIC_random"] = list_washbasin
         df_co["Q_sink_cook_COSTIC_random"] = list_sinkcook
         df_co["Q_sink_dishes_COSTIC_random"] = list_sinkdishes
         df_co["Q_sink_cleaning_COSTIC_random"] = list_sinkwash
