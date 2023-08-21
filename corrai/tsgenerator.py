@@ -193,8 +193,8 @@ coefficients_RE2020 = {
 
 class DomesticWaterConsumption:
     """
-    Class for calculating domestic hot water consumption in a building based on either
-    RE2020 or COSTIC coefficients.
+    Class for calculating domestic hot and cold water consumption
+    in a building based on either RE2020 or COSTIC coefficients.
 
     Parameters:
     -----------
@@ -207,31 +207,33 @@ class DomesticWaterConsumption:
     t_shower : int, optional (default=7)
         Average duration of a shower in minutes.
     d_shower : float, optional (default=8)
-       Shower flow rate of showers in liters per minute.
+        Shower flow rate of showers in liters per minute.
     s_moy_dwelling : float, optional (default=49.6)
         Average surface area per dwelling in square meters.
     s_tot_building : float, optional (default=2480)
         Total surface area of the building in square meters.
+    n_people_per_dwelling : int, optional (default=2)
+        Number of people per dwelling.
     method : str, optional (default="COSTIC")
-        Method for calculating hot water consumption. Available options are "COSTIC" or
-         "RE2020".
+        Method for calculating hot water consumption.
+        Available options are "COSTIC" or "RE2020".
 
     Attributes:
     -----------
     df_coefficient : pd.DataFrame
-        DataFrame containing the  coefficients for hot water consumption, calculated
-        either on "COSTIC" or "RE2020" method.
+        DataFrame containing the coefficients for hot water consumption, calculated
+        either using the "COSTIC" or "RE2020" method.
     df_daily_sum : pd.DataFrame
         DataFrame containing the daily sum of coefficients.
     df_re2020 : pd.DataFrame
-        DataFrame containing the hot water consumption for showers based on "RE2020"
-        method.
+        DataFrame containing the hot water consumption for showers
+        based on the "RE2020" method.
     df_costic : pd.DataFrame
-        DataFrame containing the hot water consumption for showers based on "COSTIC"
-        method.
+        DataFrame containing the hot water consumption for showers
+        based on the "COSTIC" method.
     df_costic_random : pd.DataFrame
-        DataFrame containing a random distribution of hot water consumption for showers
-        based on "COSTIC" method.
+        DataFrame containing a random distribution of hot water
+        consumption for showers based on the "COSTIC" method.
     df_all : pd.DataFrame
         DataFrame containing calculated coefficients and other calculated data.
     coefficients : dict
@@ -251,17 +253,36 @@ class DomesticWaterConsumption:
         Calculates the coefficients for hot water consumption based on the chosen
         method within the given time period.
     costic_shower_distribution(start, end):
-        Calculates the hot water consumption for showers based on "COSTIC" method
-        within the given time period. The output dataframe is sampled every hour.
+        Calculates the hot water consumption for showers based on the "COSTIC" method
+        within the given time period. The output DataFrame is sampled every hour.
     costic_random_shower_distribution(start, end, optional_columns=False, seed=None):
         Calculates a random distribution of hot water consumption for showers based on
-        "COSTIC" method within  the given time period. The output dataframe is sampled
-        every minute.
-        Set seed to None for a new random distribution each time method is run.
-        Otherwise, set to integer for the same random distribution.
+        the "COSTIC" method within the given time period.
+        The output DataFrame is sampled every minute.
+        Set seed to None for a new random distribution
+        each time the method is run. Otherwise, set to an integer
+        for the same random distribution.
     re2020_shower_distribution(start, end):
-        Calculates the hot water consumption for showers based on "COSTIC" method
-        within the given time period. The output dataframe is sampled every hour.
+        Calculates the hot water consumption for showers based on the "RE2020" method
+        within the given time period. The output DataFrame is sampled every hour.
+    appliances_water_distribution(start, end, seed=False, dish_washer=True,
+        washing_machine=True, v_water_dish=13, v_water_clothes=50,
+        cycles_clothes_pers=89, cycles_dish_pers=83,
+        duration_dish=4, duration_clothes=2):
+        Calculates the distribution of greywater consumption from
+        appliances over a given time period.
+    day_randomizer(coefficient, nb_used, volume, seed=None):
+        Randomly distributes water consumption over a day based on
+        coefficients and usage parameters.
+    costic_random_cold_water_distribution(start, end, percent_showers=0.4,
+        percent_washbasin=0.13, percent_cook=0.07, percent_dishes=0.04,
+        percent_cleaning=0.06, seed=False):
+        Calculates a random distribution of cold water consumption
+        for various usages based on the "COSTIC" method
+        within the given time period.
+
+    Note: Detailed descriptions and explanations for each
+    method and attribute can be found in the class docstring.
     """
 
     def __init__(
@@ -304,6 +325,22 @@ class DomesticWaterConsumption:
             self.coefficients = coefficients_RE2020
 
     def get_coefficient_calc_from_period(self, start, end):
+        """
+        Calculates the coefficients for hot water consumption
+        based on thechosen method within the given time period.
+
+        Args:
+            start (str): Start date of the time period (format: 'YYYY-MM-DD').
+            end (str): End date of the time period (format: 'YYYY-MM-DD').
+
+        Returns:
+            pd.DataFrame: DataFrame containing the calculated coefficients
+            for hot water consumption for each time step
+            within the specified time period.
+        Raises:
+            ValueError: If start or end values are not valid timestamps.
+        """
+
         if not pd.Timestamp(start) or not pd.Timestamp(end):
             raise ValueError("Start and end values must be valid timestamps.")
 
@@ -348,6 +385,23 @@ class DomesticWaterConsumption:
         return self.df_coefficient
 
     def costic_shower_distribution(self, start, end):
+        """
+        Calculates the hot water consumption for showers based
+        on the "COSTIC" method within the given time period.
+
+        Args:
+            start (str): Start date of the time period (format: 'YYYY-MM-DD').
+            end (str): End date of the time period (format: 'YYYY-MM-DD').
+
+        Returns:
+            pd.DataFrame: DataFrame containing the calculated
+            hot water consumption for showers with timestamps as index.
+        """
+
+        # Concatenation of coefficients and their daily sum
+        self.get_coefficient_calc_from_period(start, end)
+        df_co = pd.concat([self.df_coefficient, self.df_daily_sum], axis=1)
+
         # Concatenation of coefficients and their daily sum
         self.get_coefficient_calc_from_period(start, end)
         df_co = pd.concat([self.df_coefficient, self.df_daily_sum], axis=1)
@@ -363,6 +417,42 @@ class DomesticWaterConsumption:
     def costic_random_shower_distribution(
         self, start=None, end=None, optional_columns=False, seed=None
     ):
+        """
+        Calculates a random distribution of hot water
+        consumption for showers based on
+        the "COSTIC" method within
+        the given time period.
+
+        Args:
+            start (str, optional): Start date of the time period (format: 'YYYY-MM-DD').
+                Defaults to None.
+            end (str, optional): End date of the time period (format: 'YYYY-MM-DD').
+                Defaults to None.
+            optional_columns (bool, optional): Whether to include
+                additional columns in the output DataFrame.
+                Defaults to False.
+            seed (int, optional): Seed for random number generator.
+                If provided, the same distribution
+                can be reproduced. Defaults to None.
+
+        Returns:
+            pd.DataFrame: DataFrame containing the random
+            distribution of hot water consumption for showers
+            based on the "COSTIC" method with timestamps as index.
+        Raises:
+            ValueError: If the method is not "COSTIC".
+
+        Note:
+            If `optional_columns` is True, the DataFrame includes
+            additional columns like shower duration,
+            number of showers per hour, and the
+            rounded number of showers.
+
+        Warning:
+            The `seed` parameter should be used for
+            reproducibility only. Providing the same seed will
+            result in the same random distribution.
+        """
         if not self.method == "COSTIC":
             raise ValueError("Method has to be COSTIC for random shower distribution")
 
@@ -417,6 +507,19 @@ class DomesticWaterConsumption:
             return df_costic_random[["Q_ECS_COSTIC_rd"]]
 
     def re2020_shower_distribution(self, start, end):
+        """
+        Calculates the hot water consumption for showers
+        based on the "RE2020" method within the given time period.
+
+        Args:
+            start (str): Start date of the time period (format: 'YYYY-MM-DD').
+            end (str): End date of the time period (format: 'YYYY-MM-DD').
+
+        Returns:
+            pd.DataFrame: DataFrame containing the
+            calculated hot water consumption for showers
+            with timestamps as index.
+        """
         periods = pd.date_range(start=start, end=end, freq="H")
         self.get_coefficient_calc_from_period(start, end)
         # N_calculation
@@ -453,15 +556,43 @@ class DomesticWaterConsumption:
         duration_clothes=2,
     ):
         """
-        Calculates the distribution of greywater consumption over a given time period.
+        Calculates the distribution of greywater consumption
+        from appliances over a given time period.
 
         Args:
             start (str): Start date of the time period (format: 'YYYY-MM-DD').
             end (str): End date of the time period (format: 'YYYY-MM-DD').
+            seed (int or bool, optional): Seed for random number
+                generator. If provided, the same distribution
+                can be reproduced. Defaults to False.
+            dish_washer (bool, optional): Whether to consider
+                the dishwasher's greywater consumption.
+                Defaults to True.
+            washing_machine (bool, optional): Whether to consider
+                the washing machine's greywater consumption.
+                Defaults to True.
+            v_water_dish (float, optional): Greywater consumption
+                per cycle of the dishwasher, in liters.
+                Defaults to 13.
+            v_water_clothes (float, optional): Greywater consumption
+                per cycle of the washing machine, in liters.
+                Defaults to 50.
+            cycles_clothes_pers (int, optional): Number of washing
+                machine cycles per person per year.
+                Defaults to 89.
+            cycles_dish_pers (int, optional): Number of dishwasher
+                cycles per person per year.
+                Defaults to 83.
+            duration_dish (float, optional): Duration of
+                a dishwasher cycle in hours.
+                Defaults to 4.
+            duration_clothes (float, optional): Duration of
+                a washing machine cycle in hours.
+                Defaults to 2.
 
         Returns:
-            pd.DataFrame: DataFrame containing the greywater consumption
-            distribution with timestamps as index.
+            pd.DataFrame: DataFrame containing the greywater
+            consumption distribution with timestamps as index.
         """
 
         self.v_water_dish = v_water_dish
@@ -579,6 +710,38 @@ class DomesticWaterConsumption:
         percent_cleaning=0.06,
         seed=False,
     ):
+        """
+        Calculates a random distribution of cold water consumption for various usages
+        based on the "COSTIC" method within the given time period.
+
+        Args:
+            start (str): Start date of the time period (format: 'YYYY-MM-DD').
+            end (str): End date of the time period (format: 'YYYY-MM-DD').
+            percent_showers (float, optional): Percentage of
+                hot water consumption dedicated to showers.
+                Defaults to 0.4.
+            percent_washbasin (float, optional): Percentage of hot water
+                consumption dedicated to washbasin usage.
+                Defaults to 0.13.
+            percent_cook (float, optional): Percentage of hot water
+                consumption dedicated to cooking-related usage.
+                Defaults to 0.07.
+            percent_dishes (float, optional): Percentage of hot
+                water consumption dedicated to dishwashing.
+                Defaults to 0.04.
+            percent_cleaning (float, optional): Percentage of hot
+                water consumption dedicated to cleaning purposes.
+                Defaults to 0.06.
+            seed (int or bool, optional): Seed for random number
+                generator. If provided, the same distribution
+                can be reproduced. Defaults to False.
+
+        Returns:
+            pd.DataFrame: DataFrame containing the random
+                distribution of cold water consumption
+            for different usages with timestamps as index.
+        """
+
         if not self.method == "COSTIC":
             raise ValueError(
                 "Method has to be COSTIC for random cold water distribution"
