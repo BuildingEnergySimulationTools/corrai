@@ -435,27 +435,28 @@ class DHWaterConsumption:
         to_return.columns = ["Q_ECS_RE2020"]
         return to_return
 
-    def recherche_start(self, liste):
-        for i in range(len(liste)):
-            if not math.isnan(liste[i]):
-                return (i)
-
-    def recherche_end(self, liste):
-        for i in range(len(liste)):
-            if not math.isnan(liste[len(liste) - i - 1]):
-                return (len(liste) - i - 1)
-
     def day_randomizer(self,
                        coefficient,
                        nb_used,
                        volume):
 
         list_int = [0] * len(coefficient)
-        idx_start = self.recherche_start(coefficient["coef"])
-        idx_end = self.recherche_end(coefficient["coef"])
+        idx_start = None
+        idx_end = None
+
+        for i, value in zip(range(len(coefficient)), coefficient["coef"]):
+            if value > 0 and idx_start is None:
+                idx_start = i
+            if idx_start is not None and value == 0:
+                idx_end = i - 1
+                break
+
+        if idx_end is None:
+            idx_end = len(coefficient) - 1
+
         for i in range(self.n_dwellings * nb_used):
             k = np.random.randint(low=idx_start,
-                                  high=idx_end)
+                                  high=idx_end + 1)
             list_int[k] += volume
 
         return list_int
