@@ -266,15 +266,20 @@ class DHWaterConsumption:
     """
 
     def __init__(
-        self,
-        n_dwellings,
-        v_per_dwelling=110,
-        ratio_bath_shower=0.8,
-        t_shower=7,
-        d_shower=8,
-        s_moy_dwelling=49.6,
-        s_tot_building=2480,
-        method="COSTIC",
+            self,
+            n_dwellings,
+            v_per_dwelling=110,
+            ratio_bath_shower=0.8,
+            t_shower=7,
+            d_shower=8,
+            s_moy_dwelling=49.6,
+            s_tot_building=2480,
+            percent_showers=0.4,
+            percent_washbasin=0.13,
+            percent_cook=0.07,
+            percent_dishes=0.04,
+            percent_cleaning=0.06,
+            method="COSTIC",
     ):
         self.method = method
         self.n_dwellings = n_dwellings
@@ -284,7 +289,11 @@ class DHWaterConsumption:
         self.d_shower = d_shower
         self.s_moy_dwelling = s_moy_dwelling
         self.s_tot_building = s_tot_building
-
+        self.percent_showers = percent_showers
+        self.percent_washbasin = percent_washbasin
+        self.percent_cook = percent_cook
+        self.percent_dishes = percent_dishes
+        self.percent_cleaning = percent_cleaning
         self.df_coefficient = None
         self.df_daily_sum = None
         self.df_re2020 = None
@@ -298,13 +307,23 @@ class DHWaterConsumption:
             self.coefficients = coefficients_RE2020
 
         self.v_used = self.t_shower * self.d_shower
-        ## intégré en dur : à adapter !!!
-        self.v_washbassin_used = 10
+
+        # Volumes = liters per usage
+        self.v_washbasin_used = 10
         self.v_sinkcook_used = 10.5
         self.v_sinkdishes_used = 30
         self.v_sinkcleaning_used = 8.8
         self.v_liters_day = self.n_dwellings * self.v_per_dwelling
         self.v_shower_bath_per_day = self.ratio_bath_shower * self.v_liters_day
+
+        # Total consumed Liters/day/dwelling
+        self.v_water_tot = self.v_per_dwelling / self.percent_showers
+
+        #  Consumed Liters/day/dwelling for each usage
+        self.v_washbasin = self.v_water_tot * self.percent_washbasin
+        self.v_sink_cook = self.v_water_tot * self.percent_cook
+        self.v_sink_dishes = self.v_water_tot * self.percent_dishes
+        self.v_sink_cleaning = self.v_water_tot * self.percent_cleaning
 
     def get_coefficient_calc_from_period(self, start, end):
         if not pd.Timestamp(start) or not pd.Timestamp(end):
@@ -326,9 +345,9 @@ class DHWaterConsumption:
                     hour_coefficients = self.coefficients["day"]["hour_sunday"]
 
                 h24 = (
-                    hour_coefficients
-                    * self.coefficients["month"][str(val.month_name())]
-                    * self.coefficients["week"][str(val.day_name())]
+                        hour_coefficients
+                        * self.coefficients["month"][str(val.month_name())]
+                        * self.coefficients["week"][str(val.day_name())]
                 )
                 val_list.append(h24[val.hour])
 
@@ -340,8 +359,8 @@ class DHWaterConsumption:
                     hour_coefficients = self.coefficients["day"]["hour_weekend"]
 
                 h24 = (
-                    hour_coefficients
-                    * self.coefficients["month"][str(val.month_name())]
+                        hour_coefficients
+                        * self.coefficients["month"][str(val.month_name())]
                 )
                 val_list.append(h24[val.hour])
 
@@ -359,12 +378,12 @@ class DHWaterConsumption:
 
         # Calculation of the number of showers per hour
         df_co["Q_ECS_COSTIC"] = (
-            df_co["coef"] * self.v_shower_bath_per_day / df_co["coef_daily_sum"]
+                df_co["coef"] * self.v_shower_bath_per_day / df_co["coef_daily_sum"]
         )
         return df_co[["Q_ECS_COSTIC"]]
 
     def costic_random_shower_distribution(
-        self, start=None, end=None, optional_columns=False, seed=None
+            self, start=None, end=None, optional_columns=False, seed=None
     ):
         if seed is not None:
             rs = RandomState(MT19937(SeedSequence(seed)))
@@ -400,7 +419,7 @@ class DHWaterConsumption:
         )
 
         df_costic_random["Q_ECS_COSTIC_random"] = (
-            df_costic_random["shower_per_minute"] * self.v_used / self.t_shower
+                df_costic_random["shower_per_minute"] * self.v_used / self.t_shower
         )
         df_costic_random["Q_ECS_COSTIC_random"] = df_costic_random[
             "Q_ECS_COSTIC_random"
@@ -464,25 +483,13 @@ class DHWaterConsumption:
     def costic_random_cold_water_distribution(self,
                                               start,
                                               end):
-        ## codé en dur également ici : à changer
 
-        self.v_water_tot = self.v_per_dwelling * 100 / 40
-        self.v_washbasin = self.v_water_tot * 13 / 100
-        self.v_sink_cook = self.v_water_tot * 7 / 100
-        self.v_sink_dishes = self.v_water_tot * 4 / 100
-        self.v_sink_cleaning = self.v_water_tot * 6 / 100
-
-        # =============================================================================
-        #         attention à corriger le nombre de L/j fonction de la demade appelée pour l'ECS
-        # =============================================================================
-
-        nb_washbasin = round(self.v_washbasin / self.v_washbassin_used)
+        nb_washbasin = round(self.v_washbasin / self.v_washbasin_used)
         nb_sinkcook = round(self.v_sink_cook / self.v_sinkcook_used)
         nb_sinkdishes = round(self.v_sink_dishes / self.v_sinkdishes_used)
         nb_sinkcleaning = round(self.v_sink_cleaning / self.v_sinkcleaning_used)
 
         coef = self.get_coefficient_calc_from_period(start, end)
-
         coefficient = coef.mask(coef["coef"] < 0.5)
         coefficient = coefficient.resample("T").fillna('ffill').fillna(float("0"))
 
@@ -497,7 +504,7 @@ class DHWaterConsumption:
                     coefficient.index.date == coefficient.index.date[0]
                     ],
                 nb_used=nb_washbasin,
-                volume=self.v_washbassin_used,
+                volume=self.v_washbasin_used,
             )
             list_sinkcook += self.day_randomizer(
                 coefficient=coefficient[
@@ -506,7 +513,6 @@ class DHWaterConsumption:
                 nb_used=nb_sinkcook,
                 volume=self.v_sinkcook_used,
             )
-
 
             list_sinkdishes += self.day_randomizer(
                 coefficient=coefficient[
@@ -734,17 +740,17 @@ class GreyWaterConsumption:
     """
 
     def __init__(
-        self,
-        n_people,
-        seed=False,
-        dish_washer=True,
-        washing_machine=True,
-        v_water_dish=13,
-        v_water_clothes=50,
-        cycles_clothes_pers=89,  # per year
-        cycles_dish_pers=83,  # per year
-        duration_dish=4,
-        duration_clothes=2,
+            self,
+            n_people,
+            seed=False,
+            dish_washer=True,
+            washing_machine=True,
+            v_water_dish=13,
+            v_water_clothes=50,
+            cycles_clothes_pers=89,  # per year
+            cycles_dish_pers=83,  # per year
+            duration_dish=4,
+            duration_clothes=2,
     ):
         self.n_people = n_people
         self.v_water_dish = v_water_dish
@@ -793,13 +799,13 @@ class GreyWaterConsumption:
                 while index < (len(date_index) - 4) and k < tot_cycles_dish_pers:
                     dish_distribution[index] = dish_distribution[index] + Qwater_dish
                     dish_distribution[index + 1] = (
-                        dish_distribution[index + 1] + Qwater_dish
+                            dish_distribution[index + 1] + Qwater_dish
                     )
                     dish_distribution[index + 1] = (
-                        dish_distribution[index + 2] + Qwater_dish
+                            dish_distribution[index + 2] + Qwater_dish
                     )
                     dish_distribution[index + 1] = (
-                        dish_distribution[index + 3] + Qwater_dish
+                            dish_distribution[index + 3] + Qwater_dish
                     )
                     space = rs.randint(72, 120)  # day 3 to day 5
                     index = index + space
@@ -816,7 +822,7 @@ class GreyWaterConsumption:
                 index = rs.randint(0, 120)
                 while index < (len(date_index) - 2) and k < tot_cycles_dish_pers:
                     washing_distribution[index] = (
-                        washing_distribution[index] + Qwater_clothes
+                            washing_distribution[index] + Qwater_clothes
                     )
                     washing_distribution[index + 1] = washing_distribution[index + 1]
                     space = rs.randint(72, 120)
