@@ -457,7 +457,13 @@ class DHWaterConsumption:
     def day_randomizer(self,
                        coefficient,
                        nb_used,
-                       volume):
+                       volume,
+                       seed=None):
+
+        if seed is not None:
+            rs = RandomState(MT19937(SeedSequence(seed)))
+        else:
+            rs = RandomState()
 
         list_int = [0] * len(coefficient)
         idx_start = None
@@ -474,16 +480,18 @@ class DHWaterConsumption:
             idx_end = len(coefficient) - 1
 
         for i in range(self.n_dwellings * nb_used):
-            k = np.random.randint(low=idx_start,
-                                  high=idx_end + 1)
+            k = rs.randint(low=idx_start,
+                           high=idx_end + 1)
             list_int[k] += volume
 
         return list_int
 
     def costic_random_cold_water_distribution(self,
                                               start,
-                                              end):
+                                              end,
+                                              seed=False):
 
+        self.seed = seed
         nb_washbasin = round(self.v_washbasin / self.v_washbasin_used)
         nb_sinkcook = round(self.v_sink_cook / self.v_sinkcook_used)
         nb_sinkdishes = round(self.v_sink_dishes / self.v_sinkdishes_used)
@@ -505,6 +513,7 @@ class DHWaterConsumption:
                     ],
                 nb_used=nb_washbasin,
                 volume=self.v_washbasin_used,
+                seed=seed
             )
             list_sinkcook += self.day_randomizer(
                 coefficient=coefficient[
@@ -512,6 +521,7 @@ class DHWaterConsumption:
                     ],
                 nb_used=nb_sinkcook,
                 volume=self.v_sinkcook_used,
+                seed=seed
             )
 
             list_sinkdishes += self.day_randomizer(
@@ -520,6 +530,7 @@ class DHWaterConsumption:
                     ],
                 nb_used=nb_sinkdishes,
                 volume=self.v_sinkdishes_used,
+                seed=seed
             )
 
             list_sinkwash += self.day_randomizer(
