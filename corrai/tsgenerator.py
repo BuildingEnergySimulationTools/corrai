@@ -782,7 +782,7 @@ class DomesticWaterConsumption:
         list_sinkdishes = []
         list_sinkwash = []
 
-        for i in range((end - start).days):
+        for _ in range((end - start).days):
             list_washbasin += self.day_randomizer(
                 coefficient=coefficient[
                     coefficient.index.date == coefficient.index.date[0]
