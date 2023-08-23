@@ -693,7 +693,7 @@ class DomesticWaterConsumption:
         if idx_end is None:
             idx_end = len(coefficient) - 1
 
-        for i in range(self.n_dwellings * nb_used):
+        for _ in range(self.n_dwellings * nb_used):
             k = rs.randint(low=idx_start, high=idx_end + 1)
             list_int[k] += volume
         return list_int

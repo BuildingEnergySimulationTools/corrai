@@ -48,6 +48,7 @@ class TestDomesticWaterConsumption:
         start = dt.datetime(2022, 1, 1, 0, 0, 0)
         end = dt.datetime(2024, 10, 20, 1, 0, 0)
         df = dhw.costic_random_shower_distribution(start=start, end=end, seed=42)
+        df2 = dhw.costic_random_shower_distribution(start=start, end=end, seed=None)
 
         # Check if the sum of random water consumption  distribution is about equal
         # to total estimated consumption
@@ -55,6 +56,9 @@ class TestDomesticWaterConsumption:
             "Q_ECS_COSTIC"
         ].sum()
         assert np.isclose(df["Q_ECS_COSTIC_rd"].sum(), total_consoECS_COSTIC, rtol=0.05)
+        assert np.isclose(
+            df2["Q_ECS_COSTIC_rd"].sum(), total_consoECS_COSTIC, rtol=0.05
+        )
 
     def test_re2020_shower_distribution(self):
         dhw = DomesticWaterConsumption(
@@ -126,12 +130,18 @@ class TestDomesticWaterConsumption:
         with pytest.raises(ValueError):
             dhw0.costic_random_cold_water_distribution(start=start, end=end)
 
+        with pytest.raises(ValueError):
+            dhw0.costic_random_cold_water_distribution(start="wrongdate", end=end)
+
         dhw1 = DomesticWaterConsumption(n_dwellings=6)
 
         with pytest.raises(ValueError):
             dhw1.appliances_water_distribution(
                 dish_washer=False, washing_machine=False, start=start, end=end
             )
+
+        with pytest.raises(ValueError):
+            dhw0.costic_random_shower_distribution(start=start, end=end)
 
     def test_scheduler(self):
         schedule_dict = {
