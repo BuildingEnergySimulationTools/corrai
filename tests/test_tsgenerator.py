@@ -91,15 +91,21 @@ class TestDomesticWaterConsumption:
         )
         start = df.index[0]
         end = df.index[-1]
-        nb_days = (end-start).days + 1
+        nb_days = (end - start).days + 1
 
         gw = dhw.appliances_water_distribution(start=start, end=end, seed=42)
-        dish_water_tot = int(dhw.cycles_dish_pers / 365 * nb_days) * \
-                         dhw.v_water_dish * dhw.n_dwellings * \
-                         dhw.n_people_per_dwelling
-        clot_water_tot = int(dhw.cycles_clothes_pers / 365 * nb_days) *\
-                         dhw.v_water_clothes * dhw.n_dwellings * \
-                         dhw.n_people_per_dwelling
+        dish_water_tot = (
+            int(dhw.cycles_dish_pers / 365 * nb_days)
+            * dhw.v_water_dish
+            * dhw.n_dwellings
+            * dhw.n_people_per_dwelling
+        )
+        clot_water_tot = (
+            int(dhw.cycles_clothes_pers / 365 * nb_days)
+            * dhw.v_water_clothes
+            * dhw.n_dwellings
+            * dhw.n_people_per_dwelling
+        )
 
         sum_dish = gw["Q_dish"].sum()
         sum_clo = gw["Q_washer"].sum()

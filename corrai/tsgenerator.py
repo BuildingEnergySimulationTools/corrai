@@ -196,6 +196,21 @@ class DomesticWaterConsumption:
     Class for calculating domestic hot and cold water consumption
     in a building based on either RE2020 or COSTIC coefficients.
 
+    Warning1: Note that for a small number of dwellings (less than 6),
+    the calculation method for random shower water distribution is
+    not adapted: since the method uses COSTIC water flow calculations
+    for each hour and then randomly distribute showers, it does not
+    work properly for small amount of water (nb of shower per hour < 1
+    results in 0 shower). Will be addressed in future work.
+
+    Warning2: Water consumption for showers is limited here by a
+    water consumption per dwelling in liters per day, then distributed
+    using daily COSTIC coefficients. Although COSTIC coefficients are
+    calculated for each day of the year, and are representative of
+    higher probability of having showers at certain hours, they do
+    not impact the total water consumption.
+    Another method might be implemented in the future.
+
     Parameters:
     -----------
     n_dwellings : int
@@ -627,17 +642,14 @@ class DomesticWaterConsumption:
             for _ in range(self.n_people):
                 k = 0  # number of cycles
                 index = rs.randint(0, 120)  # time of start of cycles
-                while index < (len(date_index) - 4) and k < tot_cycles_dish_pers:
-                    dish_distribution[index] = dish_distribution[index] + Qwater_dish
-                    dish_distribution[index + 1] = (
-                        dish_distribution[index + 1] + Qwater_dish
-                    )
-                    dish_distribution[index + 2] = (
-                        dish_distribution[index + 2] + Qwater_dish
-                    )
-                    dish_distribution[index + 3] = (
-                        dish_distribution[index + 3] + Qwater_dish
-                    )
+                while (
+                    index < (len(date_index) - self.duration_dish)
+                    and k < tot_cycles_dish_pers
+                ):
+                    for i in range(self.duration_dish):
+                        dish_distribution[index + i] = (
+                            dish_distribution[index + i] + Qwater_dish
+                        )
                     space = rs.randint(72, 120)  # day 3 to day 5
                     index = index + space
                     k = k + 1
@@ -651,13 +663,14 @@ class DomesticWaterConsumption:
             for _ in range(self.n_people):
                 k = 0
                 index = rs.randint(0, 120)
-                while index < (len(date_index) - 4) and k < tot_cycles_clot_pers:
-                    washing_distribution[index] = (
-                        washing_distribution[index] + Qwater_clothes
-                    )
-                    washing_distribution[index + 1] = (
-                            washing_distribution[index + 1] + Qwater_clothes
-                    )
+                while (
+                    index < (len(date_index) - self.duration_clothes)
+                    and k < tot_cycles_clot_pers
+                ):
+                    for i in range(self.duration_clothes):
+                        washing_distribution[index + i] = (
+                            washing_distribution[index + i] + Qwater_clothes
+                        )
                     space = rs.randint(72, 120)
                     index = index + space
                     k = k + 1
