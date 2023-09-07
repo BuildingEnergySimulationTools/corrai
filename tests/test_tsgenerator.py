@@ -84,19 +84,27 @@ class TestDomesticWaterConsumption:
         assert np.isclose(df.loc["2023-09-10 08:00", "Q_ECS_RE2020"], 261.3, rtol=0.05)
 
     def test_appliances_water_distribution(self):
-        dhw = DomesticWaterConsumption(n_dwellings=6)
+        dhw = DomesticWaterConsumption(n_dwellings=14)
 
         df = pd.DataFrame(
             index=pd.date_range("2020-01-01 00:00:00", freq="H", periods=8760)
         )
         start = df.index[0]
         end = df.index[-1]
+        nb_days = (end-start).days + 1
 
         gw = dhw.appliances_water_distribution(start=start, end=end, seed=42)
+        dish_water_tot = int(dhw.cycles_dish_pers / 365 * nb_days) * \
+                         dhw.v_water_dish * dhw.n_dwellings * \
+                         dhw.n_people_per_dwelling
+        clot_water_tot = int(dhw.cycles_clothes_pers / 365 * nb_days) *\
+                         dhw.v_water_clothes * dhw.n_dwellings * \
+                         dhw.n_people_per_dwelling
 
-        assert np.isclose(gw["Q_dish"].sum(), 54850.0, rtol=0.05)
-
-        assert np.isclose(gw["Q_washer"].sum(), 3565.25, rtol=0.05)
+        sum_dish = gw["Q_dish"].sum()
+        sum_clo = gw["Q_washer"].sum()
+        assert np.isclose(sum_dish, dish_water_tot, rtol=0.05)
+        assert np.isclose(sum_clo, clot_water_tot, rtol=0.05)
 
     def test_day_randomizer(self):
         gw = DomesticWaterConsumption(n_dwellings=100, method="COSTIC")
