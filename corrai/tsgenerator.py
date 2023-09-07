@@ -616,11 +616,13 @@ class DomesticWaterConsumption:
         else:
             rs = RandomState()
 
+        nb_days = (end - start).days + 1
+
         # calculation for dishwasher
         if self.dish_washer is True:
-            Qwater_dish = self.v_water_clothes / self.duration_clothes
+            Qwater_dish = self.v_water_dish / self.duration_dish
             dish_distribution = [0] * len(date_index)
-            tot_cycles_dish_pers = int(self.cycles_dish_pers / 365 * len(date_index))
+            tot_cycles_dish_pers = int(self.cycles_dish_pers / 365 * nb_days)
 
             for _ in range(self.n_people):
                 k = 0  # number of cycles
@@ -630,10 +632,10 @@ class DomesticWaterConsumption:
                     dish_distribution[index + 1] = (
                         dish_distribution[index + 1] + Qwater_dish
                     )
-                    dish_distribution[index + 1] = (
+                    dish_distribution[index + 2] = (
                         dish_distribution[index + 2] + Qwater_dish
                     )
-                    dish_distribution[index + 1] = (
+                    dish_distribution[index + 3] = (
                         dish_distribution[index + 3] + Qwater_dish
                     )
                     space = rs.randint(72, 120)  # day 3 to day 5
@@ -642,18 +644,20 @@ class DomesticWaterConsumption:
 
         # calculation for washing machine
         if self.washing_machine is True:
-            Qwater_clothes = self.v_water_dish / self.duration_dish
+            Qwater_clothes = self.v_water_clothes / self.duration_clothes
             washing_distribution = [0] * len(date_index)
-            tot_cycles_dish_pers = int(self.cycles_clothes_pers / 365 * len(date_index))
+            tot_cycles_clot_pers = int(self.cycles_clothes_pers / 365 * nb_days)
 
             for _ in range(self.n_people):
                 k = 0
                 index = rs.randint(0, 120)
-                while index < (len(date_index) - 2) and k < tot_cycles_dish_pers:
+                while index < (len(date_index) - 4) and k < tot_cycles_clot_pers:
                     washing_distribution[index] = (
                         washing_distribution[index] + Qwater_clothes
                     )
-                    washing_distribution[index + 1] = washing_distribution[index + 1]
+                    washing_distribution[index + 1] = (
+                            washing_distribution[index + 1] + Qwater_clothes
+                    )
                     space = rs.randint(72, 120)
                     index = index + space
                     k = k + 1
