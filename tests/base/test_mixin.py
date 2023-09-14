@@ -1,5 +1,5 @@
 import pandas as pd
-from corrai.base import AggregationMixin
+from corrai.base.mixin import AggregationMixin
 from corrai.metrics import nmbe
 
 
