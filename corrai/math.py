@@ -143,7 +143,7 @@ def time_integrate(
 def aggregate_time_series(
     result_df: pd.DataFrame,
     agg_method: Callable = np.mean,
-    agg_method_kwarg: dict = {},
+    agg_method_kwarg: dict = None,
     reference_df: pd.DataFrame = None,
 ) -> pd.Series:
     """
@@ -177,6 +177,9 @@ def aggregate_time_series(
     B    5
     dtype: int64
     """
+
+    if agg_method_kwarg is None:
+        agg_method_kwarg = {}
 
     check_datetime_index(result_df)
 

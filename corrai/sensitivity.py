@@ -143,9 +143,9 @@ class SAnalysis:
         self,
         indicator: str,
         agg_method=np.mean,
-        agg_method_kwarg: dict = {},
+        agg_method_kwarg: dict = None,
         reference_df: pd.DataFrame = None,
-        sensitivity_method_kwargs: dict = {},
+        sensitivity_method_kwargs: dict = None,
     ):
         """
         Perform sensitivity analysis on the model outputs using the selected method
@@ -162,6 +162,12 @@ class SAnalysis:
         - sensitivity_method_kwargs (dict, optional): Additional keyword arguments for
             the sensitivity analysis method.
         """
+
+        if sensitivity_method_kwargs is None:
+            sensitivity_method_kwargs = {}
+
+        if agg_method_kwarg is None:
+            agg_method_kwarg = {}
 
         if not self.sample_results:
             raise ValueError(
