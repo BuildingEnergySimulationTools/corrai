@@ -144,7 +144,7 @@ def aggregate_time_series(
     result_df: pd.DataFrame,
     agg_method: Callable = np.mean,
     agg_method_kwarg: dict = {},
-    reference_df: pd.DataFrame | None = None,
+    reference_df: pd.DataFrame = None,
 ) -> pd.Series:
     """
     A function to perform data aggregation operations on a given DataFrame using a
