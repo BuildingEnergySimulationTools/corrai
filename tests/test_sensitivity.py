@@ -1,6 +1,5 @@
-from corrai.base import Model
 from corrai.sensitivity import SAnalysis
-import pandas as pd
+from tests.resources.pymodels import Ishigami
 import numpy as np
 
 SIMULATION_OPTIONS = {
@@ -10,55 +9,40 @@ SIMULATION_OPTIONS = {
 }
 
 PARAMETER_LIST = [
-    {"name": "x1", "interval": (1.0, 3.0), "type": "Real"},
-    {"name": "x2", "interval": (1.0, 3.0), "type": "Real"},
-    {"name": "x3", "interval": (1.0, 3.0), "type": "Real"},
+    {
+        "name": "x1",
+        "interval": (-3.14159265359, 3.14159265359),
+        "type": "Real",
+    },
+    {
+        "name": "x2",
+        "interval": (-3.14159265359, 3.14159265359),
+        "type": "Real",
+    },
+    {
+        "name": "x3",
+        "interval": (-3.14159265359, 3.14159265359),
+        "type": "Real",
+    },
 ]
-
-
-class TestModel(Model):
-    def simulate(
-        self, parameter_dict: dict = None, simulation_options: dict = None
-    ) -> pd.DataFrame:
-        evaluate = lambda x: (
-            np.sin(x["x1"])
-            + 7.0 * np.power(np.sin(x["x2"]), 2)
-            + 0.1 * np.power(x["x3"], 4) * np.sin(x["x1"])
-        )
-
-        return pd.DataFrame(
-            {"res": [evaluate(parameter_dict)]},
-            index=pd.date_range(
-                simulation_options["start"],
-                simulation_options["end"],
-                freq=simulation_options["timestep"],
-            ),
-        )
 
 
 class TestSensitivity:
     def test_sanalysis(self):
-        model = TestModel()
+        model = Ishigami()
 
-        res = model.simulate(
-            parameter_dict={"x1": 1.0, "x2": 2.0, "x3": 3.0},
-            simulation_options=SIMULATION_OPTIONS,
+        sa_analysis = SAnalysis(parameters_list=PARAMETER_LIST, method="Sobol")
+
+        sa_analysis.draw_sample(1, sampling_kwargs={"calc_second_order": True})
+
+        sa_analysis.evaluate(model, SIMULATION_OPTIONS, n_cpu=4)
+
+        sa_analysis.analyze(
+            "res", sensitivity_method_kwargs={"calc_second_order": True}
         )
 
-        sa_analysis = SAnalysis(
-            model=model, parameters_list=PARAMETER_LIST, method="Sobol"
+        np.testing.assert_almost_equal(
+            sa_analysis.sensitivity_results["S1"],
+            np.array([0.26933607, 1.255609, -0.81162613]),
+            decimal=3,
         )
-
-        sa_analysis.draw_sample(1, sampling_kwargs={"calc_second_order": False})
-
-        sample_ref = pd.DataFrame(
-            {
-                "x1": [1.18750, 2.31250, 1.18750, 1.18750, 2.31250],
-                "x2": [1.93750, 1.93750, 1.56250, 1.93750, 1.56250],
-                "x3": [1.93750, 1.93750, 1.93750, 2.93750, 2.93750],
-            }
-        )
-
-        pd.testing.assert_frame_equal(sa_analysis.sample, sample_ref)
-
-        assert True
