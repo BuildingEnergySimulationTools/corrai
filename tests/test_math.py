@@ -80,9 +80,7 @@ class TestMath:
 
         expected_nmbe = pd.Series([50.0, 0.0], index=["a", "b"])
 
-        pd.testing.assert_series_equal(
-            aggregate_time_series(sim_res), expected_default
-        )
+        pd.testing.assert_series_equal(aggregate_time_series(sim_res), expected_default)
         pd.testing.assert_series_equal(
             aggregate_time_series(sim_res, agg_method=nmbe, reference_df=ref_df),
             expected_nmbe,

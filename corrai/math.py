@@ -170,9 +170,8 @@ def aggregate_time_series(
       inconsistent shapes.
 
     Example usage:
-        >>> mixin = AggregationMixin()
         >>> result_df = pd.DataFrame({'A': [1, 2, 3], 'B': [4, 5, 6]})
-        >>> agg_series = mixin.get_aggregated(result_df)
+        >>> agg_series = aggregate_time_series(result_df)
         >>> print(agg_series)
     A    2
     B    5
@@ -190,8 +189,10 @@ def aggregate_time_series(
             )
         return pd.Series(
             [
-                agg_method(result_df[col], reference_df.iloc[:, i], **agg_method_kwarg)
-                for i, col in enumerate(result_df.columns)
+                agg_method(
+                    result_df.iloc[:, i], reference_df.iloc[:, i], **agg_method_kwarg
+                )
+                for i in range(len(result_df.columns))
             ],
             index=result_df.columns,
         )
@@ -199,8 +200,8 @@ def aggregate_time_series(
     else:
         return pd.Series(
             [
-                agg_method(result_df[col], **agg_method_kwarg)
-                for col in result_df.columns
+                agg_method(result_df.iloc[:, i], **agg_method_kwarg)
+                for i in range(len(result_df.columns))
             ],
             index=result_df.columns,
         )
