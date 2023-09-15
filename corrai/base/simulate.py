@@ -9,7 +9,7 @@ def run_model(parameters, model, simulation_options):
 
 
 def run_models_in_parallel(
-    model, parameter_samples: pd.DataFrame, simulation_options:dict, n_cpu:int
+    model, parameter_samples: pd.DataFrame, simulation_options: dict, n_cpu: int
 ):
     """
     Run a sample of simulation in parallel.

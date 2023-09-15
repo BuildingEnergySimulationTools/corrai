@@ -61,6 +61,7 @@ class SAnalysis:
         outputs using the selected method and indicator.
 
     """
+
     def __init__(self, parameters_list: [dict], method: str):
         if method not in METHOD_SAMPLER_DICT.keys():
             raise ValueError("Specified sensitivity method is not valid")
@@ -76,7 +77,7 @@ class SAnalysis:
     def set_parameters_list(self, parameters_list: list):
         """
         Set the list of model parameters and update the _salib_problem definition.
-        
+
         Parameters:
         - parameters_list (list of dict): A list of dictionaries describing the model
             parameters to be analyzed. Each dictionary should contain 'name',
@@ -91,7 +92,7 @@ class SAnalysis:
     def draw_sample(self, n: int, sampling_kwargs: dict = None):
         """
         Samples the parameters for sensitivity analysis.
-        
+
         Parameters:
         - n (int): The number of samples to generate.
         - sampling_kwargs (dict, optional): Additional keyword arguments for the
@@ -119,7 +120,7 @@ class SAnalysis:
     def evaluate(self, model, simulation_options: dict, n_cpu: int = 1):
         """
         Evaluate the model for the generated samples.
-        
+
         Parameters:
         - model: The model to be evaluated.
         - simulation_options (dict): Options for running the model simulations.
@@ -149,7 +150,7 @@ class SAnalysis:
         """
         Perform sensitivity analysis on the model outputs using the selected method
          and indicator.
-        
+
         Parameters:
         - indicator (str): The model output indicator to analyze.
         - agg_method (function, optional): Aggregation method for time series data.
