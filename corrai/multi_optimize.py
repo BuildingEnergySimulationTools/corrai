@@ -1,11 +1,23 @@
 import numpy as np
 import pandas as pd
-from pymoo.core.problem import ElementwiseProblem
+from pymoo.core.problem import ElementwiseProblem, LoopedElementwiseEvaluation
 from pymoo.core.variable import Integer, Real, Choice, Binary
 import plotly.graph_objs as go
+from pymoo.core.callback import Callback
 
 
 # TODO Add permutation variables to MyMixedProblem
+
+class MyCallback(Callback):
+    def __init__(self) -> None:
+        super().__init__()
+        self.n_evals = []
+        self.opt = []
+
+    def notify(self, algorithm):
+        self.n_evals.append(algorithm.evaluator.n_eval)
+        self.opt.append(algorithm.opt[0].F)
+
 class MyProblem(ElementwiseProblem):
     """
     A class that represents a single-objective optimization problem
@@ -64,6 +76,7 @@ class MyProblem(ElementwiseProblem):
         func_list,
         function_names,
         constraint_names,
+        parallelization=LoopedElementwiseEvaluation(),
     ):
         self.parameters = parameters
         if len(obj_func_list) == 0 and len(func_list) == 0:
@@ -74,6 +87,7 @@ class MyProblem(ElementwiseProblem):
         self.func_list = func_list
         self.function_names = function_names
         self.constraint_names = constraint_names
+        self.parallelization = parallelization
 
         super().__init__(
             n_var=len(parameters),
@@ -81,6 +95,7 @@ class MyProblem(ElementwiseProblem):
             n_ieq_constr=len(constraint_names),
             xl=np.array([p["interval"][0] for p in parameters]),
             xu=np.array([p["interval"][-1] for p in parameters]),
+            elementwise_runner=parallelization
         )
 
     def _evaluate(self, x, out, *args, **kwargs):
