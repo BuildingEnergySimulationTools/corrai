@@ -10,13 +10,13 @@ from tests.resources.pymodels import VariantModel
 
 
 def modifier_1(model, description, multiplier=None):
-    setattr(model, "y1", description["y1"])
+    model.y1 = description["y1"]
     if multiplier is not None:
-        setattr(model, "multiplier", multiplier)
+        model.multiplier = multiplier
 
 
 def modifier_2(model, description):
-    setattr(model, "z1", description["z1"])
+    model.z1 = description["z1"]
 
 
 VARIANT_DICT = {

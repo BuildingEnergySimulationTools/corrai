@@ -1,5 +1,5 @@
 import enum
-from typing import Dict, Any, Callable
+from typing import Any, Callable
 from corrai.base.model import Model
 from corrai.base.simulate import run_list_of_models_in_parallel
 from copy import deepcopy
@@ -12,7 +12,7 @@ class VariantKeys(enum.Enum):
     DESCRIPTION = "DESCRIPTION"
 
 
-def get_modifier_dict(variant_dict: Dict[str, Dict[VariantKeys, Any]]):
+def get_modifier_dict(variant_dict: dict[str, dict[VariantKeys, Any]]):
     """
     Generate a dictionary that maps modifier values (name) to associated variant names.
 
@@ -41,7 +41,7 @@ def get_modifier_dict(variant_dict: Dict[str, Dict[VariantKeys, Any]]):
     return temp_dict
 
 
-def get_combined_variants(variant_dict: Dict[str, Dict[VariantKeys, Any]]):
+def get_combined_variants(variant_dict: dict[str, dict[VariantKeys, Any]]):
     """
     Generate a list of combined variants based on the provided variant dictionary.
 
@@ -60,9 +60,9 @@ def get_combined_variants(variant_dict: Dict[str, Dict[VariantKeys, Any]]):
 
 def simulate_variants(
     model: Model,
-    variant_dict: Dict[str, Dict[VariantKeys, Any]],
-    modifier_map: Dict[str, Callable],
-    simulation_options: Dict[str, Any],
+    variant_dict: dict[str, dict[VariantKeys, Any]],
+    modifier_map: dict[str, Callable],
+    simulation_options: dict[str, Any],
     n_cpu: int = 1,
 ):
     """

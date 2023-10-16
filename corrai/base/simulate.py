@@ -1,5 +1,4 @@
 from multiprocessing import Pool
-from typing import List
 from corrai.base.model import Model
 
 import pandas as pd
@@ -44,7 +43,7 @@ def run_models_in_parallel(
 
 
 def run_list_of_models_in_parallel(
-    models: List[Model], simulation_options: dict, n_cpu: int
+    models: list[Model], simulation_options: dict, n_cpu: int
 ):
     """
     Run a list of models in parallel.
