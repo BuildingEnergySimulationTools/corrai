@@ -1,5 +1,5 @@
 import enum
-from typing import Dict, Any, Callable, Type
+from typing import Dict, Any, Callable
 from corrai.base.model import Model
 from corrai.base.simulate import run_list_of_models_in_parallel
 from copy import deepcopy
@@ -59,14 +59,14 @@ def get_combined_variants(variant_dict: Dict[str, Dict[VariantKeys, Any]]):
 
 
 def simulate_variants(
-    model: Type[Model],
+    model: Model,
     variant_dict: Dict[str, Dict[VariantKeys, Any]],
     modifier_map: Dict[str, Callable],
     simulation_options: Dict[str, Any],
     n_cpu: int = 1,
 ):
     """
-    Simulate a list of model variants combination in parallel with customizable
+    Simulate a list of mppodel variants combination in parallel with customizable
     modifiers.
 
     This function takes a base model, a dictionary of variant information, a modifier
