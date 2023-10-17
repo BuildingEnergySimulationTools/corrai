@@ -203,3 +203,111 @@ class SAnalysis:
                 Y=y_array,
                 **sensitivity_method_kwargs
             )
+
+def plot_sobol_st_bar(salib_res):
+    sobol_ind = salib_res.to_df()[0]
+    sobol_ind.sort_values(by="ST", ascending=True, inplace=True)
+
+    figure = go.Figure()
+    figure.add_trace(
+        go.Bar(
+            x=sobol_ind.index,
+            y=sobol_ind.ST,
+            name="Sobol Total Indices",
+            marker_color="orange",
+            error_y=dict(type="data", array=sobol_ind.ST_conf.to_numpy()),
+            yaxis="y1",
+        )
+    )
+
+    figure.update_layout(
+        title="Sobol Total indices",
+        xaxis_title="Parameters",
+        yaxis_title="Sobol total index value [0-1]",
+    )
+
+    figure.show()
+
+
+def plot_morris_scatter(salib_res, title=None, unit="", scaler=100, autosize=True):
+    morris_res = salib_res.to_df()
+    morris_res["distance"] = np.sqrt(morris_res.mu_star**2 + morris_res.sigma**2)
+    morris_res["dimless_distance"] = morris_res.distance / morris_res.distance.max()
+
+    import plotly.graph_objects as go
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=morris_res.mu_star,
+            y=morris_res.sigma,
+            name="Morris index",
+            mode="markers+text",
+            text=list(morris_res.index),
+            textposition="top center",
+            marker=dict(
+                size=morris_res.dimless_distance * scaler,
+                color=np.arange(morris_res.shape[0]),
+            ),
+            error_x=dict(
+                type="data",  # value of error bar given in data coordinates
+                array=morris_res.mu_star_conf,
+                color="#696969",
+                visible=True,
+            ),
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=np.array([0, morris_res.mu_star.max() * 1.1]),
+            y=np.array([0, 0.1 * morris_res.mu_star.max() * 1.1]),
+            name="linear_lim",
+            mode="lines",
+            line=dict(color="grey", dash="dash"),
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=np.array([0, morris_res.mu_star.max() * 1.1]),
+            y=np.array([0, 0.5 * morris_res.mu_star.max() * 1.1]),
+            name="Monotonic limit",
+            mode="lines",
+            line=dict(color="grey", dash="dot"),
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=np.array([0, morris_res.mu_star.max() * 1.1]),
+            y=np.array([0, 1 * morris_res.mu_star.max() * 1.1]),
+            name="Non linear limit",
+            mode="lines",
+            line=dict(color="grey", dash="dashdot"),
+        )
+    )
+
+    # Edit the layout
+    if title is not None:
+        title = title
+    else:
+        title = "Morris Sensitivity Analysis"
+
+    if autosize:
+        y_lim = [-morris_res.sigma.max() * 0.1, morris_res.sigma.max() * 1.5]
+    else:
+        y_lim = [-morris_res.sigma.max() * 0.1, morris_res.mu_star.max() * 1.1]
+
+    x_label = f"Absolute mean of elementary effects μ* [{unit}]"
+    y_label = f"Standard deviation of elementary effects σ [{unit}]"
+
+    fig.update_layout(
+        title=title,
+        xaxis_title=x_label,
+        yaxis_title=y_label,
+        yaxis_range=y_lim,
+    )
+
+    fig.show()
