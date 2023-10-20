@@ -1,7 +1,9 @@
+import enum
 from typing import Any
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 from SALib.analyze import fast, morris, sobol, rbd_fast
 from SALib.sample import fast_sampler, saltelli, latin
 from SALib.sample import morris as morris_sampler
@@ -10,17 +12,25 @@ from corrai.base.parameter import Parameter
 from corrai.base.simulate import run_models_in_parallel
 from corrai.math import aggregate_time_series
 
+
+class Method(enum.Enum):
+    FAST = "FAST"
+    MORRIS = "MORRIS"
+    SOBOL = "SOBOL"
+    RDB_FAST = "RBD_FAST"
+
+
 METHOD_SAMPLER_DICT = {
-    "FAST": {
+    Method.FAST: {
         "method": fast,
         "sampling": fast_sampler,
     },
-    "Morris": {"method": morris, "sampling": morris_sampler},
-    "Sobol": {
+    Method.MORRIS: {"method": morris, "sampling": morris_sampler},
+    Method.SOBOL: {
         "method": sobol,
         "sampling": saltelli,
     },
-    "RBD_fast": {
+    Method.RDB_FAST: {
         "method": rbd_fast,
         "sampling": latin,
     },
@@ -63,11 +73,8 @@ class SAnalysis:
 
     """
 
-    def __init__(self, parameters_list: list[dict[Parameter, Any]], method: str):
-        if method not in METHOD_SAMPLER_DICT.keys():
-            raise ValueError("Specified sensitivity method is not valid")
-        else:
-            self.method = method
+    def __init__(self, parameters_list: list[dict[Parameter, Any]], method: Method):
+        self.method = method
         self.parameters_list = parameters_list
         self._salib_problem = None
         self.set_parameters_list(parameters_list)
@@ -75,7 +82,7 @@ class SAnalysis:
         self.sensitivity_results = None
         self.sample_results = []
 
-    def set_parameters_list(self, parameters_list: list):
+    def set_parameters_list(self, parameters_list: list[dict[Parameter, Any]]):
         """
         Set the list of model parameters and update the _salib_problem definition.
 
@@ -193,17 +200,18 @@ class SAnalysis:
             )
         )
 
-        if self.method in ["Sobol", "FAST"]:
+        if self.method.value in ["SOBOL", "FAST"]:
             self.sensitivity_results = analyser.analyze(
                 problem=self._salib_problem, Y=y_array, **sensitivity_method_kwargs
             )
-        elif self.method in ["Morris", "RBD_fast"]:
+        elif self.method.value in ["MORRIS", "RBD_FAST"]:
             self.sensitivity_results = analyser.analyze(
                 problem=self._salib_problem,
-                X=self.sample,
+                X=self.sample.to_numpy(),
                 Y=y_array,
-                **sensitivity_method_kwargs
+                **sensitivity_method_kwargs,
             )
+
 
 def plot_sobol_st_bar(salib_res):
     sobol_ind = salib_res.to_df()[0]

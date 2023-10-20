@@ -1,7 +1,9 @@
+import numpy as np
+
+from corrai.base.parameter import Parameter
+from corrai.sensitivity import Method
 from corrai.sensitivity import SAnalysis
 from tests.resources.pymodels import Ishigami
-from corrai.base.parameter import Parameter
-import numpy as np
 
 SIMULATION_OPTIONS = {
     "start": "2009-01-01 00:00:00",
@@ -32,7 +34,7 @@ class TestSensitivity:
     def test_sanalysis(self):
         model = Ishigami()
 
-        sa_analysis = SAnalysis(parameters_list=PARAMETER_LIST, method="Sobol")
+        sa_analysis = SAnalysis(parameters_list=PARAMETER_LIST, method=Method.SOBOL)
 
         sa_analysis.draw_sample(1, sampling_kwargs={"calc_second_order": True})
 
