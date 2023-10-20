@@ -1,6 +1,7 @@
+import pandas as pd
+
 from corrai.base.simulate import run_models_in_parallel
 from tests.resources.pymodels import Ishigami
-import pandas as pd
 
 SIMULATION_OPTIONS = {
     "start": "2009-01-01 00:00:00",
@@ -20,9 +21,7 @@ class TestSimulate:
             }
         )
 
-        res = run_models_in_parallel(
-            model, parameters_sample, SIMULATION_OPTIONS
-        )
+        res = run_models_in_parallel(model, parameters_sample, SIMULATION_OPTIONS)
 
         assert len(res) == 2
         assert res[0][0] == {"x1": 1.0, "x2": 1.0, "x3": 1.0}

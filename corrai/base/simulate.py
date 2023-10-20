@@ -73,7 +73,7 @@ def run_list_of_models_in_parallel(
         n_cpu = max(1, cpu_count() + n_cpu)
 
     grouped_sample = [
-        models_list[i: i + n_cpu] for i in range(0, len(models_list), n_cpu)
+        models_list[i : i + n_cpu] for i in range(0, len(models_list), n_cpu)
     ]
     prog_bar = progress_bar(range(len(grouped_sample)))
     collect = []
