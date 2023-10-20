@@ -2,6 +2,7 @@ from multiprocessing import Pool
 from multiprocessing import cpu_count
 
 import pandas as pd
+from fastprogress.fastprogress import progress_bar
 
 from corrai.base.model import Model
 
@@ -15,7 +16,8 @@ def run_models_in_parallel(
     model, parameter_samples: pd.DataFrame, simulation_options: dict, n_cpu: int = -1
 ):
     """
-    Run a sample of simulation in parallel.
+    Run a sample of simulation in parallel. The function will automatically divide
+    the sample into batch depending on the number of used cpus.
 
     Parameters:
     - model: The simulation model to run.
@@ -36,34 +38,50 @@ def run_models_in_parallel(
         n_cpu = max(1, cpu_count() + n_cpu)
 
     sample_dict = parameter_samples.to_dict(orient="records")
-    with Pool(n_cpu) as pool:
-        results = pool.map(
-            run_model, [(param, model, simulation_options) for param in sample_dict]
-        )
-
-    combined_result = [
-        (param, simulation_options, res) for param, res in zip(sample_dict, results)
+    grouped_sample = [
+        sample_dict[i : i + n_cpu] for i in range(0, len(sample_dict), n_cpu)
     ]
+    prog_bar = progress_bar(range(len(grouped_sample)))
+    collect = []
+    for mb, group in zip(prog_bar, grouped_sample):
+        with Pool(n_cpu) as pool:
+            results = pool.map(
+                run_model, [(param, model, simulation_options) for param in group]
+            )
 
-    return combined_result
+        combined_result = [
+            (param, simulation_options, res) for param, res in zip(sample_dict, results)
+        ]
+        collect.append(combined_result)
+
+    return [item for sublist in collect for item in sublist]
 
 
 def run_list_of_models_in_parallel(
-    models: list[Model], simulation_options: dict, n_cpu: int
+    models_list: list[Model], simulation_options: dict, n_cpu: int = -1
 ):
     """
     Run a list of models in parallel.
 
-    :param n_cpu:
-    :param models: A list of Model objects to be simulated in parallel.
+    :param n_cpu: The number of CPU cores to use for parallel execution. Default is -1
+        meaning all CPUs but one
+    :param models_list: A list of Model objects to be simulated in parallel.
     :param simulation_options: A dictionary containing simulation options.
     :return: A list of Pandas DataFrames with simulation results for each model.
     """
+    if n_cpu <= 0:
+        n_cpu = max(1, cpu_count() + n_cpu)
 
-    # Create a pool of worker processes
-    with Pool(n_cpu) as pool:
-        results = pool.map(
-            run_model, [(None, model, simulation_options) for model in models]
-        )
+    grouped_sample = [
+        models_list[i: i + n_cpu] for i in range(0, len(models_list), n_cpu)
+    ]
+    prog_bar = progress_bar(range(len(grouped_sample)))
+    collect = []
+    for mb, group in zip(prog_bar, grouped_sample):
+        with Pool(n_cpu) as pool:
+            results = pool.map(
+                run_model, [(None, model, simulation_options) for model in group]
+            )
+        collect.append(results)
 
-    return results
+    return [item for sublist in collect for item in sublist]
