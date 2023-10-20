@@ -238,7 +238,27 @@ def plot_sobol_st_bar(salib_res):
     figure.show()
 
 
-def plot_morris_scatter(salib_res, title=None, unit="", scaler=100, autosize=True):
+def plot_morris_scatter(
+    salib_res,
+    title: str = None,
+    unit: str = "",
+    scaler: int = 100,
+    autosize: bool = True,
+):
+    """
+    This function generates a scatter plot for Morris sensitivity analysis results.
+    It displays the mean of elementary effects (μ*) on the x-axis and the standard
+    deviation of elementary effects (σ) on the y-axis.
+    Marker sizes and colors represent the 'distance' to the origin.
+
+    Parameters:
+    - salib_res (pandas DataFrame): DataFrame containing sensitivity analysis results.
+    - title (str, optional): Title for the plot. If not provided, a default title is used.
+    - unit (str, optional): Unit for the axes labels.
+    - scaler (int, optional): A scaling factor for marker sizes in the plot.
+    - autosize (bool, optional): Whether to automatically adjust the y-axis range.
+
+    """
     morris_res = salib_res.to_df()
     morris_res["distance"] = np.sqrt(morris_res.mu_star**2 + morris_res.sigma**2)
     morris_res["dimless_distance"] = morris_res.distance / morris_res.distance.max()
