@@ -1,7 +1,9 @@
 from multiprocessing import Pool
-from corrai.base.model import Model
+from multiprocessing import cpu_count
 
 import pandas as pd
+
+from corrai.base.model import Model
 
 
 def run_model(args):
@@ -10,7 +12,7 @@ def run_model(args):
 
 
 def run_models_in_parallel(
-    model, parameter_samples: pd.DataFrame, simulation_options: dict, n_cpu: int
+    model, parameter_samples: pd.DataFrame, simulation_options: dict, n_cpu: int = -1
 ):
     """
     Run a sample of simulation in parallel.
@@ -21,7 +23,8 @@ def run_models_in_parallel(
         columns is parameters name, index is the number of simulation
     - simulation_options: A dictionary of options for the simulation.
     Keys values depend on the model requirements.
-    - n_cpu: The number of CPU cores to use for parallel execution.
+    - n_cpu: The number of CPU cores to use for parallel execution. Default is -1
+        meaning all CPUs but one
 
     Returns:
     - combined_result: A list of tuples, where each tuple contains:
@@ -29,6 +32,9 @@ def run_models_in_parallel(
         - simulation_options: The options used for the simulation.
         - res: The result of running the model with the given parameters.
     """
+    if n_cpu <= 0:
+        n_cpu = max(1, cpu_count() + n_cpu)
+
     sample_dict = parameter_samples.to_dict(orient="records")
     with Pool(n_cpu) as pool:
         results = pool.map(

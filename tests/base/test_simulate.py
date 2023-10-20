@@ -21,7 +21,7 @@ class TestSimulate:
         )
 
         res = run_models_in_parallel(
-            model, parameters_sample, SIMULATION_OPTIONS, n_cpu=2
+            model, parameters_sample, SIMULATION_OPTIONS
         )
 
         assert len(res) == 2
