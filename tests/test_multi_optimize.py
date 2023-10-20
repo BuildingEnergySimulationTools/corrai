@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from corrai.multi_optimize import MyProblem, MyMixedProblem
+from corrai.base.parameter import Parameter
 
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.soo.nonconvex.ga import GA
@@ -56,8 +57,8 @@ class MyObjectMixed:
 
 
 parameters = [
-    {"name": "x", "interval": (-2, 10)},
-    {"name": "y", "interval": (-2, 10)},
+    {Parameter.NAME: "x", Parameter.INTERVAL: (-2, 10)},
+    {Parameter.NAME: "y", Parameter.INTERVAL: (-2, 10)},
 ]
 
 
@@ -79,8 +80,8 @@ class TestMyProblem:
 
     def test_myproblem_twoobjectsfunction(self):
         param = [
-            {"name": "x", "interval": (0, 5)},
-            {"name": "y", "interval": (0, 3)},
+            {Parameter.NAME: "x", Parameter.INTERVAL: (0, 5)},
+            {Parameter.NAME: "y", Parameter.INTERVAL: (0, 3)},
         ]
 
         obj1 = MyObjectBinhandKorn1()
@@ -158,10 +159,18 @@ class TestMyProblem:
 
     def test_myproblem_mixed(self):
         param = [
-            {"name": "b", "interval": (), "type": "Binary"},
-            {"name": "x", "interval": ("nothing", "multiply"), "type": "Choice"},
-            {"name": "y", "interval": (-2, 2.5), "type": "Integer"},
-            {"name": "z", "interval": (-5, 5), "type": "Real"},
+            {Parameter.NAME: "b", Parameter.INTERVAL: (), Parameter.TYPE: "Binary"},
+            {
+                Parameter.NAME: "x",
+                Parameter.INTERVAL: ("nothing", "multiply"),
+                Parameter.TYPE: "Choice",
+            },
+            {
+                Parameter.NAME: "y",
+                Parameter.INTERVAL: (-2, 2.5),
+                Parameter.TYPE: "Integer",
+            },
+            {Parameter.NAME: "z", Parameter.INTERVAL: (-5, 5), Parameter.TYPE: "Real"},
         ]
 
         obj = MyObjectMixed()
