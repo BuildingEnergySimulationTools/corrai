@@ -49,3 +49,14 @@ class TestSensitivity:
             np.array([0.26933607, 1.255609, -0.81162613]),
             decimal=3,
         )
+
+        sa_analysis = SAnalysis(parameters_list=PARAMETER_LIST, method=Method.MORRIS)
+
+        sa_analysis.draw_sample(15)
+
+        sa_analysis.evaluate(model, SIMULATION_OPTIONS, n_cpu=4)
+
+        sa_analysis.analyze(indicator="res")
+
+        # Problem is highly non linear and result do not converge.
+        # We are just checking the execution
