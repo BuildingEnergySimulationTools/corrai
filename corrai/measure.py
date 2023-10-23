@@ -1,14 +1,16 @@
-import numpy as np
-import pandas as pd
-import corrai.custom_transformers as ct
+import datetime as dt
 import json
 from collections import defaultdict
-from corrai.utils import check_datetime_index
-from corrai.custom_transformers import PdIdentity
+
+import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
-import datetime as dt
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import make_pipeline
+
+import corrai.custom_transformers as ct
+from corrai.custom_transformers import PdIdentity
+from corrai.utils import check_datetime_index
 
 TRANSFORMER_MAP = {
     "dropna": ct.PdDropna,
