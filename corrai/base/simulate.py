@@ -39,11 +39,11 @@ def run_models_in_parallel(
 
     sample_dict = parameter_samples.to_dict(orient="records")
     grouped_sample = [
-        sample_dict[i: i + n_cpu] for i in range(0, len(sample_dict), n_cpu)
+        sample_dict[i : i + n_cpu] for i in range(0, len(sample_dict), n_cpu)
     ]
     prog_bar = progress_bar(range(len(grouped_sample)))
     collect = []
-    for mb, group in zip(prog_bar, grouped_sample):
+    for _mb, group in zip(prog_bar, grouped_sample):
         with Pool(n_cpu) as pool:
             results = pool.map(
                 run_model, [(param, model, simulation_options) for param in group]
@@ -73,11 +73,11 @@ def run_list_of_models_in_parallel(
         n_cpu = max(1, cpu_count() + n_cpu)
 
     grouped_sample = [
-        models_list[i: i + n_cpu] for i in range(0, len(models_list), n_cpu)
+        models_list[i : i + n_cpu] for i in range(0, len(models_list), n_cpu)
     ]
     prog_bar = progress_bar(range(len(grouped_sample)))
     collect = []
-    for mb, group in zip(prog_bar, grouped_sample):
+    for _mb, group in zip(prog_bar, grouped_sample):
         with Pool(n_cpu) as pool:
             results = pool.map(
                 run_model, [(None, model, simulation_options) for model in group]
