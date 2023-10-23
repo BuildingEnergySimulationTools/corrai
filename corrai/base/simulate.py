@@ -22,7 +22,7 @@ def run_models_in_parallel(
     Parameters:
     - model: The simulation model to run.
     - parameter_samples: A DataFrame containing parameter samples for the model.
-        columns is parameters name, index is the number of simulation
+        columns are parameters name, index is the number of simulation
     - simulation_options: A dictionary of options for the simulation.
     Keys values depend on the model requirements.
     - n_cpu: The number of CPU cores to use for parallel execution. Default is -1
@@ -39,7 +39,7 @@ def run_models_in_parallel(
 
     sample_dict = parameter_samples.to_dict(orient="records")
     grouped_sample = [
-        sample_dict[i : i + n_cpu] for i in range(0, len(sample_dict), n_cpu)
+        sample_dict[i: i + n_cpu] for i in range(0, len(sample_dict), n_cpu)
     ]
     prog_bar = progress_bar(range(len(grouped_sample)))
     collect = []

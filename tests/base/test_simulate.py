@@ -1,6 +1,7 @@
+import pandas as pd
+
 from corrai.base.simulate import run_models_in_parallel
 from tests.resources.pymodels import Ishigami
-import pandas as pd
 
 SIMULATION_OPTIONS = {
     "start": "2009-01-01 00:00:00",
