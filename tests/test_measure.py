@@ -1,16 +1,18 @@
-import numpy as np
-import pandas as pd
 import json
-
-from corrai.measure import MeasuredDats
-from corrai.measure import missing_values_dict
-from corrai.measure import gaps_describe
-from corrai.measure import select_data, Transformer
 from copy import deepcopy
-
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import pytest
+
+from corrai.measure import (
+    MeasuredDats,
+    gaps_describe,
+    missing_values_dict,
+    select_data,
+    Transformer,
+)
 
 RESOURCES_DIR = Path(__file__).parent / "resources"
 
