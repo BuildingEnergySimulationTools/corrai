@@ -38,6 +38,7 @@ setup(
         "scikit-learn>=1.2.2",
         "pymoo>=0.6.0.1",
         "salib>=1.4.7",
+        "fastprogress>=1.0.3"
     ],
     packages=find_packages(exclude=["tests*"]),
     include_package_data=True,
