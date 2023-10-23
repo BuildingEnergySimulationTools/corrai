@@ -253,7 +253,8 @@ def plot_morris_scatter(
 
     Parameters:
     - salib_res (pandas DataFrame): DataFrame containing sensitivity analysis results.
-    - title (str, optional): Title for the plot. If not provided, a default title is used.
+    - title (str, optional): Title for the plot. If not provided, a default title
+    is used.
     - unit (str, optional): Unit for the axes labels.
     - scaler (int, optional): A scaling factor for marker sizes in the plot.
     - autosize (bool, optional): Whether to automatically adjust the y-axis range.
