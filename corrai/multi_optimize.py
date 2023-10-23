@@ -1,8 +1,12 @@
+from typing import Any
+
 import numpy as np
 import pandas as pd
+import plotly.graph_objs as go
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Integer, Real, Choice, Binary
-import plotly.graph_objs as go
+
+from corrai.base.parameter import Parameter
 
 
 # TODO Add permutation variables to MyMixedProblem
@@ -59,7 +63,7 @@ class MyProblem(ElementwiseProblem):
 
     def __init__(
         self,
-        parameters,
+        parameters: list[dict[Parameter, Any]],
         obj_func_list,
         func_list,
         function_names,
@@ -79,12 +83,14 @@ class MyProblem(ElementwiseProblem):
             n_var=len(parameters),
             n_obj=len(function_names),
             n_ieq_constr=len(constraint_names),
-            xl=np.array([p["interval"][0] for p in parameters]),
-            xu=np.array([p["interval"][-1] for p in parameters]),
+            xl=np.array([p[Parameter.INTERVAL][0] for p in parameters]),
+            xu=np.array([p[Parameter.INTERVAL][-1] for p in parameters]),
         )
 
     def _evaluate(self, x, out, *args, **kwargs):
-        current_param = {param["name"]: val for param, val in zip(self.parameters, x)}
+        current_param = {
+            param[Parameter.NAME]: val for param, val in zip(self.parameters, x)
+        }
         res = pd.concat(
             [m.function(current_param) for m in self.obj_func_list]
             + [pyf(current_param) for pyf in self.func_list]
@@ -94,7 +100,7 @@ class MyProblem(ElementwiseProblem):
 
     def plot_pcp(self, res, ref, bounds=False):
         data_dict = {
-            param["name"]: res.X[:, i]
+            param[Parameter.NAME]: res.X[:, i]
             for param, i in zip(self.parameters, range(res.X.shape[1]))
         }
         data_dict.update(
@@ -162,7 +168,7 @@ class MyMixedProblem(ElementwiseProblem):
 
     def __init__(
         self,
-        parameters,
+        parameters: list[dict[Parameter, Any]],
         obj_func_list,
         func_list,
         function_names,
@@ -180,7 +186,11 @@ class MyMixedProblem(ElementwiseProblem):
         variable_string = {}
 
         for param in parameters:
-            name, bounds, vtype = param["name"], param["interval"], param["type"]
+            name, bounds, vtype = (
+                param[Parameter.NAME],
+                param[Parameter.INTERVAL],
+                param[Parameter.TYPE],
+            )
             if vtype == "Integer":
                 var = Integer(bounds=bounds)
             elif vtype == "Real":
@@ -214,7 +224,7 @@ class MyMixedProblem(ElementwiseProblem):
 
     def plot_pcp(self, res, ref, bounds=False):
         data_dict = {
-            param["name"]: res.X[:, i]
+            param[Parameter.NAME]: res.X[:, i]
             for param, i in zip(self.parameters, range(res.X.shape[1]))
         }
         data_dict.update(
@@ -235,9 +245,9 @@ def plot_parcoord(data_dict, bounds, parameters, obj_res, colorby=None):
     color_palette = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
 
     if bounds:
-        range_down = [p["interval"][0] for i, p in enumerate(parameters)]
+        range_down = [p[Parameter.INTERVAL][0] for i, p in enumerate(parameters)]
         range_down.extend(obj_res.min(axis=0))
-        range_up = [p["interval"][-1] for i, p in enumerate(parameters)]
+        range_up = [p[Parameter.INTERVAL][-1] for i, p in enumerate(parameters)]
         range_up.extend(obj_res.max(axis=0))
         ranges = [[range_down[i], range_up[i]] for i in range(len(range_up))]
 

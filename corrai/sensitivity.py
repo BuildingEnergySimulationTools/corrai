@@ -1,13 +1,14 @@
-import pandas as pd
-
-from corrai.base.simulate import run_models_in_parallel
-from corrai.math import aggregate_time_series
-
-from SALib.sample import fast_sampler, saltelli, latin
-from SALib.sample import morris as morris_sampler
-from SALib.analyze import fast, morris, sobol, rbd_fast
+from typing import Any
 
 import numpy as np
+import pandas as pd
+from SALib.analyze import fast, morris, sobol, rbd_fast
+from SALib.sample import fast_sampler, saltelli, latin
+from SALib.sample import morris as morris_sampler
+
+from corrai.base.parameter import Parameter
+from corrai.base.simulate import run_models_in_parallel
+from corrai.math import aggregate_time_series
 
 METHOD_SAMPLER_DICT = {
     "FAST": {
@@ -62,7 +63,7 @@ class SAnalysis:
 
     """
 
-    def __init__(self, parameters_list: [dict], method: str):
+    def __init__(self, parameters_list: list[dict[Parameter, Any]], method: str):
         if method not in METHOD_SAMPLER_DICT.keys():
             raise ValueError("Specified sensitivity method is not valid")
         else:
@@ -85,8 +86,8 @@ class SAnalysis:
         """
         self._salib_problem = {
             "num_vars": len(parameters_list),
-            "names": [p["name"] for p in parameters_list],
-            "bounds": list(map(lambda p: p["interval"], parameters_list)),
+            "names": [p[Parameter.NAME] for p in parameters_list],
+            "bounds": list(map(lambda p: p[Parameter.INTERVAL], parameters_list)),
         }
 
     def draw_sample(self, n: int, sampling_kwargs: dict = None):
@@ -110,7 +111,7 @@ class SAnalysis:
         )
 
         for index, param in enumerate(self.parameters_list):
-            vtype = param["type"]
+            vtype = param[Parameter.TYPE]
             if vtype == "Integer":
                 sample_temp[:, index] = np.round(sample_temp[:, index])
                 sample_temp = np.unique(sample_temp, axis=0)

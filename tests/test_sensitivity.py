@@ -1,5 +1,6 @@
 from corrai.sensitivity import SAnalysis
 from tests.resources.pymodels import Ishigami
+from corrai.base.parameter import Parameter
 import numpy as np
 
 SIMULATION_OPTIONS = {
@@ -10,19 +11,19 @@ SIMULATION_OPTIONS = {
 
 PARAMETER_LIST = [
     {
-        "name": "x1",
-        "interval": (-3.14159265359, 3.14159265359),
-        "type": "Real",
+        Parameter.NAME: "x1",
+        Parameter.INTERVAL: (-3.14159265359, 3.14159265359),
+        Parameter.TYPE: "Real",
     },
     {
-        "name": "x2",
-        "interval": (-3.14159265359, 3.14159265359),
-        "type": "Real",
+        Parameter.NAME: "x2",
+        Parameter.INTERVAL: (-3.14159265359, 3.14159265359),
+        Parameter.TYPE: "Real",
     },
     {
-        "name": "x3",
-        "interval": (-3.14159265359, 3.14159265359),
-        "type": "Real",
+        Parameter.NAME: "x3",
+        Parameter.INTERVAL: (-3.14159265359, 3.14159265359),
+        Parameter.TYPE: "Real",
     },
 ]
 
