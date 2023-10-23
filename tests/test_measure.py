@@ -5,7 +5,7 @@ import json
 from corrai.measure import MeasuredDats
 from corrai.measure import missing_values_dict
 from corrai.measure import gaps_describe
-from corrai.measure import select_data
+from corrai.measure import select_data, Transformer
 from copy import deepcopy
 
 from pathlib import Path
@@ -36,23 +36,26 @@ def my_measure():
         category_transformations={
             "col_1": {
                 "ANOMALIES": [
-                    ["drop_threshold", {"upper": 50, "lower": 0}],
-                    ["drop_time_gradient", {"lower_rate": 0, "upper_rate": 0.004}],
+                    [Transformer.DROP_THRESHOLD, {"upper": 50, "lower": 0}],
+                    [
+                        Transformer.DROP_TIME_GRADIENT,
+                        {"lower_rate": 0, "upper_rate": 0.004},
+                    ],
                 ],
-                "PROCESS": [["apply_expression", {"expression": "X * 2"}]],
+                "PROCESS": [[Transformer.APPLY_EXPRESSION, {"expression": "X * 2"}]],
             },
             "col_2": {
                 "ANOMALIES": [
-                    ["drop_threshold", {"upper": 500, "lower": 0}],
+                    [Transformer.DROP_THRESHOLD, {"upper": 500, "lower": 0}],
                 ],
             },
             "col_3": {},
         },
         common_transformations={
             "COMMON": [
-                ["interpolate", {"method": "linear"}],
-                ["fill_na", {"method": "bfill"}],
-                ["fill_na", {"method": "ffill"}],
+                [Transformer.INTERPOLATE, {"method": "linear"}],
+                [Transformer.FILL_NA, {"method": "bfill"}],
+                [Transformer.FILL_NA, {"method": "ffill"}],
             ]
         },
         resampler_agg_methods={"col_2": "sum"},

@@ -1,6 +1,7 @@
 import datetime as dt
 import json
 from collections import defaultdict
+from enum import Enum
 
 import numpy as np
 import pandas as pd
@@ -12,27 +13,38 @@ import corrai.custom_transformers as ct
 from corrai.custom_transformers import PdIdentity
 from corrai.utils import check_datetime_index
 
+
+class Transformer(str, Enum):
+    DROPNA = "DROPNA"
+    RENAME_COLUMNS = "RENAME_COLUMNS"
+    SK_TRANSFORMER = "SK_TRANSFORMER"
+    DROP_THRESHOLD = "DROP_THRESHOLD"
+    DROP_TIME_GRADIENT = "DROP_TIME_GRADIENT"
+    APPLY_EXPRESSION = "APPLY_EXPRESSION"
+    TIME_GRADIENT = "TIME_GRADIENT"
+    FILL_NA = "FILL_NA"
+    RESAMPLE = "RESAMPLE"
+    INTERPOLATE = "INTERPOLATE"
+    GAUSSIAN_FILTER = "GAUSSIAN_FILTER"
+
+
 TRANSFORMER_MAP = {
-    "dropna": ct.PdDropna,
-    "rename_columns": ct.PdRenameColumns,
-    "sk_transformer": ct.PdSkTransformer,
-    "drop_threshold": ct.PdDropThreshold,
-    "drop_time_gradient": ct.PdDropTimeGradient,
-    "apply_expression": ct.PdApplyExpression,
-    "time_gradient": ct.PdTimeGradient,
-    "fill_na": ct.PdFillNa,
-    "resample": ct.PdResampler,
-    "interpolate": ct.PdInterpolate,
-    "gaussian_filter": ct.PdGaussianFilter1D,
+    "DROPNA": ct.PdDropna,
+    "RENAME_COLUMNS": ct.PdRenameColumns,
+    "SK_TRANSFORMER": ct.PdSkTransformer,
+    "DROP_THRESHOLD": ct.PdDropThreshold,
+    "DROP_TIME_GRADIENT": ct.PdDropTimeGradient,
+    "APPLY_EXPRESSION": ct.PdApplyExpression,
+    "TIME_GRADIENT": ct.PdTimeGradient,
+    "FILL_NA": ct.PdFillNa,
+    "RESAMPLE": ct.PdResampler,
+    "INTERPOLATE": ct.PdInterpolate,
+    "GAUSSIAN_FILTER": ct.PdGaussianFilter1D,
 }
 
-RESAMPLE_METHS = {"mean": np.mean, "sum": np.sum}
+RESAMPLING_METHODS = {"mean": np.mean, "sum": np.sum}
 
 COLOR_PALETTE = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
-
-
-def get_transformers_keys():
-    return TRANSFORMER_MAP.keys()
 
 
 def missing_values_dict(df):
@@ -184,8 +196,8 @@ def add_scatter_and_gaps(
 class MeasuredDats:
     def __init__(
         self,
-        data,
-        category_dict=None,
+        data: pd.DataFrame,
+        category_dict: dict[str, list[str]] = None,
         category_transformations=None,
         common_transformations=None,
         resampler_agg_methods=None,
@@ -456,14 +468,14 @@ class MeasuredDats:
         if transformers_list is None:
             transformers_list = self.transformers_list.copy()
 
-        if "RESAMPLER" in transformers_list and not resampling_rule:
+        if Transformer.RESAMPLE in transformers_list and not resampling_rule:
             raise ValueError(
-                "RESAMPLER is present in transformers_list but no rule"
+                "RESAMPLE is present in transformers_list but no rule"
                 "have been specified. use resampling_rule argument"
             )
 
-        if resampling_rule and "RESAMPLER" not in transformers_list:
-            transformers_list += ["RESAMPLER"]
+        if resampling_rule and Transformer.RESAMPLE not in transformers_list:
+            transformers_list += [Transformer.RESAMPLE]
 
         if not transformers_list:
             obj_list = [PdIdentity()]
@@ -472,7 +484,7 @@ class MeasuredDats:
             for trans in transformers_list:
                 if trans in self.category_trans_names:
                     obj_list.append(self.get_category_transformer(trans))
-                elif trans == "RESAMPLER":
+                elif trans == Transformer.RESAMPLE:
                     obj_list.append(self.get_resampler(resampling_rule))
                 else:
                     obj_list.append(self.get_common_transformer(trans))
@@ -488,7 +500,7 @@ class MeasuredDats:
     def get_common_transformer(self, transformation):
         common_trans = self.common_trans[transformation]
         return make_pipeline(
-            *[TRANSFORMER_MAP[trans[0]](**trans[1]) for trans in common_trans]
+            *[TRANSFORMER_MAP[trans[0].value](**trans[1]) for trans in common_trans]
         )
 
     def get_category_transformer(self, transformation):
@@ -505,7 +517,7 @@ class MeasuredDats:
                             f"{transformation}_{data_cat}",
                             make_pipeline(
                                 *[
-                                    TRANSFORMER_MAP[trans[0]](**trans[1])
+                                    TRANSFORMER_MAP[trans[0].value](**trans[1])
                                     for trans in transformations
                                 ]
                             ),
@@ -522,7 +534,7 @@ class MeasuredDats:
         for data_cat, cols in self.category_dict.items():
             try:
                 method = self.resampler_agg_methods[data_cat]
-                column_config_list.append((cols, RESAMPLE_METHS[method]))
+                column_config_list.append((cols, RESAMPLING_METHODS[method]))
             except KeyError:
                 pass
 
@@ -532,7 +544,7 @@ class MeasuredDats:
             return ct.PdColumnResampler(
                 rule=rule,
                 columns_method=column_config_list,
-                remainder=RESAMPLE_METHS[remainder_rule],
+                remainder=RESAMPLING_METHODS[remainder_rule],
             )
 
     def write_config_file(self, file_path):
