@@ -12,6 +12,7 @@ from corrai.measure import (
     missing_values_dict,
     select_data,
     Transformer,
+    AggMethod,
 )
 
 RESOURCES_DIR = Path(__file__).parent / "resources"
@@ -60,7 +61,7 @@ def my_measure():
                 [Transformer.FILL_NA, {"method": "ffill"}],
             ]
         },
-        resampler_agg_methods={"col_2": "sum"},
+        resampler_agg_methods={"col_2": AggMethod.SUM},
     )
 
     return tested_obj

@@ -9,9 +9,10 @@ import plotly.graph_objects as go
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import make_pipeline
 
-import corrai.custom_transformers as ct
-from corrai.custom_transformers import PdIdentity
+import corrai.transformers as ct
+from corrai.transformers import PdIdentity
 from corrai.utils import check_datetime_index
+from corrai.math import time_integrate
 
 
 class Transformer(str, Enum):
@@ -42,7 +43,14 @@ TRANSFORMER_MAP = {
     "GAUSSIAN_FILTER": ct.PdGaussianFilter1D,
 }
 
-RESAMPLING_METHODS = {"mean": np.mean, "sum": np.sum}
+
+class AggMethod(str, Enum):
+    MEAN = "MEAN"
+    SUM = "SUM"
+    TIME_INTEGRATE = "TIME_INTEGRATE"
+
+
+AGG_METHOD_MAP = {"MEAN": np.mean, "SUM": np.sum, "TIME_INTEGRATE": time_integrate}
 
 COLOR_PALETTE = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
 
@@ -529,12 +537,12 @@ class MeasuredDats:
             column_config_list, verbose_feature_names_out=False, remainder="passthrough"
         ).set_output(transform="pandas")
 
-    def get_resampler(self, rule, remainder_rule="mean"):
+    def get_resampler(self, rule, remainder_rule=AggMethod.MEAN):
         column_config_list = []
         for data_cat, cols in self.category_dict.items():
             try:
                 method = self.resampler_agg_methods[data_cat]
-                column_config_list.append((cols, RESAMPLING_METHODS[method]))
+                column_config_list.append((cols, AGG_METHOD_MAP[method.value]))
             except KeyError:
                 pass
 
@@ -544,7 +552,7 @@ class MeasuredDats:
             return ct.PdColumnResampler(
                 rule=rule,
                 columns_method=column_config_list,
-                remainder=RESAMPLING_METHODS[remainder_rule],
+                remainder=AGG_METHOD_MAP[remainder_rule.value],
             )
 
     def write_config_file(self, file_path):
