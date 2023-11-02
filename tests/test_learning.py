@@ -7,7 +7,7 @@ from corrai.learning import KdeSetPointIdentificator
 from corrai.learning import get_hours_switch
 from corrai.learning import plot_kde_set_point, plot_time_series_kde
 from corrai.learning import set_point_identifier, moving_window_set_point_identifier
-import corrai.custom_transformers as ct
+import corrai.transformers as ct
 
 import datetime as dt
 from pathlib import Path
