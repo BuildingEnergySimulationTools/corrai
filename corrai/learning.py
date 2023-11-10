@@ -12,7 +12,7 @@ import datetime as dt
 import plotly.colors as colors
 import plotly.graph_objects as go
 
-import corrai.custom_transformers as ct
+import corrai.transformers as ct
 from corrai.utils import as_1_column_dataframe
 from corrai.utils import _reshape_1d
 from corrai.utils import check_datetime_index

@@ -744,7 +744,7 @@ class PdAddTimeLag(PdTransformerBC):
         The list of feature names to lag. If None, all features in the input
          DataFrame will be lagged.
 
-    custom_feature_marker : str or None, optional (default=None)
+    feature_marker : str or None, optional (default=None)
         The string used to prefix the names of the new lagged features.
         If None, the feature names will be prefixed with the string
         representation of the `time_lag` parameter followed by an underscore.

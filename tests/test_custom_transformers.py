@@ -6,20 +6,20 @@ from scipy.ndimage import gaussian_filter1d
 
 from sklearn.preprocessing import StandardScaler
 
-from corrai.custom_transformers import PdDropna
-from corrai.custom_transformers import PdRenameColumns
-from corrai.custom_transformers import PdSkTransformer
-from corrai.custom_transformers import PdDropThreshold
-from corrai.custom_transformers import PdDropTimeGradient
-from corrai.custom_transformers import PdApplyExpression
-from corrai.custom_transformers import PdTimeGradient
-from corrai.custom_transformers import PdFillNa
-from corrai.custom_transformers import PdResampler
-from corrai.custom_transformers import PdColumnResampler
-from corrai.custom_transformers import PdAddTimeLag
-from corrai.custom_transformers import PdGaussianFilter1D
-from corrai.custom_transformers import PdIdentity
-from corrai.custom_transformers import PdCombineColumns
+from corrai.transformers import PdDropna
+from corrai.transformers import PdRenameColumns
+from corrai.transformers import PdSkTransformer
+from corrai.transformers import PdDropThreshold
+from corrai.transformers import PdDropTimeGradient
+from corrai.transformers import PdApplyExpression
+from corrai.transformers import PdTimeGradient
+from corrai.transformers import PdFillNa
+from corrai.transformers import PdResampler
+from corrai.transformers import PdColumnResampler
+from corrai.transformers import PdAddTimeLag
+from corrai.transformers import PdGaussianFilter1D
+from corrai.transformers import PdIdentity
+from corrai.transformers import PdCombineColumns
 
 
 class TestCustomTransformers:
