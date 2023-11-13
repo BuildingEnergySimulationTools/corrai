@@ -3,6 +3,7 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 from scipy.ndimage import gaussian_filter1d
+
 from sklearn.preprocessing import StandardScaler
 
 from corrai.transformers import (
@@ -375,4 +376,49 @@ class TestCustomTransformers:
 
         x_tot_test, y_to_test = windower.fit_transform(test_timeseries)
 
-        assert pd.testing.assert_frame_equal(x_tot_test, x_ref)
+        pd.testing.assert_frame_equal(x_tot_test, x_ref)
+
+    # def test_pd_time_window(self):
+    #     test_timeseries = pd.DataFrame(
+    #         {
+    #             "feat_1": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+    #             "feat_2": [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+    #         },
+    #         index=pd.date_range("2009-01-01", freq="H", periods=7),
+    #     )
+    #     test_timeseries["label"] = (
+    #         test_timeseries["feat_1"] * 2 + test_timeseries["feat_1"] * 3
+    #     )
+    #
+    #     windower = PdTimeWindow(
+    #         feat_input_width=3,
+    #         label_output_width=2,
+    #         feat_label_shift=3,
+    #         sampling_shift=1,
+    #         labels_names="label",
+    #     )
+    #
+    #     x_ref = pd.DataFrame(
+    #         np.array(
+    #             [
+    #                 [1.0, 2.0, 3.0, 3.0, 4.0, 5.0],
+    #                 [2.0, 3.0, 4.0, 4.0, 5.0, 6.0],
+    #                 [3.0, 4.0, 5.0, 5.0, 6.0, 7.0],
+    #             ]
+    #         ),
+    #         columns=[
+    #             "feat_1_n0",
+    #             "feat_1_n1",
+    #             "feat_1_n2",
+    #             "feat_2_n0",
+    #             "feat_2_n1",
+    #             "feat_2_n2",
+    #         ],
+    #         index=pd.DatetimeIndex(
+    #             ["2009-01-01 00:00:00", "2009-01-01 01:00:00", "2009-01-01 02:00:00"]
+    #         ),
+    #     )
+    #
+    #     x_tot_test, y_to_test = windower.fit_transform(test_timeseries)
+    #
+    #     assert pd.testing.assert_frame_equal(x_tot_test, x_ref)
