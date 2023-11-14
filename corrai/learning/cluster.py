@@ -1,24 +1,22 @@
-import pandas as pd
-import numpy as np
+import datetime as dt
+import itertools
 
+import numpy as np
+import pandas as pd
+from plotly import colors as colors, graph_objects as go
+from scipy.signal import argrelextrema
 from sklearn.base import BaseEstimator, ClusterMixin
 from sklearn.neighbors import KernelDensity
-from sklearn.preprocessing import StandardScaler
-from scipy.signal import argrelextrema
-
-import itertools
-import datetime as dt
-
-import plotly.colors as colors
-import plotly.graph_objects as go
-
-import corrai.transformers as ct
-from corrai.utils import as_1_column_dataframe
-from corrai.utils import _reshape_1d
-from corrai.utils import check_datetime_index
-from corrai.utils import float_to_hour
-
 from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+from corrai import transformers as ct
+from corrai.utils import (
+    as_1_column_dataframe,
+    check_datetime_index,
+    float_to_hour,
+    _reshape_1d,
+)
 
 
 def get_hours_switch(X, diff_filter_threshold=0, switch="positive"):

@@ -1,5 +1,7 @@
 import enum
-from typing import Any, Callable
+from typing import Any
+
+from collections.abc import Callable
 from corrai.base.model import Model
 from corrai.base.simulate import run_list_of_models_in_parallel
 from copy import deepcopy
