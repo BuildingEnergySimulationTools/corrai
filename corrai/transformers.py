@@ -468,10 +468,6 @@ class PdFillNa(PdTransformerBC):
     Parameters:
         value: scalar, dict, Series, or DataFrame
             Value(s) used to replace missing values.
-        method: str, optional
-            Interpolation method used to fill missing values.
-            Must be one of 'bfill', 'ffill'.
-            If None, the missing values are left as is.
 
     Methods:
         fit(self, X, y=None):
@@ -480,10 +476,9 @@ class PdFillNa(PdTransformerBC):
             Fill missing values in the input DataFrame.
     """
 
-    def __init__(self, value=None, method=None):
+    def __init__(self, value: float):
         super().__init__()
         self.value = value
-        self.method = method
 
     def fit(self, X, y=None):
         self.columns = X.columns
@@ -491,9 +486,7 @@ class PdFillNa(PdTransformerBC):
         return self
 
     def transform(self, X):
-        if self.value is not None:
-            return X.fillna(self.value)
-        return getattr(X, self.method)()
+        return X.fillna(self.value)
 
 
 class PdResampler(PdTransformerBC):
