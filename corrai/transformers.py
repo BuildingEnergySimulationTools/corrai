@@ -460,6 +460,74 @@ class PdTimeGradient(PdTransformerBC):
         return derivative.reindex(original_index)
 
 
+class PdFfill(PdTransformerBC):
+    """
+    A class to front-fill missing values in a Pandas DataFrame.
+    the limit argument allows the function to stop frontfilling at a certain
+    number of missing value
+
+    Parameters:
+        limit: int, default None If limit is specified, this is the maximum number
+        of consecutive NaN values to forward/backward fill.
+        In other words, if there is a gap with more than this number of consecutive
+        NaNs, it will only be partially filled.
+        If limit is not specified, this is the maximum number of entries along
+        the entire axis where NaNs will be filled. Must be greater than 0 if not None.
+
+    Methods:
+        fit(self, X, y=None):
+            Does nothing. Returns the object itself.
+        transform(self, X):
+            Fill missing values in the input DataFrame.
+    """
+
+    def __init__(self, limit: int = None):
+        super().__init__()
+        self.limit = limit
+
+    def fit(self, X, y=None):
+        self.columns = X.columns
+        self.index = X.index
+        return self
+
+    def transform(self, X):
+        return X.ffill(limit=self.limit)
+
+
+class PdBfill(PdTransformerBC):
+    """
+    A class to back-fill missing values in a Pandas DataFrame.
+    the limit argument allows the function to stop backfilling at a certain
+    number of missing value
+
+    Parameters:
+        limit: int, default None If limit is specified, this is the maximum number
+        of consecutive NaN values to forward/backward fill.
+        In other words, if there is a gap with more than this number of consecutive
+        NaNs, it will only be partially filled.
+        If limit is not specified, this is the maximum number of entries along
+        the entire axis where NaNs will be filled. Must be greater than 0 if not None.
+
+    Methods:
+        fit(self, X, y=None):
+            Does nothing. Returns the object itself.
+        transform(self, X):
+            Fill missing values in the input DataFrame.
+    """
+
+    def __init__(self, limit: int = None):
+        super().__init__()
+        self.limit = limit
+
+    def fit(self, X, y=None):
+        self.columns = X.columns
+        self.index = X.index
+        return self
+
+    def transform(self, X):
+        return X.bfill(limit=self.limit)
+
+
 class PdFillNa(PdTransformerBC):
     """
     A class that extends scikit-learn's TransformerMixin and BaseEstimator

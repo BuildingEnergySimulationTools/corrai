@@ -5,20 +5,24 @@ import pandas as pd
 from scipy.ndimage import gaussian_filter1d
 from sklearn.preprocessing import StandardScaler
 
-from corrai.transformers import PdAddTimeLag
-from corrai.transformers import PdApplyExpression
-from corrai.transformers import PdColumnResampler
-from corrai.transformers import PdCombineColumns
-from corrai.transformers import PdDropThreshold
-from corrai.transformers import PdDropTimeGradient
-from corrai.transformers import PdDropna
-from corrai.transformers import PdFillNa
-from corrai.transformers import PdGaussianFilter1D
-from corrai.transformers import PdIdentity
-from corrai.transformers import PdRenameColumns
-from corrai.transformers import PdResampler
-from corrai.transformers import PdSkTransformer
-from corrai.transformers import PdTimeGradient
+from corrai.transformers import (
+    PdAddTimeLag,
+    PdApplyExpression,
+    PdColumnResampler,
+    PdCombineColumns,
+    PdDropThreshold,
+    PdDropTimeGradient,
+    PdDropna,
+    PdFillNa,
+    PdBfill,
+    PdFfill,
+    PdGaussianFilter1D,
+    PdIdentity,
+    PdRenameColumns,
+    PdResampler,
+    PdSkTransformer,
+    PdTimeGradient,
+)
 
 
 class TestCustomTransformers:
@@ -148,6 +152,42 @@ class TestCustomTransformers:
         derivator = PdTimeGradient()
 
         pd.testing.assert_frame_equal(ref, derivator.fit_transform(test), rtol=0.01)
+
+    def test_pd_ffill(self):
+        test = pd.DataFrame(
+            {
+                "cpt1": [0.0, np.nan, 2.0, 2.0, np.nan, 3.0],
+                "cpt2": [0.0, 1.0, 2.0, 2.0, np.nan, 3.0],
+            }
+        )
+
+        ref = pd.DataFrame(
+            {
+                "cpt1": [0.0, 0.0, 2.0, 2.0, 2.0, 3.0],
+                "cpt2": [0.0, 1.0, 2.0, 2.0, 2.0, 3.0],
+            }
+        )
+
+        filler = PdFfill()
+        pd.testing.assert_frame_equal(ref, filler.fit_transform(test))
+
+    def test_pd_bfill(self):
+        test = pd.DataFrame(
+            {
+                "cpt1": [0.0, np.nan, 2.0, 2.0, np.nan, 3.0],
+                "cpt2": [0.0, 1.0, 2.0, 2.0, np.nan, 3.0],
+            }
+        )
+
+        ref = pd.DataFrame(
+            {
+                "cpt1": [0.0, 2.0, 2.0, 2.0, 3.0, 3.0],
+                "cpt2": [0.0, 1.0, 2.0, 2.0, 3.0, 3.0],
+            }
+        )
+
+        filler = PdBfill()
+        pd.testing.assert_frame_equal(ref, filler.fit_transform(test))
 
     def test_pd_fill_na(self):
         test = pd.DataFrame(
