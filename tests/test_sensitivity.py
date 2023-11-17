@@ -36,7 +36,9 @@ class TestSensitivity:
 
         sa_analysis = SAnalysis(parameters_list=PARAMETER_LIST, method=Method.SOBOL)
 
-        sa_analysis.draw_sample(1, sampling_kwargs={"calc_second_order": True})
+        sa_analysis.draw_sample(
+            1, sampling_kwargs={"calc_second_order": True, "seed": 42}
+        )
 
         sa_analysis.evaluate(model, SIMULATION_OPTIONS, n_cpu=4)
 
@@ -46,7 +48,7 @@ class TestSensitivity:
 
         np.testing.assert_almost_equal(
             sa_analysis.sensitivity_results["S1"],
-            np.array([0.26933607, 1.255609, -0.81162613]),
+            np.array([1.022, 2.229, -1.412]),
             decimal=3,
         )
 
