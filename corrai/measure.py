@@ -24,6 +24,8 @@ class Transformer(str, Enum):
     APPLY_EXPRESSION = "APPLY_EXPRESSION"
     TIME_GRADIENT = "TIME_GRADIENT"
     FILL_NA = "FILL_NA"
+    BFILL = "BFILL"
+    FFILL = "FFILL"
     RESAMPLE = "RESAMPLE"
     INTERPOLATE = "INTERPOLATE"
     GAUSSIAN_FILTER = "GAUSSIAN_FILTER"
@@ -38,6 +40,8 @@ TRANSFORMER_MAP = {
     "APPLY_EXPRESSION": ct.PdApplyExpression,
     "TIME_GRADIENT": ct.PdTimeGradient,
     "FILL_NA": ct.PdFillNa,
+    "BFILL": ct.PdBfill,
+    "FFILL": ct.PdFfill,
     "RESAMPLE": ct.PdResampler,
     "INTERPOLATE": ct.PdInterpolate,
     "GAUSSIAN_FILTER": ct.PdGaussianFilter1D,

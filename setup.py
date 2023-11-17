@@ -30,9 +30,9 @@ setup(
     ],
     python_requires=">=3.10",
     install_requires=[
-        "numpy>=1.21.3",
+        "numpy>=1.22.0",
         "pandas>=1.3.4",
-        "scipy>=1.7.2",
+        "scipy>=1.9.1",
         "matplotlib>=3.5.1",
         "plotly>=5.3.1",
         "scikit-learn>=1.2.2",

@@ -57,8 +57,8 @@ def my_measure():
         common_transformations={
             "COMMON": [
                 [Transformer.INTERPOLATE, {"method": "linear"}],
-                [Transformer.FILL_NA, {"method": "bfill"}],
-                [Transformer.FILL_NA, {"method": "ffill"}],
+                [Transformer.BFILL, {}],
+                [Transformer.FFILL, {}],
             ]
         },
         resampler_agg_methods={"col_2": AggMethod.SUM},

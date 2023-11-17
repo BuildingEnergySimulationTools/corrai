@@ -80,6 +80,7 @@ def apply_transformation(x, function):
     elif isinstance(x, pd.Series):
         return x.apply(function)
     elif isinstance(x, pd.DataFrame):
+        # applymap will be deprecated in future version
         return x.applymap(function)
 
     return function(x)

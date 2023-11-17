@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from SALib.analyze import fast, morris, sobol, rbd_fast
-from SALib.sample import fast_sampler, saltelli, latin
+from SALib.sample import sobol as sobol_sampler
+from SALib.sample import fast_sampler, latin
 from SALib.sample import morris as morris_sampler
 
 from corrai.base.parameter import Parameter
@@ -28,7 +29,7 @@ METHOD_SAMPLER_DICT = {
     Method.MORRIS: {"method": morris, "sampling": morris_sampler},
     Method.SOBOL: {
         "method": sobol,
-        "sampling": saltelli,
+        "sampling": sobol_sampler,
     },
     Method.RDB_FAST: {
         "method": rbd_fast,

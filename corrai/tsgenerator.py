@@ -420,7 +420,7 @@ class DomesticWaterConsumption:
         # Concatenation of coefficients and their daily sum
         self.get_coefficient_calc_from_period(start, end)
         df_co = pd.concat([self.df_coefficient, self.df_daily_sum], axis=1)
-        df_co.fillna(method="ffill", inplace=True)
+        df_co.ffill(inplace=True)
         df_co = df_co.dropna(axis=0)
 
         # Calculation of the number of showers per hour
@@ -792,7 +792,7 @@ class DomesticWaterConsumption:
 
         coef = self.get_coefficient_calc_from_period(start, end)
         coefficient = coef.mask(coef["coef"] < 0.5)
-        coefficient = coefficient.resample("T").fillna("ffill").fillna(float("0"))
+        coefficient = coefficient.resample("T").ffill().fillna(float("0"))
 
         list_washbasin = []
         list_sinkcook = []
@@ -995,8 +995,8 @@ class Scheduler:
 
         df = pd.concat(day_list)
         df.sort_index(inplace=True)
-        df = df.fillna(method="bfill")
+        df = df.bfill()
         df = df.resample("T").bfill()
         df = df.shift(-1)
-        df = df.fillna(method="ffill")
+        df = df.ffill()
         return df.resample(freq).mean()
