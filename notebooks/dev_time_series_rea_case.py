@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from sklearn.preprocessing import StandardScaler
+
 
 # %%
 def plot_forcast(x, y_ref, model, batch_nb=42):
@@ -59,18 +61,6 @@ def plot_forcast(x, y_ref, model, batch_nb=42):
     plt.show()
 
 
-def generate_time_series(batch_size, n_steps):
-    freq1, freq2, offsets1, offsets2 = np.random.rand(4, batch_size, 1)
-    time = np.linspace(0, 1, n_steps)
-    series = 0.5 * np.sin((time - offsets1) * (freq1 * 10 + 10))
-    series += 0.2 * np.sin((time - offsets2) * (freq2 * 20 + 20))
-    series += 0.1 * (np.random.rand(batch_size, n_steps) - 0.5)
-    return series[..., np.newaxis].astype(np.float32)
-
-
-MAX_EPOCHS = 20
-
-
 # %%
 def last_timestep_mse(y_true, y_pred):
     return keras.metrics.mean_squared_error(y_true[:, -1], y_pred[:, -1])
@@ -103,135 +93,156 @@ def compile_and_fit(model, x, y, x_val, y_val, max_epoch=20, patience=2, metrics
 
 
 # %%
-SEQUENCE_lENGTH = 10
+N_STEP = 24 * 4  # 12h
+N_STEP_FUTURE = 6 * 4  # 6h
 TRAIN_RATIO = 0.8
 VAL_RATIO = 0.1
+MAX_EPOCHS = 20
 
 
 # %%
 if __name__ == "__main__":
     # %% DATA PREPARATION
+
+    # COLLER LES BOUT ENSEMBLE
+    # INDIQUER LE JOUR COURANT
+    # INDIQUER DEMAIN
+
     data = pd.read_csv(
-        Path(r"C:\Users\bdurandestebe\PycharmProjects\corrai\notebooks\conso_30T.csv")
+        Path(
+            r"C:\Users\bdurandestebe\PycharmProjects\corrai\notebooks\ELN-CPT-ELE-GEN-TD1.1-ELNATH_15T_SINES.csv"
+        )
     )
+
+    scaler = StandardScaler()
+    data = scaler.fit_transform(data)
 
     data = data.to_numpy()[:, 1]
     data = data.astype(np.float32)
+    data = (data - data.mean()) / data.std()
+
+    # data = np.arange(100)
 
     ts_data = keras.utils.timeseries_dataset_from_array(
-        data=data, targets=None, sequence_length=SEQUENCE_lENGTH, shuffle=True
+        data=data, targets=None, sequence_length=N_STEP + N_STEP_FUTURE, shuffle=True
     )
 
-    stacked = np.empty([0, SEQUENCE_lENGTH])
+    stacked = np.empty([0, N_STEP + N_STEP_FUTURE])
     for batch in ts_data:
         stacked = np.vstack((stacked, batch))
 
+    stacked = stacked[..., np.newaxis]
+
     size = len(stacked)
-    train = stacked[0 : int(size * TRAIN_RATIO), :]
-    val = stacked[int(size * TRAIN_RATIO) : int(size * (TRAIN_RATIO + VAL_RATIO)), :]
-    test = stacked[int(size * (TRAIN_RATIO + VAL_RATIO)) :, :]
-    #
-    # # %%
-    # deep_rnn = keras.models.Sequential(
-    #     [
-    #         keras.layers.SimpleRNN(20, return_sequences=True, input_shape=[None, 1]),
-    #         keras.layers.SimpleRNN(20),
-    #         keras.layers.Dense(10),
-    #     ]
-    # )
-    #
-    # compile_and_fit(deep_rnn, x_train, y_train, x_valid, y_valid)
-    # res_metrics["deep_rnn"] = deep_rnn.evaluate(x_valid, y_valid)
-    #
-    # # %%
-    # plot_forcast(x_train, y_train, deep_rnn, batch_nb=35)
-    #
-    # # %% New combination of y
-    # y = np.empty((10000, n_steps, 10))
-    # for step_ahead in range(1, 10 + 1):
-    #     y[:, :, step_ahead - 1] = series[:, step_ahead : step_ahead + n_steps, 0]
-    #
-    # y_train = y[:7000]
-    # y_valid = y[7000:9000]
-    # y_test = y[9000:]
-    #
-    # # %%
-    # improved_deep_rnn = keras.models.Sequential(
-    #     [
-    #         keras.layers.SimpleRNN(20, return_sequences=True, input_shape=[None, 1]),
-    #         keras.layers.SimpleRNN(20, return_sequences=True),
-    #         keras.layers.TimeDistributed(keras.layers.Dense(10)),
-    #     ]
-    # )
-    #
-    # compile_and_fit(
-    #     improved_deep_rnn,
-    #     x_train,
-    #     y_train,
-    #     x_valid,
-    #     $y_valid,
-    #     metrics=last_timestep_mse
-    # )
-    # res_metrics["improved_deep_rnn"] = improved_deep_rnn.evaluate(x_valid, y_valid)
-    # # %%
-    # plot_forcast(x_train, y_train, improved_deep_rnn, batch_nb=22)
-    #
-    # # %%
-    # conv_gru = keras.models.Sequential(
-    #     [
-    #         keras.layers.Conv1D(
-    #             filters=20,
-    #             kernel_size=4,
-    #             strides=2,
-    #             padding="valid",
-    #             input_shape=[None, 1],
-    #         ),
-    #         keras.layers.GRU(20, return_sequences=True),
-    #         keras.layers.GRU(20, return_sequences=True),
-    #         keras.layers.TimeDistributed(keras.layers.Dense(10)),
-    #     ]
-    # )
-    #
-    # # %%
-    # compile_and_fit(
-    #     conv_gru,
-    #     x_train,
-    #     y_train[:, 3::2],
-    #     x_valid,
-    #     y_valid[:, 3::2],
-    #     metrics=last_timestep_mse,
-    # )
-    #
-    # # %%
-    # res_metrics["improved_deep_rnn"] = conv_gru.evaluate(x_valid, y_valid[:, 3::2])
-    # # %%
-    # plot_forcast(x_valid, y_valid[:, 3::2], conv_gru, batch_nb=22)
-    #
-    # # %%
-    # wave_net = keras.models.Sequential()
-    # wave_net.add(keras.layers.InputLayer(input_shape=[None, 1]))
-    #
-    # for rate in (1, 2, 4, 8) * 2:
-    #     wave_net.add(
-    #         keras.layers.Conv1D(
-    #             filters=20,
-    #             kernel_size=2,
-    #             padding="causal",
-    #             activation="relu",
-    #             dilation_rate=rate,
-    #         )
-    #     )
-    #
-    # wave_net.add(keras.layers.Conv1D(filters=10, kernel_size=1))
-    #
-    # compile_and_fit(
-    #     wave_net, x_train, y_train, x_valid, y_valid, metrics=last_timestep_mse
-    # )
-    # # %%
-    # res_metrics["wave_net"] = wave_net.evaluate(x_valid, y_valid)
-    #
-    # # %%
-    # plot_forcast(x_valid, y_valid, wave_net, batch_nb=1)
-    #
-    # # %%
-    # wave_net.predict(x_train).shape
+    train_idx = int(size * TRAIN_RATIO)
+    val_idx = int(size * (TRAIN_RATIO + VAL_RATIO))
+
+    x_train, y_train = (
+        stacked[:train_idx, :N_STEP],
+        stacked[:train_idx, -N_STEP_FUTURE:, 0],
+    )
+    x_valid, y_valid = (
+        stacked[train_idx:val_idx, :N_STEP],
+        stacked[train_idx:val_idx, -N_STEP_FUTURE:, 0],
+    )
+    x_test, y_test = stacked[val_idx:, :N_STEP], stacked[val_idx:, -N_STEP_FUTURE:, 0]
+
+    res_metrics = {}
+
+    # %%
+    linear = keras.models.Sequential(
+        [
+            keras.layers.Flatten(input_shape=[N_STEP, 1]),
+            keras.layers.Dense(N_STEP_FUTURE),
+        ]
+    )
+
+    compile_and_fit(linear, x_train, y_train, x_valid, y_valid)
+
+    res_metrics["linear"] = linear.evaluate(x_valid, y_valid)
+
+    plot_forcast(x_test, y_test, linear, batch_nb=6)
+
+    # %%
+    simple_rn = keras.models.Sequential(
+        [
+            keras.layers.Flatten(input_shape=[N_STEP, 1]),
+            keras.layers.Dense(units=N_STEP),
+            keras.layers.Dense(units=N_STEP),
+            keras.layers.Dense(N_STEP_FUTURE),
+        ]
+    )
+
+    compile_and_fit(simple_rn, x_train, y_train, x_valid, y_valid)
+    res_metrics["simple_rn"] = simple_rn.evaluate(x_valid, y_valid)
+
+    plot_forcast(x_test, y_test, simple_rn, batch_nb=6)
+
+    # %%
+    deep_rnn = keras.models.Sequential(
+        [
+            keras.layers.SimpleRNN(40, return_sequences=True, input_shape=[None, 1]),
+            keras.layers.SimpleRNN(40),
+            keras.layers.Dense(N_STEP_FUTURE),
+        ]
+    )
+
+    compile_and_fit(deep_rnn, x_train, y_train, x_valid, y_valid)
+    res_metrics["deep_rnn"] = deep_rnn.evaluate(x_valid, y_valid)
+
+    # %%
+    plot_forcast(x_test, y_test, deep_rnn, batch_nb=6)
+
+    # %% New combination of y
+    y = np.empty((stacked.shape[0], N_STEP, N_STEP_FUTURE))
+    for step_ahead in range(1, N_STEP_FUTURE + 1):
+        y[:, :, step_ahead - 1] = stacked[:, step_ahead : step_ahead + N_STEP, 0]
+
+    y_train = y[:train_idx]
+    y_valid = y[train_idx:val_idx]
+    y_test = y[val_idx:]
+
+    # %%
+    improved_deep_rnn = keras.models.Sequential(
+        [
+            keras.layers.SimpleRNN(40, return_sequences=True, input_shape=[None, 1]),
+            keras.layers.SimpleRNN(40, return_sequences=True),
+            keras.layers.TimeDistributed(keras.layers.Dense(N_STEP_FUTURE)),
+        ]
+    )
+
+    compile_and_fit(
+        improved_deep_rnn, x_train, y_train, x_valid, y_valid, metrics=last_timestep_mse
+    )
+    res_metrics["improved_deep_rnn"] = improved_deep_rnn.evaluate(x_valid, y_valid)
+
+    # %%
+    plot_forcast(x_test, y_test, deep_rnn, batch_nb=6)
+
+    # %%
+    wave_net = keras.models.Sequential()
+    wave_net.add(keras.layers.InputLayer(input_shape=[None, 1]))
+
+    for rate in (1, 2, 4, 8) * 2:
+        wave_net.add(
+            keras.layers.Conv1D(
+                filters=40,
+                kernel_size=2,
+                padding="causal",
+                activation="relu",
+                dilation_rate=rate,
+            )
+        )
+
+    wave_net.add(keras.layers.Conv1D(filters=N_STEP_FUTURE, kernel_size=1))
+
+    compile_and_fit(
+        wave_net, x_train, y_train, x_valid, y_valid, metrics=last_timestep_mse
+    )
+
+    res_metrics["wave_net"] = wave_net.evaluate(x_valid, y_valid)
+
+    # %%
+    plot_forcast(x_test, y_test, wave_net, batch_nb=10)
+
+    # %%
