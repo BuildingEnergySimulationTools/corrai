@@ -23,6 +23,7 @@ from corrai.transformers import (
     PdResampler,
     PdSkTransformer,
     PdTimeGradient,
+    PdAddSineWave,
 )
 
 
@@ -332,6 +333,48 @@ class TestCustomTransformers:
         trans.drop_columns = False
 
         pd.testing.assert_frame_equal(trans.fit_transform(x_in), ref)
+
+    def test_pd_add_sine_wave(self):
+        test_df = pd.DataFrame(
+            data=np.arange(24),
+            index=pd.date_range("2009-01-01 00:00:00", freq="H", periods=24),
+            columns=["feat_1"],
+        )
+
+        signal = PdAddSineWave(frequency=1 / (24 * 3600))
+
+        res = signal.fit_transform(test_df)
+
+        test_df["Sine_f_1.1574074074074073e-05"] = [
+            0.00000,
+            0.25882,
+            0.50000,
+            0.70711,
+            0.86603,
+            0.96593,
+            1.00000,
+            0.96593,
+            0.86603,
+            0.70711,
+            0.50000,
+            0.25882,
+            0.00000,
+            -0.25882,
+            -0.50000,
+            -0.70711,
+            -0.86603,
+            -0.96593,
+            -1.00000,
+            -0.96593,
+            -0.86603,
+            -0.70711,
+            -0.50000,
+            -0.25882,
+        ]
+
+        pd.testing.assert_frame_equal(res, test_df)
+
+        assert True
 
     def test_pd_time_window(self):
         test_timeseries = pd.DataFrame(

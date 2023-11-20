@@ -29,6 +29,7 @@ class Transformer(str, Enum):
     RESAMPLE = "RESAMPLE"
     INTERPOLATE = "INTERPOLATE"
     GAUSSIAN_FILTER = "GAUSSIAN_FILTER"
+    ADD_SINE_WAVE = "ADD_SINE_WAVE"
 
 
 TRANSFORMER_MAP = {
@@ -45,6 +46,7 @@ TRANSFORMER_MAP = {
     "RESAMPLE": ct.PdResampler,
     "INTERPOLATE": ct.PdInterpolate,
     "GAUSSIAN_FILTER": ct.PdGaussianFilter1D,
+    "ADD_SINE_WAVE": ct.PdAddSineWave,
 }
 
 

@@ -1010,6 +1010,66 @@ class PdCombineColumns(PdTransformerBC):
         return X_transformed[col_to_return]
 
 
+class PdAddSineWave(PdTransformerBC):
+    """
+    A pandas transformer that adds a new column with a sine signal.
+
+    Parameters:
+    -----------
+    frequency : float | int
+        The frequency of the sine signal (Hz).
+    phi : float | int, optional
+        Phase shift of the sine signal (default is 0.0).
+    amplitude : float | int, optional
+        Amplitude of the sine signal (default is 1.0).
+    feature_marker : str, optional
+        The name of the new feature column (default is f"Sine_f_{frequency}").
+
+    Methods:
+    --------
+    fit(X, y=None)
+        Fit method (does nothing, present for compatibility).
+    transform(X)
+        Transform method that adds a sine signal column to the input DataFrame.
+
+    Returns:
+    --------
+    X : pd.DataFrame
+        Transformed DataFrame with the new sine signal column.
+    """
+
+    def __init__(
+        self,
+        frequency: float | int,
+        phi: float | int = None,
+        amplitude: float | int = None,
+        feature_marker: str = None,
+    ):
+        super().__init__()
+        self.frequency = frequency
+        if feature_marker is None:
+            self.feature_marker = f"Sine_f_{frequency}"
+        if phi is None:
+            self.phi = 0.0
+
+        if amplitude is None:
+            self.amplitude = 1.0
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        new_index = X.index.to_frame().diff().squeeze()
+        sec_dt = [element.total_seconds() for element in new_index]
+        increasing_seconds = pd.Series(sec_dt).cumsum().to_numpy()
+        increasing_seconds[0] = 0
+        X[self.feature_marker] = self.amplitude * np.sin(
+            2 * np.pi * self.frequency * increasing_seconds + self.phi
+        )
+
+        return X
+
+
 class PdTimeWindow(PdTransformerBC):
     def __init__(
         self,
