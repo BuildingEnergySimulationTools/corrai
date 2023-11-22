@@ -3,10 +3,8 @@ from abc import ABC, abstractmethod
 from functools import partial
 
 import keras
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import tensorflow as tf
 from scipy.ndimage import gaussian_filter1d
 from sklearn.base import TransformerMixin, BaseEstimator
 
@@ -1090,47 +1088,49 @@ class TimeSeriesSampler(TransformerMixin, BaseEstimator):
         end_index: int = None,
     ):
         """
-    A transformer that wraps keras timeseries_dataset_from_array to generate batches
-    of sequence from a multi variate time series and combine it in a single numpy array.
-    The input shall be a Pandas DataFrame or a 2D numpy array of shape
-    [time steps, dimensionality].
-    The output will be a 3D numpy array of shape
-    [batche size, time steps, dimensionality].
+        A transformer that wraps keras timeseries_dataset_from_array to generate batches
+        of sequence from a multi variate time series and combine it in a single
+        numpy array.
+        The input shall be a Pandas DataFrame or a 2D numpy array of shape
+        [time steps, dimensionality].
+        The output will be a 3D numpy array of shape
+        [batche size, time steps, dimensionality].
 
 
-    Parameters:
-    :param sequence_length: Length of the output sequences
-        (in number of timesteps).
-    :param sequence_stride: Period between successive output sequences. For stride `s`,
-        output samples would start at index `data[i]`, `data[i + s]`,
-        `data[i + 2 * s]`, etc.
-    :param sampling_rate: Period between successive individual timesteps within
-        sequences. For rate `r`, timesteps
-        `data[i], data[i + r], ... data[i + sequence_length]`
-        are used for creating a sample sequence.
-    :param shuffle: Whether to shuffle output samples, or instead draw them in
-        chronological order.
-    :param seed: Seed for reproducibility. If None, no seed is used. Default is None.
-    :param start_index: The starting index of the time series data to consider.
-        If None, the data will start from the beginning. Default is None.
-    :param end_index: The ending index of the time series data to consider.
-        If None, the data will end at the last index. Default is None.
+        Parameters:
+        :param sequence_length: Length of the output sequences
+            (in number of timesteps).
+        :param sequence_stride: Period between successive output sequences.
+            For stride `s`, output samples would start at
+            index `data[i]`, `data[i + s]`, `data[i + 2 * s]`, etc.
+        :param sampling_rate: Period between successive individual timesteps within
+            sequences. For rate `r`, timesteps
+            `data[i], data[i + r], ... data[i + sequence_length]`
+            are used for creating a sample sequence.
+        :param shuffle: Whether to shuffle output samples, or instead draw them in
+            chronological order.
+        :param seed: Seed for reproducibility. If None, no seed is used.
+            Default is None.
+        :param start_index: The starting index of the time series data to consider.
+            If None, the data will start from the beginning. Default is None.
+        :param end_index: The ending index of the time series data to consider.
+            If None, the data will end at the last index. Default is None.
 
-    Example from keras documentation
-    https://www.tensorflow.org/api_docs/python/tf/keras/utils/timeseries_dataset_from_array:
+        Example from keras documentation
+        https://www.tensorflow.org/api_docs/python/tf/keras/utils/timeseries_dataset_from_array:
 
-    Consider indices `[0, 1, ... 98]`.
-    With `sequence_length=10,  sampling_rate=2, sequence_stride=3`,
-    `shuffle=False`, the dataset will yield batches of sequences
-    composed of the following indices:
+        Consider indices `[0, 1, ... 98]`.
+        With `sequence_length=10,  sampling_rate=2, sequence_stride=3`,
+        `shuffle=False`, the dataset will yield batches of sequences
+        composed of the following indices:
 
-    ```
-    First sequence:  [0  2  4  6  8 10 12 14 16 18]
-    Second sequence: [3  5  7  9 11 13 15 17 19 21]
-    Third sequence:  [6  8 10 12 14 16 18 20 22 24]
-    ...
-    Last sequence:   [78 80 82 84 86 88 90 92 94 96]
-    ```
+        ```
+        First sequence:  [0  2  4  6  8 10 12 14 16 18]
+        Second sequence: [3  5  7  9 11 13 15 17 19 21]
+        Third sequence:  [6  8 10 12 14 16 18 20 22 24]
+        ...
+        Last sequence:   [78 80 82 84 86 88 90 92 94 96]
+        ```
 
         """
         self.sequence_length = sequence_length
