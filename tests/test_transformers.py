@@ -3,7 +3,6 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 from scipy.ndimage import gaussian_filter1d
-
 from sklearn.preprocessing import StandardScaler
 
 from corrai.transformers import (
@@ -24,6 +23,7 @@ from corrai.transformers import (
     PdSkTransformer,
     PdTimeGradient,
     PdAddSineWave,
+    TimeSeriesSampler,
 )
 
 
@@ -376,3 +376,16 @@ class TestCustomTransformers:
 
         assert True
 
+    def test_time_series_sampler(self):
+        ts = pd.DataFrame(
+            {"feat_1": np.arange(10), "feat_2": 10 * np.arange(10)},
+            index=pd.date_range("2009-01-01 00:00:00", freq="H", periods=10),
+        )
+
+        sampler = TimeSeriesSampler(sequence_length=4, shuffle=False)
+
+        res = sampler.fit_transform(ts)
+
+        np.testing.assert_array_equal(
+            res[0], np.array([[0.0, 0.0], [1.0, 10.0], [2.0, 20.0], [3.0, 30.0]])
+        )
