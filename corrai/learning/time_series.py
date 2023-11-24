@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 
 import keras
 import matplotlib.pyplot as plt
-import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin
 
 
@@ -158,6 +157,47 @@ class TsLinearModel(KerasModelSkBC):
         model = keras.models.Sequential(
             [
                 keras.layers.Flatten(input_shape=[X.shape[1] * X.shape[2], 1]),
+                keras.layers.Dense(y.shape[1]),
+            ]
+        )
+
+        X = X.reshape(X.shape[0], -1)
+        if x_val is not None:
+            x_val = x_val.reshape(x_val.shape[0], -1)
+
+        self._main_fit(model, X, y, x_val, y_val)
+
+    def predict(self, X):
+        X = X.reshape(X.shape[0], -1)
+        return self.model.predict(X)
+
+
+class TsDeepNN(KerasModelSkBC):
+    def __init__(
+        self,
+        loss=None,
+        optimizer=None,
+        max_epoch: int = 20,
+        patience: int = 2,
+        metrics=None,
+    ):
+        """
+        Initialize a time-series linear model using Keras
+        """
+        super().__init__(
+            loss=loss,
+            optimizer=optimizer,
+            max_epoch=max_epoch,
+            patience=patience,
+            metrics=metrics,
+        )
+
+    def fit(self, X, y, x_val=None, y_val=None):
+        model = keras.models.Sequential(
+            [
+                keras.layers.Flatten(input_shape=[X.shape[1] * X.shape[2], 1]),
+                keras.layers.Dense(units=X.shape[1]),
+                keras.layers.Dense(units=X.shape[1]),
                 keras.layers.Dense(y.shape[1]),
             ]
         )
