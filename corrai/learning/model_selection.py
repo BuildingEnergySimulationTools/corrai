@@ -1,9 +1,8 @@
 import enum
 
+import keras
 import numpy as np
 import pandas as pd
-import keras
-
 from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
@@ -160,6 +159,92 @@ def time_series_sampling(
         stacked = np.vstack((stacked, batch))
 
     return stacked
+
+
+def sequences_train_test_split(
+    data: np.ndarray = None,
+    targets_index: int = 0,
+    n_steps_history: int = 10,
+    n_steps_future: int = 2,
+    test_size: float = None,
+    train_size: float = None,
+    random_state: bool = None,
+    shuffle: bool = True,
+    stratify: bool = None,
+):
+    """
+    Splits a time sequences 3D array of shape [batch size, time steps, dimensionality]
+    based on test_size or train_size. Split the sequence array to isolate the target.
+    returns 4 array x_train, x_test, y_train, y_test
+    x arrays have shape [batch size, n_steps_history, dimensionality]
+    y arrays have shape [batch size, 1]
+
+    Parameters:
+    :param data: np.ndarray
+        The input time-series data, where each row represents a timestamp and each
+        column represents a feature.
+    :param targets_index: int | list
+        The index of the target variable(s) to be predicted.
+    :param n_steps_history: int
+        Number of historical steps to consider for each sequence.
+    :param n_steps_future: int
+        Number of future steps to predict for each sequence.
+    :param test_size: float
+        The proportion of the dataset to include in the test split.
+         If None, it is set to the complement of train_size.
+    :param train_size: float
+        The proportion of the dataset to include in the train split.
+        If None, it is set to the complement of test_size.
+    :param random_state: int | None
+        Seed for random number generation to ensure reproducibility.
+    :param shuffle: bool
+        Whether to shuffle the data before splitting.
+    :param stratify: bool
+        If True, the data is stratified based on the target variable to maintain
+        class distribution in train and test sets.
+
+    Returns:
+    :return: tuple
+        A tuple containing x_train, x_test, y_train, and y_test, where:
+        - x_train: np.ndarray
+        - x_test: np.ndarray
+        - y_train: np.ndarray
+        - y_test: np.ndarray
+
+    Raises:
+    :raises ValueError:
+        If the sum of n_steps_history and n_steps_future does not match the sample
+        time step dimension of the input data.
+
+    """
+    if data.shape[1] != n_steps_future + n_steps_history:
+        raise ValueError(
+            f"The entered values of n_steps_future = {n_steps_future} and "
+            f"n_steps_history = {n_steps_history} do not match the sample time step "
+            f"dimension of {data.shape[1]}. sample time step dimentsion muste be "
+            f"equal to n_steps_future + n_steps_history"
+        )
+
+    data_train, data_test = train_test_split(
+        data,
+        test_size=test_size,
+        train_size=train_size,
+        random_state=random_state,
+        shuffle=shuffle,
+        stratify=stratify,
+    )
+
+    x_train, y_train = (
+        data_train[:, :n_steps_history, :],
+        data_train[:, -n_steps_future:, targets_index],
+    )
+
+    x_test, y_test = (
+        data_test[:, :n_steps_history, :],
+        data_test[:, -n_steps_future:, targets_index],
+    )
+
+    return x_train, x_test, y_train, y_test
 
 
 class ModelTrainer:
