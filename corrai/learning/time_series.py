@@ -68,6 +68,31 @@ class KerasModelSkBC(ABC, BaseEstimator, RegressorMixin):
         patience: int = 2,
         metrics=None,
     ):
+        """
+        Initialize a Keras-based scikit-learn compatible regressor.
+
+        Parameters:
+        :param loss: str | keras.losses.Loss | None
+            The loss function to be optimized during training. If None, defaults
+            to Mean Squared Error.
+        :param optimizer: str | keras.optimizers.Optimizer | None
+            The optimizer to use during training. If None, defaults to Adam optimizer.
+        :param max_epoch: int
+            The maximum number of training epochs. Default is 20.
+        :param patience: int
+            Number of epochs with no improvement after which training will be stopped.
+            Default is 2.
+        :param metrics: list | None
+            List of evaluation metrics to be monitored during training. Default is None.
+
+        Attributes:
+        - history: keras.callbacks.History
+            The training history obtained during fitting.
+        - _is_fitted: bool
+            A flag indicating whether the model has been fitted or not.
+        - model: keras.models.Model
+            The underlying Keras model.
+        """
         self.max_epoch = max_epoch
         self.patience = patience
         self.metrics = metrics
