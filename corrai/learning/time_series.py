@@ -2,7 +2,40 @@ from abc import ABC, abstractmethod
 
 import keras
 import matplotlib.pyplot as plt
+import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin
+
+
+def reshape_target_sequence_to_sequence(X, y, X_idx_target=0):
+    """
+    Reshapes the target sequence and concatenates it with the input sequence along
+    the time axis.
+    This function shall be used to turn a sequence to vector ML model to a sequence
+    to sequence model.
+    Code is adapted from the book "Hands-On Machine Learning with Scikit-Learn,
+    Keras & TensorFlow" A. Géron, O'Reilly
+
+    Parameters:
+    :param X (numpy.ndarray): Input sequence array with shape
+        [batch_sqize, n_step_history, features].
+    :param y (numpy.ndarray): Target sequence array with shape
+        [batch_size, n_step_future].
+    :param X_idx_target (int): Index of the target variable in the input sequence
+        (default is 0).
+
+    Returns:
+    numpy.ndarray: Reshaped target sequence with shape
+        [batch_size, n_step_history, n_step_future].
+    """
+    y_to_concat = y[:, :, np.newaxis]
+    targets_in_X = X[:, :, X_idx_target : X_idx_target + 1]
+    stacked = np.concatenate((targets_in_X, y_to_concat), axis=1)
+
+    y_ss = np.empty((stacked.shape[0], X.shape[1], y.shape[1]))
+    for step_ahead in range(1, y.shape[1] + 1):
+        y_ss[:, :, step_ahead - 1] = stacked[:, step_ahead : step_ahead + X.shape[1], 0]
+
+    return y_ss
 
 
 def plot_sequence_forcast(X, y_ref, model, X_target_index=0, batch_nb=0):
@@ -213,11 +246,13 @@ class TsDeepNN(KerasModelSkBC):
         return self.model.predict(X)
 
 
-class SimpleRNN(KerasModelSkBC):
+class DeepRNN(KerasModelSkBC):
     def __init__(
         self,
-        reshape_ss: bool = True,
         n_units: int = None,
+        cells: str = "LSTM",
+        hidden_layers_size: int = 1,
+        reshape_sequence_to_sequence: bool = True,
         loss=None,
         optimizer=None,
         max_epoch: int = 20,
@@ -235,10 +270,22 @@ class SimpleRNN(KerasModelSkBC):
             metrics=metrics,
         )
 
+        self.cell_map = {
+            "LSTM": keras.layers.LSTMCell,
+            "GRU": keras.layers.GRUCell,
+            "RNN": keras.layers.SimpleRNNCell,
+        }
+
         self.n_units = n_units
-        self.reshape_ss = reshape_ss
+        self.reshape_sequence_to_sequence = reshape_sequence_to_sequence
 
     def fit(self, X, y, x_val=None, y_val=None):
+        if self.reshape_sequence_to_sequence:
+            pass
+
+        model = keras.models.Sequential()
+        model.add()
+
         model = keras.models.Sequential(
             [
                 keras.layers.SimpleRNN(
