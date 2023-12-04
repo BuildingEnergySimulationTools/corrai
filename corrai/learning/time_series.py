@@ -276,15 +276,40 @@ class DeepRNN(KerasModelSkBC):
             "RNN": keras.layers.SimpleRNNCell,
         }
 
+        self.cells = cells
+        self.hidden_layers_size = hidden_layers_size
         self.n_units = n_units
         self.reshape_sequence_to_sequence = reshape_sequence_to_sequence
 
-    def fit(self, X, y, x_val=None, y_val=None):
+    def fit(self, X, y, x_val=None, y_val=None, idx_target: int = 0):
         if self.reshape_sequence_to_sequence:
-            pass
+            y = reshape_target_sequence_to_sequence(X, y, idx_target)
+            if y_val is not None and x_val is not None:
+                y_val = reshape_target_sequence_to_sequence(x_val, y_val, idx_target)
 
         model = keras.models.Sequential()
-        model.add()
+        # Input layer
+        model.add(
+            keras.layers.RNN(
+                cell=self.cell_map[self.cells](self.n_units),
+                return_sequences=True,
+                input_shape=[None, X.shape[2]],
+            )
+        )
+
+        # Hidden layers
+        for layers in range(self.hidden_layers_size):
+            model.add(
+                keras.layers.RNN(
+                    cell=self.cell_map[self.cells](self.n_units), return_sequences=True
+                )
+            )
+
+        # Output layer
+        if self.reshape_sequence_to_sequence:
+            model.add(keras.layers.TimeDistributed(keras.layers.Dense(y.shape[1])))
+        else:
+            model.add(keras.layers.Dense(y.shape[1]))
 
         model = keras.models.Sequential(
             [
@@ -296,12 +321,7 @@ class DeepRNN(KerasModelSkBC):
             ]
         )
 
-        X = X.reshape(X.shape[0], -1)
-        if x_val is not None:
-            x_val = x_val.reshape(x_val.shape[0], -1)
-
         self._main_fit(model, X, y, x_val, y_val)
 
     def predict(self, X):
-        X = X.reshape(X.shape[0], -1)
         return self.model.predict(X)
