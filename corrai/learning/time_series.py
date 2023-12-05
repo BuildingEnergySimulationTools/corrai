@@ -209,6 +209,7 @@ class TsLinearModel(KerasModelSkBC):
 class TsDeepNN(KerasModelSkBC):
     def __init__(
         self,
+        hidden_layers_size=1,
         loss=None,
         optimizer=None,
         max_epoch: int = 20,
@@ -226,15 +227,25 @@ class TsDeepNN(KerasModelSkBC):
             metrics=metrics,
         )
 
+        self.hidden_layers_size = hidden_layers_size
+
+    def evaluate(self, x, y, **kwargs):
+        check_is_fitted(self)
+        x = x.reshape(x.shape[0], -1)
+        return self.model.evaluate(x, y, **kwargs)
+
     def fit(self, X, y, x_val=None, y_val=None):
-        model = keras.models.Sequential(
-            [
-                keras.layers.Flatten(input_shape=[X.shape[1] * X.shape[2], 1]),
-                keras.layers.Dense(units=X.shape[1]),
-                keras.layers.Dense(units=X.shape[1]),
-                keras.layers.Dense(y.shape[1]),
-            ]
-        )
+        model = keras.models.Sequential()
+
+        # Input layer
+        model.add(keras.layers.Flatten(input_shape=[X.shape[1] * X.shape[2], 1]))
+
+        # Hidden layers
+        for _ in range(self.hidden_layers_size):
+            model.add(keras.layers.Dense(units=X.shape[1]))
+
+        # Output layer
+        model.add(keras.layers.Dense(y.shape[1]))
 
         X = X.reshape(X.shape[0], -1)
         if x_val is not None:
@@ -243,6 +254,7 @@ class TsDeepNN(KerasModelSkBC):
         self._main_fit(model, X, y, x_val, y_val)
 
     def predict(self, X):
+        check_is_fitted(self)
         X = X.reshape(X.shape[0], -1)
         return self.model.predict(X)
 
@@ -308,7 +320,7 @@ class DeepRNN(KerasModelSkBC):
         )
 
         # Hidden layers
-        for layers in range(self.hidden_layers_size):
+        for _ in range(self.hidden_layers_size):
             model.add(
                 keras.layers.RNN(
                     cell=self.cell_map[self.cells](self.n_units),
