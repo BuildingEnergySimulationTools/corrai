@@ -258,7 +258,7 @@ class DeepRNN(KerasModelSkBC):
         self.n_units = n_units
         self.reshape_sequence_to_sequence = reshape_sequence_to_sequence
 
-    def evaluate(self, X, y, idx_target, **kwargs):
+    def evaluate(self, X, y, idx_target=0, **kwargs):
         check_is_fitted(self)
         if self.reshape_sequence_to_sequence:
             y = reshape_target_sequence_to_sequence(X, y, idx_target)
