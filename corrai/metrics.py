@@ -1,4 +1,5 @@
 import numpy as np
+import keras
 from sklearn.utils import check_consistent_length
 from sklearn.metrics._regression import _check_reg_targets
 
@@ -40,3 +41,15 @@ def cv_rmse(y_pred, y_true):
         * np.sqrt(np.sum((y_true - y_pred) ** 2) / (y_true.shape[0] - 1))
         * 100
     )
+
+
+def last_time_step_rmse(y_true, y_pred):
+    """
+    For sequence to sequence time forcasting models,
+    returns the error on the last sequence.
+
+    :param y_true: nd.array, with dimension []
+    :param y_pred:
+    :return:
+    """
+    return keras.metrics.mean_squared_error(y_true[:, -1], y_pred[:, -1])
