@@ -4,6 +4,7 @@ import keras
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin
+from sklearn.utils.validation import check_is_fitted
 
 
 def reshape_target_sequence_to_sequence(X, y, X_idx_target=0):
@@ -281,8 +282,17 @@ class DeepRNN(KerasModelSkBC):
         self.n_units = n_units
         self.reshape_sequence_to_sequence = reshape_sequence_to_sequence
 
-    def fit(self, X, y, x_val=None, y_val=None, idx_target: int = 0):
+    def evaluate(self, X, y, idx_target, **kwargs):
+        check_is_fitted(self)
         if self.reshape_sequence_to_sequence:
+            y = reshape_target_sequence_to_sequence(X, y, idx_target)
+
+        return self.model.evaluate(X, y, **kwargs)
+
+    def fit(self, X, y, x_val=None, y_val=None, idx_target: int = 0):
+        hidden_return_sequence = False
+        if self.reshape_sequence_to_sequence:
+            hidden_return_sequence = True
             y = reshape_target_sequence_to_sequence(X, y, idx_target)
             if y_val is not None and x_val is not None:
                 y_val = reshape_target_sequence_to_sequence(x_val, y_val, idx_target)
@@ -301,27 +311,23 @@ class DeepRNN(KerasModelSkBC):
         for layers in range(self.hidden_layers_size):
             model.add(
                 keras.layers.RNN(
-                    cell=self.cell_map[self.cells](self.n_units), return_sequences=True
+                    cell=self.cell_map[self.cells](self.n_units),
+                    return_sequences=hidden_return_sequence,
                 )
             )
 
         # Output layer
         if self.reshape_sequence_to_sequence:
-            model.add(keras.layers.TimeDistributed(keras.layers.Dense(y.shape[1])))
+            model.add(keras.layers.TimeDistributed(keras.layers.Dense(y.shape[2])))
         else:
             model.add(keras.layers.Dense(y.shape[1]))
 
-        model = keras.models.Sequential(
-            [
-                keras.layers.SimpleRNN(
-                    self.n_units, return_sequences=True, input_shape=[None, X.shape[2]]
-                ),
-                keras.layers.SimpleRNN(self.n_units, return_sequences=True),
-                keras.layers.TimeDistributed(keras.layers.Dense(y.shape[1])),
-            ]
-        )
-
+        # Fit
         self._main_fit(model, X, y, x_val, y_val)
 
     def predict(self, X):
-        return self.model.predict(X)
+        check_is_fitted(self)
+        if self.reshape_sequence_to_sequence:
+            return self.model.predict(X)[:, -1, :]
+        else:
+            return self.model.predict(X)
