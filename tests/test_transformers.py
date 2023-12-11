@@ -333,7 +333,7 @@ class TestCustomTransformers:
 
         pd.testing.assert_frame_equal(trans.fit_transform(x_in), ref)
 
-    def test_pd_add_sine_wave(self):
+    def test_pd_add_fourier_pairs(self):
         test_df = pd.DataFrame(
             data=np.arange(24),
             index=pd.date_range("2009-01-01 00:00:00", freq="H", periods=24),
@@ -400,4 +400,13 @@ class TestCustomTransformers:
 
         pd.testing.assert_frame_equal(res, test_df)
 
+        test_df_phi = pd.DataFrame(
+            data=np.arange(24),
+            index=pd.date_range("2009-01-01 06:00:00", freq="H", periods=24),
+            columns=["feat_1"],
+        )
+
+        res = signal.transform(test_df_phi)
+
+        assert res.iloc[0, 1] == 1.0
         assert True

@@ -1012,13 +1012,13 @@ class PdAddFourierPairs(PdTransformerBC):
     """
     A pandas transformer that adds a pair of new columns with sine and cosine
      signal of given frequency and lag.
+     Based on time series index, phase shift is computed from the beginning
+     of the year.
 
     Parameters:
     -----------
     frequency : float | int
         The frequency of the sine signal (Hz).
-    phi : float | int, optional
-        Phase shift of the sine signal (default is 0.0).
     amplitude : float | int, optional
         Amplitude of the sine signal (default is 1.0).
     feature_marker : str, optional
@@ -1040,16 +1040,10 @@ class PdAddFourierPairs(PdTransformerBC):
     def __init__(
         self,
         frequency: float | int,
-        phi: float | int = None,
         amplitude: float | int = None,
     ):
         super().__init__()
         self.frequency = frequency
-
-        if phi is None:
-            self.phi = 0.0
-        else:
-            self.phi = phi
 
         if amplitude is None:
             self.amplitude = 1.0
@@ -1060,15 +1054,20 @@ class PdAddFourierPairs(PdTransformerBC):
         return self
 
     def transform(self, X):
+        seconds_from_start_of_year = (
+            X.index[0] - pd.Timestamp(X.index[0].year, 1, 1)
+        ).total_seconds()
+        phi = 2 * np.pi * self.frequency * seconds_from_start_of_year
+
         new_index = X.index.to_frame().diff().squeeze()
         sec_dt = [element.total_seconds() for element in new_index]
         increasing_seconds = pd.Series(sec_dt).cumsum().to_numpy()
         increasing_seconds[0] = 0
         X[f"{self.frequency}_f_Sine"] = self.amplitude * np.sin(
-            2 * np.pi * self.frequency * increasing_seconds + self.phi
+            2 * np.pi * self.frequency * increasing_seconds + phi
         )
         X[f"{self.frequency}_f_Cosine"] = self.amplitude * np.cos(
-            2 * np.pi * self.frequency * increasing_seconds + self.phi
+            2 * np.pi * self.frequency * increasing_seconds + phi
         )
 
         return X
