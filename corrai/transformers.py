@@ -1008,9 +1008,10 @@ class PdCombineColumns(PdTransformerBC):
         return X_transformed[col_to_return]
 
 
-class PdAddSineWave(PdTransformerBC):
+class PdAddFourierPairs(PdTransformerBC):
     """
-    A pandas transformer that adds a new column with a sine signal.
+    A pandas transformer that adds a pair of new columns with sine and cosine
+     signal of given frequency and lag.
 
     Parameters:
     -----------
@@ -1041,14 +1042,9 @@ class PdAddSineWave(PdTransformerBC):
         frequency: float | int,
         phi: float | int = None,
         amplitude: float | int = None,
-        feature_marker: str = None,
     ):
         super().__init__()
         self.frequency = frequency
-        if feature_marker is None:
-            self.feature_marker = f"Sine_f_{frequency}"
-        else:
-            self.feature_marker = feature_marker
 
         if phi is None:
             self.phi = 0.0
@@ -1068,7 +1064,10 @@ class PdAddSineWave(PdTransformerBC):
         sec_dt = [element.total_seconds() for element in new_index]
         increasing_seconds = pd.Series(sec_dt).cumsum().to_numpy()
         increasing_seconds[0] = 0
-        X[self.feature_marker] = self.amplitude * np.sin(
+        X[f"{self.frequency}_f_Sine"] = self.amplitude * np.sin(
+            2 * np.pi * self.frequency * increasing_seconds + self.phi
+        )
+        X[f"{self.frequency}_f_Cosine"] = self.amplitude * np.cos(
             2 * np.pi * self.frequency * increasing_seconds + self.phi
         )
 

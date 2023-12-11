@@ -22,7 +22,7 @@ from corrai.transformers import (
     PdResampler,
     PdSkTransformer,
     PdTimeGradient,
-    PdAddSineWave,
+    PdAddFourierPairs,
 )
 
 
@@ -340,7 +340,7 @@ class TestCustomTransformers:
             columns=["feat_1"],
         )
 
-        signal = PdAddSineWave(frequency=1 / (24 * 3600))
+        signal = PdAddFourierPairs(frequency=1 / (24 * 3600))
 
         res = signal.fit_transform(test_df)
 
@@ -369,6 +369,33 @@ class TestCustomTransformers:
             -0.70711,
             -0.50000,
             -0.25882,
+        ]
+
+        test_df["Cosine_f_1.1574074074074073e-05"] = [
+            1.00000,
+            0.96593,
+            0.86603,
+            0.70711,
+            0.50000,
+            0.25882,
+            0.00000,
+            -0.25882,
+            -0.50000,
+            -0.70711,
+            -0.86603,
+            -0.96593,
+            -1.00000,
+            -0.96593,
+            -0.86603,
+            -0.70711,
+            -0.50000,
+            -0.25882,
+            -0.00000,
+            0.25882,
+            0.50000,
+            0.70711,
+            0.86603,
+            0.96593,
         ]
 
         pd.testing.assert_frame_equal(res, test_df)
