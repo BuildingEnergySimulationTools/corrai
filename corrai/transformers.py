@@ -1054,9 +1054,11 @@ class PdAddFourierPairs(PdTransformerBC):
         return self
 
     def transform(self, X):
-        seconds_from_start_of_year = (
-            X.index[0] - pd.Timestamp(X.index[0].year, 1, 1)
-        ).total_seconds()
+        begin = X.index[0]
+        year_start = pd.Timestamp(begin.year, 1, 1)
+        if begin.tz:
+            year_start = year_start.tz_localize(begin.tz)
+        seconds_from_start_of_year = (begin - year_start).total_seconds()
         phi = 2 * np.pi * self.frequency * seconds_from_start_of_year
 
         new_index = X.index.to_frame().diff().squeeze()
