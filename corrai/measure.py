@@ -46,7 +46,7 @@ TRANSFORMER_MAP = {
     "RESAMPLE": ct.PdResampler,
     "INTERPOLATE": ct.PdInterpolate,
     "GAUSSIAN_FILTER": ct.PdGaussianFilter1D,
-    "ADD_SINE_WAVE": ct.PdAddSineWave,
+    "ADD_FOURIER_PAIRS": ct.PdAddFourierPairs,
 }
 
 
