@@ -405,7 +405,7 @@ class TestCustomTransformers:
             index=pd.date_range("2009-01-01 06:00:00", freq="H", periods=24),
             columns=["feat_1"],
         )
-        test_df_phi.index = test_df_phi.index.tz_localize('UTC')
+        test_df_phi.index = test_df_phi.index.tz_localize("UTC")
         res = signal.transform(test_df_phi)
 
         assert res.iloc[0, 1] == 1.0

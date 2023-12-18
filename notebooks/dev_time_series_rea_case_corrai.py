@@ -267,7 +267,6 @@ if __name__ == "__main__":
     # data.loc["2023-02", "is_people"].plot()
     # plt.show()
 
-
     # %%
     train_df = pre_process_pipe.fit_transform(train_df)
     train_array = train_df.to_numpy()

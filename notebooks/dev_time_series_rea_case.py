@@ -135,7 +135,7 @@ if __name__ == "__main__":
         index_col=0,
     )
 
-    #%%
+    # %%
 
     scaler = StandardScaler()
     data = scaler.fit_transform(data)
@@ -278,9 +278,7 @@ if __name__ == "__main__":
     # %% DEEP GRU
     deep_GRU = keras.models.Sequential(
         [
-            keras.layers.GRU(
-                40, return_sequences=True, input_shape=[None, N_FEATURES]
-            ),
+            keras.layers.GRU(40, return_sequences=True, input_shape=[None, N_FEATURES]),
             keras.layers.GRU(40, return_sequences=True),
             keras.layers.TimeDistributed(keras.layers.Dense(N_STEP_FUTURE)),
         ]
