@@ -69,11 +69,24 @@ class TestVariant:
 
         model = VariantModel()
 
+        # Sequential
         res = simulate_variants(
             model=model,
             variant_dict=VARIANT_DICT,
             modifier_map=MODIFIER_MAP,
             simulation_options=SIMULATION_OPTIONS,
+            n_cpu=1,
+        )
+
+        assert list(pd.concat(res, axis=1).max()) == [5, 81, 34, 110, 48, 200, 68, 220]
+
+        # Parallel
+        res = simulate_variants(
+            model=model,
+            variant_dict=VARIANT_DICT,
+            modifier_map=MODIFIER_MAP,
+            simulation_options=SIMULATION_OPTIONS,
+            n_cpu=-1,
         )
 
         assert list(pd.concat(res, axis=1).max()) == [5, 81, 34, 110, 48, 200, 68, 220]
