@@ -97,9 +97,9 @@ class KerasModelSkBC(ABC, BaseEstimator, RegressorMixin):
         self,
         loss=None,
         optimizer=None,
-        max_epoch: int = 20,
-        patience: int = 2,
-        metrics=None,
+        max_epoch: int = None,
+        patience: int = None,
+        metrics: list[str | keras.metrics.Metric] = None,
     ):
         """
         Initialize a Keras-based scikit-learn compatible regressor.
@@ -126,6 +126,7 @@ class KerasModelSkBC(ABC, BaseEstimator, RegressorMixin):
         - model: keras.models.Model
             The underlying Keras model.
         """
+
         self.max_epoch = max_epoch
         self.patience = patience
         self.metrics = metrics
@@ -143,7 +144,7 @@ class KerasModelSkBC(ABC, BaseEstimator, RegressorMixin):
             monitor="val_loss", patience=self.patience, mode="min"
         )
 
-        model.compile(loss=self.loss, optimizer=self.optimizer, metrics=[self.metrics])
+        model.compile(loss=self.loss, optimizer=self.optimizer, metrics=self.metrics)
 
         validation_data = (
             (x_val, y_val) if x_val is not None and y_val is not None else None
@@ -255,7 +256,10 @@ class DeepRNN(KerasModelSkBC):
 
         self.cells = cells
         self.hidden_layers_size = hidden_layers_size
-        self.n_units = n_units
+        if n_units is None:
+            self.n_units = 40
+        else:
+            self.n_units = n_units
         self.reshape_sequence_to_sequence = reshape_sequence_to_sequence
 
     def evaluate(self, X, y, idx_target=0, **kwargs):
@@ -307,3 +311,72 @@ class DeepRNN(KerasModelSkBC):
             return self.model.predict(X)[:, -1, :]
         else:
             return self.model.predict(X)
+
+
+class SimplifiedWaveNet(KerasModelSkBC):
+    def __init__(
+        self,
+        convolutional_layers: int = 4,
+        staked_groups: int = 2,
+        groups_filters: int = 40,
+        groups_kernel_size: int = 2,
+        output_kernel_size: int = 1,
+        loss="mse",
+        optimizer="adam",
+        max_epoch: int = 20,
+        patience: int = 2,
+        metrics=None,
+    ):
+        super().__init__(
+            loss=loss,
+            optimizer=optimizer,
+            max_epoch=max_epoch,
+            patience=patience,
+            metrics=metrics,
+        )
+
+        self.convolutional_layers = convolutional_layers
+        self.staked_groups = staked_groups
+        self.groups_filters = groups_filters
+        self.groups_kernel_size = groups_kernel_size
+        self.output_kernel_size = output_kernel_size
+
+    def evaluate(self, X, y, idx_target=0, **kwargs):
+        check_is_fitted(self)
+        y = reshape_target_sequence_to_sequence(X, y, idx_target)
+        return self.model.evaluate(X, y, **kwargs)
+
+    def fit(self, X, y, x_val=None, y_val=None, idx_target: int = 0):
+        y = reshape_target_sequence_to_sequence(X, y, idx_target)
+        if x_val is not None and y_val is not None:
+            y_val = reshape_target_sequence_to_sequence(x_val, y_val, idx_target)
+
+        model = keras.models.Sequential()
+        # Input layer
+        model.add(keras.layers.InputLayer(input_shape=[None, X.shape[2]]))
+
+        # Staked groups of convolutional filter with dilation rate
+        for rate in (
+            tuple(2**n for n in range(self.convolutional_layers)) * self.staked_groups
+        ):
+            model.add(
+                keras.layers.Conv1D(
+                    filters=self.groups_filters,
+                    kernel_size=self.groups_kernel_size,
+                    padding="causal",
+                    activation="relu",
+                    dilation_rate=rate,
+                )
+            )
+
+        # Output layer
+        model.add(
+            keras.layers.Conv1D(filters=y.shape[2], kernel_size=self.output_kernel_size)
+        )
+
+        # Fit
+        self._main_fit(model, X, y, x_val, y_val)
+
+    def predict(self, X):
+        check_is_fitted(self)
+        return self.model.predict(X)[:, -1, :]
