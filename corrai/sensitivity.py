@@ -10,7 +10,7 @@ from SALib.sample import fast_sampler, latin
 from SALib.sample import morris as morris_sampler
 
 from corrai.base.parameter import Parameter
-from corrai.base.simulate import run_models_in_parallel
+from corrai.base.simulate import run_simulations
 from corrai.math import aggregate_time_series
 
 
@@ -141,7 +141,7 @@ class SAnalysis:
                 "draw sample using draw_sample() method"
             )
 
-        self.sample_results = run_models_in_parallel(
+        self.sample_results = run_simulations(
             model=model,
             parameter_samples=self.sample,
             simulation_options=simulation_options,

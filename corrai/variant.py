@@ -65,7 +65,7 @@ def simulate_variants(
     variant_dict: dict[str, dict[VariantKeys, Any]],
     modifier_map: dict[str, Callable],
     simulation_options: dict[str, Any],
-    n_cpu: int = 1,
+    n_cpu: int = -1,
 ):
     """
     Simulate a list of mppodel variants combination in parallel with customizable
@@ -89,7 +89,9 @@ def simulate_variants(
 
     :param simulation_options: A dictionary containing options for the simulation.
 
-    :param n_cpu: The number of CPU cores to use for parallel simulation. Default is 1.
+    :param n_cpu: The number of CPU cores to use for parallel execution. Default is -1
+        meaning all CPUs but one, 0 is all CPU, 1 is sequential, >1 is the number
+        of cpus
 
     :return: A list of simulation results for each model variant.
     """
