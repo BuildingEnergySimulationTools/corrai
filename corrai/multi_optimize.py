@@ -208,7 +208,6 @@ class MyMixedProblem(ElementwiseProblem):
 
         super().__init__(
             vars=variable_string,
-            n_var=len(parameters),
             n_obj=len(function_names),
             n_ieq_constr=len(constraint_names),
         )
