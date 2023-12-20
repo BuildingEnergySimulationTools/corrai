@@ -1019,6 +1019,8 @@ class PdAddFourierPairs(PdTransformerBC):
     -----------
     frequency : float | int
         The frequency of the sine signal (Hz).
+    order : int, optional
+        The number of pairs of sinus cosine waves. Frequency is multiplied by the order
     amplitude : float | int, optional
         Amplitude of the sine signal (default is 1.0).
     feature_marker : str, optional
@@ -1042,17 +1044,15 @@ class PdAddFourierPairs(PdTransformerBC):
     def __init__(
         self,
         frequency: float | int,
+        order:int = 1,
         amplitude: float | int = None,
         feature_prefix: str = None,
     ):
         super().__init__()
         self.frequency = frequency
         self.feature_prefix = feature_prefix
-
-        if amplitude is None:
-            self.amplitude = 1.0
-        else:
-            self.amplitude = amplitude
+        self.order = order
+        self.amplitude = amplitude if amplitude is not None else 1.
 
     def fit(self, X, y=None):
         return self
@@ -1072,11 +1072,14 @@ class PdAddFourierPairs(PdTransformerBC):
         prefix = (
             self.feature_prefix if self.feature_prefix is not None else self.frequency
         )
-        X[f"{prefix}_f_Sine"] = self.amplitude * np.sin(
-            2 * np.pi * self.frequency * increasing_seconds + phi
-        )
-        X[f"{prefix}_f_Cosine"] = self.amplitude * np.cos(
-            2 * np.pi * self.frequency * increasing_seconds + phi
-        )
+
+        omega = 2 * np.pi * self.frequency
+        for od in range(1, self.order + 1):
+            X[f"{prefix}_order_{od}_Sine"] = self.amplitude * np.sin(
+                od * omega * increasing_seconds + phi
+            )
+            X[f"{prefix}_order_{od}_Cosine"] = self.amplitude * np.cos(
+                od * omega * increasing_seconds + phi
+            )
 
         return X
