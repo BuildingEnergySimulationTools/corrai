@@ -204,9 +204,9 @@ if __name__ == "__main__":
         KdeSetPointIdentificator(lik_filter=0.5, cluster_tol=0.2),
     )
 
-    # df = kde_pipe.fit_predict(data.dropna())
-    # plt.plot(df[:2000])
-    # plt.show()
+    df = kde_pipe.fit_predict(data.dropna())
+    plt.plot(df[:2000])
+    plt.show()
 
     # %%
 
@@ -244,15 +244,11 @@ if __name__ == "__main__":
     pre_process_pipe = make_pipeline(
         PdSkTransformer(StandardScaler()),
         PdInterpolate(method="linear"),
-        PdSkTransformer(FunctionTransformer(func=is_people)),
+        # PdSkTransformer(FunctionTransformer(func=is_people)),
         PdSkTransformer(FunctionTransformer(func=weekday_encoding)),
-        PdAddFourierPairs(frequency=1 / (7 * 24 * 3600)),
-        PdAddFourierPairs(frequency=1 / (3.5 * 24 * 3600)),
-        PdAddFourierPairs(frequency=1 / (1 * 24 * 3600)),
-        PdAddFourierPairs(frequency=1 / (6 * 3600)),
-        PdAddFourierPairs(frequency=1 / (3 * 3600)),
-        # PdAddFourierPairs(frequency=1 / (2 * 3600)),
-        # PdAddFourierPairs(frequency=1 / (1 * 3600)),
+        PdAddFourierPairs(
+            frequency=1 / (7 * 24 * 3600), feature_prefix="week", order=2
+        ),
     )
 
     test = pre_process_pipe.fit_transform(

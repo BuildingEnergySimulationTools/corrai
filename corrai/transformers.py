@@ -1044,7 +1044,7 @@ class PdAddFourierPairs(PdTransformerBC):
     def __init__(
         self,
         frequency: float | int,
-        order:int = 1,
+        order: int = 1,
         amplitude: float | int = None,
         feature_prefix: str = None,
     ):
@@ -1052,7 +1052,7 @@ class PdAddFourierPairs(PdTransformerBC):
         self.frequency = frequency
         self.feature_prefix = feature_prefix
         self.order = order
-        self.amplitude = amplitude if amplitude is not None else 1.
+        self.amplitude = amplitude if amplitude is not None else 1.0
 
     def fit(self, X, y=None):
         return self

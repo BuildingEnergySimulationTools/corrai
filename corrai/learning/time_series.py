@@ -44,16 +44,16 @@ def reshape_target_sequence_to_sequence(X, y, X_idx_target=0):
     return y_ss
 
 
-def plot_periodogram(ts:pd.Series, detrend="linear"):
+def plot_periodogram(ts: pd.Series, detrend="linear"):
     """
-       Plots the periodogram of a time series using Plotly.
+    Plots the periodogram of a time series using Plotly.
 
-       Parameters:
-       - ts (pd.Series): The time series data as a pandas Series.
-        Index must be datetime index with freq
-       - detrend (str): The detrending method to be applied. Default is "linear".
+    Parameters:
+    - ts (pd.Series): The time series data as a pandas Series.
+     Index must be datetime index with freq
+    - detrend (str): The detrending method to be applied. Default is "linear".
 
-       """
+    """
     if not isinstance(ts.index, pd.DatetimeIndex):
         raise ValueError("fs index must be a Pandas DatetimeIndex")
     if ts.index.freq is None:
