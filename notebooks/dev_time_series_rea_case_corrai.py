@@ -241,16 +241,28 @@ if __name__ == "__main__":
 
     # %%
 
+    # pre_process_pipe = make_pipeline(
+    #     PdSkTransformer(StandardScaler()),
+    #     PdInterpolate(method="linear"),
+    #     # PdSkTransformer(FunctionTransformer(func=is_people)),
+    #     PdSkTransformer(FunctionTransformer(func=weekday_encoding)),
+    #     PdAddFourierPairs(
+    #         frequency=1 / (7 * 24 * 3600), feature_prefix="week", order=2
+    #     ),
+    # )
     pre_process_pipe = make_pipeline(
         PdSkTransformer(StandardScaler()),
         PdInterpolate(method="linear"),
-        # PdSkTransformer(FunctionTransformer(func=is_people)),
+        PdSkTransformer(FunctionTransformer(func=is_people)),
         PdSkTransformer(FunctionTransformer(func=weekday_encoding)),
-        PdAddFourierPairs(
-            frequency=1 / (7 * 24 * 3600), feature_prefix="week", order=2
-        ),
+        PdAddFourierPairs(frequency=1 / (7 * 24 * 3600), feature_prefix="week"),
+        PdAddFourierPairs(frequency=1 / (3.5 * 24 * 3600), feature_prefix="1/2week"),
+        PdAddFourierPairs(frequency=1 / (1 * 24 * 3600), feature_prefix="day"),
+        PdAddFourierPairs(frequency=1 / (6 * 3600), feature_prefix="6h"),
+        PdAddFourierPairs(frequency=1 / (3 * 3600), feature_prefix="3h")
+        # PdAddFourierPairs(frequency=1 / (2 * 3600)),
+        # PdAddFourierPairs(frequency=1 / (1 * 3600)),
     )
-
     test = pre_process_pipe.fit_transform(
         data["Index (ELN-CPT-ELE-GEN-TD1.1-ELNATH)"].to_frame()
     )
@@ -288,7 +300,7 @@ if __name__ == "__main__":
         train_array,
         sequence_length=N_STEP + N_STEP_FUTURE,
         sampling_rate=1,
-        sequence_stride=3,
+        sequence_stride=1,
         shuffle=False,
         seed=42,  # Make sure the behaviour can be repeated in the notebook
     )
@@ -303,7 +315,7 @@ if __name__ == "__main__":
         val_array,
         sequence_length=N_STEP + N_STEP_FUTURE,
         sampling_rate=1,
-        sequence_stride=3,
+        sequence_stride=1,
         shuffle=False,
         seed=42,  # Make sure the behaviour can be repeated in the notebook
     )
@@ -318,7 +330,7 @@ if __name__ == "__main__":
         test_array,
         sequence_length=N_STEP + N_STEP_FUTURE,
         sampling_rate=1,
-        sequence_stride=3,
+        sequence_stride=1,
         shuffle=False,
         seed=42,  # Make sure the behaviour can be repeated in the notebook
     )
@@ -427,7 +439,7 @@ if __name__ == "__main__":
     # plot_sequence_forcast(x_valid, y_val_reshaped, model=model, batch_nb=100)
     # %%
 
-    predictions = pd.DataFrame(gru_seq.predict(x_valid))
+    predictions = pd.DataFrame(lstm_seq.predict(x_valid))
     predictions.index = pd.date_range(
         val_df.index.to_series().iloc[N_STEP + 1],
         freq="15T",
@@ -441,7 +453,7 @@ if __name__ == "__main__":
     )
 
     # %%
-    concat.iloc[:500, [0, 24]].plot()
+    concat.iloc[:500, [0, 23]].plot()
     plt.show()
 
     # %%
