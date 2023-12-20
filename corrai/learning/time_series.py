@@ -54,9 +54,9 @@ def plot_periodogram(ts:pd.Series, detrend="linear"):
        - detrend (str): The detrending method to be applied. Default is "linear".
 
        """
-    if not isinstance(fs.index, pd.DatetimeIndex):
+    if not isinstance(ts.index, pd.DatetimeIndex):
         raise ValueError("fs index must be a Pandas DatetimeIndex")
-    if fs.index.freq is None:
+    if ts.index.freq is None:
         raise ValueError("freq attribute of fs datetime index is None")
 
     fs = pd.Timedelta("365D") / ts.index.freq
