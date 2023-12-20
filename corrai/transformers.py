@@ -1023,6 +1023,8 @@ class PdAddFourierPairs(PdTransformerBC):
         Amplitude of the sine signal (default is 1.0).
     feature_marker : str, optional
         The name of the new feature column (default is f"Sine_f_{frequency}").
+    feature_prefix : str, optional
+        The prefix of the new feature column (default is)
 
     Methods:
     --------
@@ -1041,9 +1043,11 @@ class PdAddFourierPairs(PdTransformerBC):
         self,
         frequency: float | int,
         amplitude: float | int = None,
+        feature_prefix: str = None,
     ):
         super().__init__()
         self.frequency = frequency
+        self.feature_prefix = feature_prefix
 
         if amplitude is None:
             self.amplitude = 1.0
@@ -1065,10 +1069,13 @@ class PdAddFourierPairs(PdTransformerBC):
         sec_dt = [element.total_seconds() for element in new_index]
         increasing_seconds = pd.Series(sec_dt).cumsum().to_numpy()
         increasing_seconds[0] = 0
-        X[f"{self.frequency}_f_Sine"] = self.amplitude * np.sin(
+        prefix = (
+            self.feature_prefix if self.feature_prefix is not None else self.frequency
+        )
+        X[f"{prefix}_f_Sine"] = self.amplitude * np.sin(
             2 * np.pi * self.frequency * increasing_seconds + phi
         )
-        X[f"{self.frequency}_f_Cosine"] = self.amplitude * np.cos(
+        X[f"{prefix}_f_Cosine"] = self.amplitude * np.cos(
             2 * np.pi * self.frequency * increasing_seconds + phi
         )
 
