@@ -5,6 +5,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils.validation import check_is_fitted
+from scipy.signal import periodogram
+
+import plotly.graph_objects as go
+
+import pandas as pd
 
 
 def reshape_target_sequence_to_sequence(X, y, X_idx_target=0):
@@ -37,6 +42,75 @@ def reshape_target_sequence_to_sequence(X, y, X_idx_target=0):
         y_ss[:, :, step_ahead - 1] = stacked[:, step_ahead : step_ahead + X.shape[1], 0]
 
     return y_ss
+
+
+def plot_periodogram(ts:pd.Series, detrend="linear"):
+    """
+       Plots the periodogram of a time series using Plotly.
+
+       Parameters:
+       - ts (pd.Series): The time series data as a pandas Series.
+        Index must be datetime index with freq
+       - detrend (str): The detrending method to be applied. Default is "linear".
+
+       """
+    if not isinstance(fs.index, pd.DatetimeIndex):
+        raise ValueError("fs index must be a Pandas DatetimeIndex")
+    if fs.index.freq is None:
+        raise ValueError("freq attribute of fs datetime index is None")
+
+    fs = pd.Timedelta("365D") / ts.index.freq
+    freqencies, spectrum = periodogram(
+        ts,
+        fs=fs,
+        detrend=detrend,
+        window="boxcar",
+        scaling="spectrum",
+    )
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=freqencies,
+            y=spectrum,
+            mode="lines",
+            line=dict(color="purple"),
+        )
+    )
+
+    fig.update_layout(
+        xaxis_type="log",
+        xaxis=dict(
+            tickvals=[1, 2, 4, 6, 12, 26, 52, 104, 365, 730, 1460, 2920, 8760, 17520],
+            ticktext=[
+                "Annual (1)",
+                "Semiannual (2)",
+                "Quarterly (4)",
+                "Bimonthly (6)",
+                "Monthly (12)",
+                "Biweekly (26)",
+                "Weekly (52)",
+                "Semiweekly (104)",
+                "Daily (365)",
+                "12h (730)",
+                "6h (1460)",
+                "3h (2920)",
+                "1h (8760)",
+                "30min (17520)",
+            ],
+            tickangle=30,
+        ),
+        yaxis=dict(
+            tickformat="e",
+            title="Variance",
+        ),
+        title="Periodogram",
+    )
+
+    fig.show()
+
+    return fig
 
 
 def plot_sequence_forcast(X, y_ref, model, X_target_index=0, batch_nb=0):
