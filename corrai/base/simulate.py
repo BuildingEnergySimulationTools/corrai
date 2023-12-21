@@ -54,7 +54,7 @@ def run_simulations(
                 )
 
         combined_result = [
-            (param, simulation_options, res) for param, res in zip(sample_dict, results)
+            (param, simulation_options, res) for param, res in zip(group, results)
         ]
         collect.append(combined_result)
 
