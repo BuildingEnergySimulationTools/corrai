@@ -354,6 +354,21 @@ def plot_sample(
     loc=None,
     show_legends=False,
 ):
+    """
+    Plot sample results for a given indicator.
+
+    Parameters:
+    - sample_results (list): List of tuples, each containing parameters, simulation options,
+        and results.
+    - indicator (str): The model output indicator to plot.
+    - ref (pd.Series or pd.DataFrame, optional): Reference data for comparison.
+    - title (str, optional): Title for the plot.
+    - y_label (str, optional): Label for the y-axis.
+    - x_label (str, optional): Label for the x-axis.
+    - alpha (float, optional): Opacity of the markers.
+    - loc (tuple, optional): Tuple specifying the time range to plot, e.g., (start_time, end_time).
+    - show_legends (bool, optional): Whether to display legends with parameter values.
+    """
     if indicator is None:
         raise ValueError("Please specify at least the model output name as 'indicator'")
 
