@@ -422,6 +422,46 @@ def plot_sample(
 
 def plot_pcp(sample_results, parameters, indicators, aggregation_method=np.mean, bounds=False):
 
+    """
+    Plots a parallel coordinate plot for sensitivity analysis results.
+
+    Parameters
+    ----------
+    sample_results : list
+        A list of results from sensitivity analysis simulations. Each element
+        in the list should be a tuple containing three components:
+        1. A dictionary representing the parameter values used in the simulation.
+        2. A dictionary representing simulation options.
+        3. A DataFrame containing the results of the simulation.
+
+    parameters : list
+        A list of dictionaries, where each dictionary represents a parameter and
+        contains its name, interval, and type.
+
+    indicators : list
+        A list of strings representing the indicators (columns) in the simulation
+        results DataFrame to be plotted.
+
+    aggregation_method : function, optional
+        The aggregation method used to summarize indicator values across multiple
+        simulations. Default is numpy.mean.
+
+    bounds : bool, optional
+        If True, includes the bounds of the parameters in the plot. Default is False.
+
+    Returns
+    -------
+    None
+        The function displays the parallel coordinate plot using Plotly.
+
+    Notes
+    -----
+    The parallel coordinate plot visualizes the relationships between parameters
+    and indicators across multiple simulations. Each line in the plot represents a
+    simulation, and the position of each line along the axes corresponds to the
+    parameter values. The color of the lines can be determined by an indicator.
+    """
+
     data_dict = {
         param[Parameter.NAME]: np.array([res[0][param[Parameter.NAME]] for res in sample_results])
         for param in parameters
