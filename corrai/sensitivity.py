@@ -12,6 +12,7 @@ from SALib.sample import morris as morris_sampler
 from corrai.base.parameter import Parameter
 from corrai.base.simulate import run_simulations
 from corrai.math import aggregate_time_series
+from corrai.multi_optimize import plot_parcoord
 
 
 class Method(enum.Enum):
@@ -343,6 +344,7 @@ def plot_morris_scatter(
 
     fig.show()
 
+
 def plot_sample(
     sample_results,
     indicator=None,
@@ -393,7 +395,6 @@ def plot_sample(
         parameter_names = [param.split('.')[-1] if '.' in param else param for param in rounded_parameters.keys()]
         legend_str = ', '.join([f'{name}: {value}' for name, value in zip(parameter_names, rounded_parameters.values())])
 
-
         fig.add_trace(
             go.Scattergl(
                 name=legend_str if show_legends else None,
@@ -418,3 +419,23 @@ def plot_sample(
     fig.update_layout(showlegend=show_legends)
     fig.show()
 
+
+def plot_pcp(sample_results, parameters, indicators, aggregation_method=np.mean, bounds=False):
+
+    data_dict = {
+        param[Parameter.NAME]: np.array([res[0][param[Parameter.NAME]] for res in sample_results])
+        for param in parameters
+    }
+
+    for i, indicator in enumerate(indicators):
+        data_dict[indicator] = np.array([aggregation_method(res[2][indicator]) for res in sample_results])
+
+    colorby = indicators[0] if indicators else None
+
+    plot_parcoord(
+        data_dict=data_dict,
+        bounds=bounds,
+        parameters=parameters,
+        colorby=colorby,
+        obj_res=np.array([res[2][indicators] for res in sample_results]),
+    )
