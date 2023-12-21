@@ -342,3 +342,64 @@ def plot_morris_scatter(
     )
 
     fig.show()
+
+def plot_sample(
+    sample_results,
+    indicator=None,
+    ref=None,
+    title=None,
+    y_label=None,
+    x_label=None,
+    alpha=0.5,
+    loc=None,
+    show_legends=False,
+):
+    if indicator is None:
+        raise ValueError("Please specify at least the model output name as 'indicator'")
+
+    fig = go.Figure()
+
+    for i, result in enumerate(sample_results):
+        parameters, simulation_options, simulation_results = result
+
+        if ref is not None:
+            try:
+                to_plot = simulation_results[indicator].loc[ref.index]
+            except ValueError:
+                raise ValueError("Provide Pandas Series or DataFrame as ref")
+        else:
+            to_plot = simulation_results[indicator]
+
+        if loc is not None:
+            to_plot = to_plot.loc[loc[0]:loc[1]]
+
+        # Useful for openmodelica parameters (long names)
+        rounded_parameters = {key: round(value, 2) for key, value in parameters.items()}
+        parameter_names = [param.split('.')[-1] if '.' in param else param for param in rounded_parameters.keys()]
+        legend_str = ', '.join([f'{name}: {value}' for name, value in zip(parameter_names, rounded_parameters.values())])
+
+
+        fig.add_trace(
+            go.Scattergl(
+                name=legend_str if show_legends else None,
+                mode="markers",
+                x=to_plot.index,
+                y=np.array(to_plot),
+                marker=dict(
+                    color=f"rgba(135, 135, 135, {alpha})",
+                ),
+            )
+        )
+
+    if title is not None:
+        fig.update_layout(title=title)
+
+    if x_label is not None:
+        fig.update_layout(xaxis_title=x_label)
+
+    if y_label is not None:
+        fig.update_layout(yaxis_title=y_label)
+
+    fig.update_layout(showlegend=show_legends)
+    fig.show()
+
