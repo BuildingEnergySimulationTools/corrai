@@ -360,15 +360,16 @@ def plot_sample(
     Plot sample results for a given indicator.
 
     Parameters:
-    - sample_results (list): List of tuples, each containing parameters, simulation options,
-        and results.
+    - sample_results (list): List of tuples, each containing parameters,
+    simulation options, and results.
     - indicator (str): The model output indicator to plot.
     - ref (pd.Series or pd.DataFrame, optional): Reference data for comparison.
     - title (str, optional): Title for the plot.
     - y_label (str, optional): Label for the y-axis.
     - x_label (str, optional): Label for the x-axis.
     - alpha (float, optional): Opacity of the markers.
-    - loc (tuple, optional): Tuple specifying the time range to plot, e.g., (start_time, end_time).
+    - loc (tuple, optional): Tuple specifying the time range to plot,
+        e.g., (start_time, end_time).
     - show_legends (bool, optional): Whether to display legends with parameter values.
     """
     if indicator is None:
@@ -388,12 +389,20 @@ def plot_sample(
             to_plot = simulation_results[indicator]
 
         if loc is not None:
-            to_plot = to_plot.loc[loc[0]:loc[1]]
+            to_plot = to_plot.loc[loc[0] : loc[1]]
 
         # Useful for openmodelica parameters (long names)
         rounded_parameters = {key: round(value, 2) for key, value in parameters.items()}
-        parameter_names = [param.split('.')[-1] if '.' in param else param for param in rounded_parameters.keys()]
-        legend_str = ', '.join([f'{name}: {value}' for name, value in zip(parameter_names, rounded_parameters.values())])
+        parameter_names = [
+            param.split(".")[-1] if "." in param else param
+            for param in rounded_parameters.keys()
+        ]
+        legend_str = ", ".join(
+            [
+                f"{name}: {value}"
+                for name, value in zip(parameter_names, rounded_parameters.values())
+            ]
+        )
 
         fig.add_trace(
             go.Scattergl(
@@ -420,8 +429,9 @@ def plot_sample(
     fig.show()
 
 
-def plot_pcp(sample_results, parameters, indicators, aggregation_method=np.mean, bounds=False):
-
+def plot_pcp(
+    sample_results, parameters, indicators, aggregation_method=np.mean, bounds=False
+):
     """
     Plots a parallel coordinate plot for sensitivity analysis results.
 
@@ -463,12 +473,16 @@ def plot_pcp(sample_results, parameters, indicators, aggregation_method=np.mean,
     """
 
     data_dict = {
-        param[Parameter.NAME]: np.array([res[0][param[Parameter.NAME]] for res in sample_results])
+        param[Parameter.NAME]: np.array(
+            [res[0][param[Parameter.NAME]] for res in sample_results]
+        )
         for param in parameters
     }
 
     for i, indicator in enumerate(indicators):
-        data_dict[indicator] = np.array([aggregation_method(res[2][indicator]) for res in sample_results])
+        data_dict[indicator] = np.array(
+            [aggregation_method(res[2][indicator]) for res in sample_results]
+        )
 
     colorby = indicators[0] if indicators else None
 
