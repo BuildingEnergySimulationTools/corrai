@@ -25,6 +25,7 @@ class TestSimulate:
 
         assert len(res) == 2
         assert res[0][0] == {"x1": 1.0, "x2": 1.0, "x3": 1.0}
+        assert res[1][0] == {"x1": 2.0, "x2": 2.0, "x3": 2.0}
         assert res[0][1] == {
             "end": "2009-01-01 02:00:00",
             "start": "2009-01-01 00:00:00",
@@ -44,6 +45,7 @@ class TestSimulate:
 
         assert len(res) == 2
         assert res[0][0] == {"x1": 1.0, "x2": 1.0, "x3": 1.0}
+        assert res[1][0] == {"x1": 2.0, "x2": 2.0, "x3": 2.0}
         assert res[0][1] == {
             "end": "2009-01-01 02:00:00",
             "start": "2009-01-01 00:00:00",
