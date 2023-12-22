@@ -1,5 +1,6 @@
 import numpy as np
 import keras
+import tensorflow as tf
 from sklearn.utils import check_consistent_length
 from sklearn.metrics._regression import _check_reg_targets
 
@@ -41,6 +42,36 @@ def cv_rmse(y_pred, y_true):
         * np.sqrt(np.sum((y_true - y_pred) ** 2) / (y_true.shape[0] - 1))
         * 100
     )
+
+
+def smape(y_pred, y_true):
+    """
+    Symmetric mean absolute percentage error (SMAPE or sMAPE) is an accuracy measure
+    based on percentage (or relative) errors.
+
+    In contrast to the mean absolute percentage error, SMAPE has both a lower bound and
+    an upper bound. Indeed, the formula provides a result between 0% and 200%.
+
+    A limitation to SMAPE is that if the actual value or forecast value is 0, the value
+    of error will boom up to the upper-limit of error. (200% for the first formula and
+    100% for the second formula)
+
+    From Wikipedia, the free encyclopedia
+
+    :param y_pred: array-like of shape (n_samples,) or (n_samples, n_outputs)
+        Ground truth (correct) target values.
+    :param y_true: array-like of shape (n_samples,) or (n_samples, n_outputs)
+        Estimated target values.
+    """
+    result = tf.norm(y_pred - y_true, axis=1)
+    result = tf.abs(result)
+
+    denom = tf.norm(y_pred, axis=1) + tf.norm(y_true, axis=1)
+    result /= denom
+    result *= 100 * 2
+
+    result = tf.reduce_mean(result)
+    return result
 
 
 def last_time_step_rmse(y_true, y_pred):
