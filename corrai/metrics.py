@@ -44,7 +44,7 @@ def cv_rmse(y_pred, y_true):
     )
 
 
-def smape(y_pred, y_true):
+def smape(y_true, y_pred):
     """
     Symmetric mean absolute percentage error (SMAPE or sMAPE) is an accuracy measure
     based on percentage (or relative) errors.
@@ -74,7 +74,7 @@ def smape(y_pred, y_true):
     return result
 
 
-def last_time_step_rmse(y_true, y_pred):
+def last_time_step_mse(y_true, y_pred):
     """
     For sequence to sequence time forcasting models,
     returns the error on the last sequence.
@@ -84,3 +84,15 @@ def last_time_step_rmse(y_true, y_pred):
     :return:
     """
     return keras.metrics.mean_squared_error(y_true[:, -1], y_pred[:, -1])
+
+
+def last_time_step_smape(y_true, y_pred):
+    """
+    For sequence to sequence time forcasting models,
+    returns the error on the last sequence.
+
+    :param y_true: nd.array, with dimension []
+    :param y_pred:
+    :return:
+    """
+    return smape(y_true[:, -1], y_pred[:, -1])

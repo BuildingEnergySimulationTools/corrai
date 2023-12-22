@@ -30,7 +30,7 @@ from corrai.learning.time_series import (
     plot_sequence_forcast,
 )
 
-from corrai.metrics import last_time_step_rmse
+from corrai.metrics import last_time_step_mse
 
 # %%
 sns.set(style="whitegrid")
@@ -357,7 +357,7 @@ if __name__ == "__main__":
         n_units=40,
         hidden_layers_size=1,
         reshape_sequence_to_sequence=True,
-        metrics=[last_time_step_rmse],
+        metrics=[last_time_step_mse],
         # optimizer=keras.optimizers.SGD(0.01),
         # patience=200,
         max_epoch=20,
@@ -376,7 +376,7 @@ if __name__ == "__main__":
         n_units=40,
         hidden_layers_size=1,
         reshape_sequence_to_sequence=True,
-        metrics=[last_time_step_rmse],
+        metrics=[last_time_step_mse],
         # optimizer=keras.optimizers.SGD(0.01),
         # patience=200,
         # max_epoch=25,
@@ -394,7 +394,7 @@ if __name__ == "__main__":
         convolutional_layers=4,
         staked_groups=2,
         groups_filters=50,
-        metrics=[last_time_step_rmse],
+        metrics=[last_time_step_mse],
         # optimizer=keras.optimizers.SGD(0.01),
         # patience=200,
         max_epoch=25,

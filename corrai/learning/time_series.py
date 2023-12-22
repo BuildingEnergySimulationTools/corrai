@@ -11,6 +11,8 @@ import plotly.graph_objects as go
 
 import pandas as pd
 
+from corrai.learning.model_selection import time_series_sampling
+
 
 def reshape_target_sequence_to_sequence(X, y, X_idx_target=0):
     """
@@ -42,6 +44,56 @@ def reshape_target_sequence_to_sequence(X, y, X_idx_target=0):
         y_ss[:, :, step_ahead - 1] = stacked[:, step_ahead : step_ahead + X.shape[1], 0]
 
     return y_ss
+
+
+def sequence_prediction_to_frame(
+    model,
+    data: pd.DataFrame | np.ndarray,
+    target_index: int,
+    n_step_history: int,
+    n_step_future: int,
+    sequence_stride: int = 1,
+):
+    """
+        Uses model to predict the values of Data.
+        Return DataFrame. the original time series is the first columns, the other
+        columns are the n_step_future timestep.
+
+    :param model: Machine learning model with predict methon
+    :param data: Pd DataFrame or 2D nd Array
+    :param target_index: int the index of the
+    :param sequence_stride: integer
+    :param n_step_history:
+    :param n_step_future:
+    :return:
+    """
+    sequences = time_series_sampling(
+        data,
+        sequence_length=n_step_history + n_step_future,
+        sampling_rate=1,
+        sequence_stride=sequence_stride,
+        shuffle=False,
+    )
+
+    x, y = (
+        sequences[:, :n_step_history, :],
+        sequences[:, -n_step_future:, target_index],
+    )
+
+    predictions = pd.DataFrame(model.predict(x))
+    predictions.index = pd.date_range(
+        data.index.to_series().iloc[n_step_history + 1],
+        freq=data.index.freq,
+        periods=predictions.shape[0],
+    )
+
+    concat = pd.concat(
+        [data[data.columns[target_index]]]
+        + [predictions[col].shift(col - sequence_stride) for col in predictions],
+        axis=1,
+    )
+
+    return concat
 
 
 def plot_periodogram(ts: pd.Series, detrend="linear"):
