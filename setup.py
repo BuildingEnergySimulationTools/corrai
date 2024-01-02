@@ -39,6 +39,7 @@ setup(
         "pymoo>=0.6.0.1",
         "salib>=1.4.7",
         "fastprogress>=1.0.3",
+        "keras>=2.14.0",
     ],
     packages=find_packages(exclude=["tests*"]),
     include_package_data=True,
