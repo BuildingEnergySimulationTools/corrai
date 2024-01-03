@@ -22,7 +22,6 @@ def get_modifier_dict(variant_dict: dict[str, dict[VariantKeys, Any]]):
     the MODIFIER values along with their corresponding variants, creating a new
     dictionary where each modifier is associated with a list of variant names
     that share that modifier.
-    The function automatically add an "EXISTING" variant to each modifier.
 
     :param variant_dict: A dictionary containing variant information where keys are
                         variant names and values are dictionaries with keys from the
@@ -106,3 +105,4 @@ def simulate_variants(
         model_list.append(working_model)
 
     return run_list_of_models_in_parallel(model_list, simulation_options, n_cpu)
+
