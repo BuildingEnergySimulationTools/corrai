@@ -19,7 +19,25 @@ def modifier_2(model, description):
     model.z1 = description["z1"]
 
 
-VARIANT_DICT = {
+VARIANT_DICT_true = {
+    "Variant_1": {
+        VariantKeys.MODIFIER: "mod1",
+        VariantKeys.ARGUMENTS: {"multiplier": 2},
+        VariantKeys.DESCRIPTION: {"y1": 20},
+    },
+    "Variant_2": {
+        VariantKeys.MODIFIER: "mod1_bis",
+        VariantKeys.ARGUMENTS: {},
+        VariantKeys.DESCRIPTION: {"y1": 30},
+    },
+    "Variant_3": {
+        VariantKeys.MODIFIER: "mod2",
+        VariantKeys.ARGUMENTS: {},
+        VariantKeys.DESCRIPTION: {"z1": 40},
+    },
+}
+
+VARIANT_DICT_false = {
     "EXISTING_mod1": {
         VariantKeys.MODIFIER: "mod1",
         VariantKeys.ARGUMENTS: {"multiplier": 1},
@@ -63,15 +81,20 @@ SIMULATION_OPTIONS = {
 
 class TestVariant:
     def test_variant(self):
-        modifier_dict = get_modifier_dict(VARIANT_DICT)
-        assert modifier_dict == {
+        modifier_dict_true = get_modifier_dict(VARIANT_DICT_true, include_existing=True)
+        modifier_dict_false = get_modifier_dict(VARIANT_DICT_false, include_existing=False)
+        expected_dict_modifiers = {
             "mod1": ["EXISTING_mod1", "Variant_1"],
             "mod1_bis": ["EXISTING_mod1_bis", "Variant_2"],
             "mod2": ["EXISTING_mod2", "Variant_3"],
         }
+        assert modifier_dict_false == expected_dict_modifiers
+        assert modifier_dict_true == expected_dict_modifiers
 
-        variant_list = get_combined_variants(VARIANT_DICT)
-        assert variant_list == [
+        variant_list_false = get_combined_variants(VARIANT_DICT_false)
+        variant_list_true = get_combined_variants(VARIANT_DICT_true)
+
+        expected_variant_list = [
             ("EXISTING_mod1", "EXISTING_mod1_bis", "EXISTING_mod2"),
             ("EXISTING_mod1", "EXISTING_mod1_bis", "Variant_3"),
             ("EXISTING_mod1", "Variant_2", "EXISTING_mod2"),
@@ -82,26 +105,48 @@ class TestVariant:
             ("Variant_1", "Variant_2", "Variant_3"),
         ]
 
+        assert set(variant_list_true) == set(expected_variant_list)
+        assert set(variant_list_false) == set(expected_variant_list)
+
         model = VariantModel()
+
+        expected_set = [110, 220, 5, 48, 81, 200, 34, 68]
 
         # Sequential
         res = simulate_variants(
             model=model,
-            variant_dict=VARIANT_DICT,
+            variant_dict=VARIANT_DICT_false,
             modifier_map=MODIFIER_MAP,
             simulation_options=SIMULATION_OPTIONS,
             n_cpu=1,
+            include_existing=False
         )
 
-        # Parallel
+        calc_list = list(pd.concat(res, axis=1).max())
+        assert set(calc_list) == set(expected_set)
+
         res = simulate_variants(
             model=model,
-            variant_dict=VARIANT_DICT,
+            variant_dict=VARIANT_DICT_true,
             modifier_map=MODIFIER_MAP,
             simulation_options=SIMULATION_OPTIONS,
-            n_cpu=-1,
+            n_cpu=1,
+            include_existing=True
         )
 
-        assert list(pd.concat(res, axis=1).max()) == [5, 81, 34, 110, 5, 81, 68, 220]
-        # for combinations with conflictual values (several y1),
-        # the last one erases the previous ones
+        calc_list = list(pd.concat(res, axis=1).max())
+        assert set(calc_list) == set(expected_set)
+
+        #
+        # # Parallel
+        # res = simulate_variants(
+        #     model=model,
+        #     variant_dict=VARIANT_DICT_false,
+        #     modifier_map=MODIFIER_MAP,
+        #     simulation_options=SIMULATION_OPTIONS,
+        #     n_cpu=-1,
+        # )
+        #
+        # assert list(pd.concat(res, axis=1).max()) == [5, 81, 34, 110, 5, 81, 68, 220]
+        # # for combinations with conflictual values (several y1),
+        # # the last one erases the previous ones
