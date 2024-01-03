@@ -81,8 +81,8 @@ SIMULATION_OPTIONS = {
 
 class TestVariant:
     def test_variant(self):
-        modifier_dict_true = get_modifier_dict(VARIANT_DICT_true, include_existing=True)
-        modifier_dict_false = get_modifier_dict(VARIANT_DICT_false, include_existing=False)
+        modifier_dict_true = get_modifier_dict(VARIANT_DICT_true, add_existing=True)
+        modifier_dict_false = get_modifier_dict(VARIANT_DICT_false, add_existing=False)
         expected_dict_modifiers = {
             "mod1": ["EXISTING_mod1", "Variant_1"],
             "mod1_bis": ["EXISTING_mod1_bis", "Variant_2"],
@@ -110,7 +110,7 @@ class TestVariant:
 
         model = VariantModel()
 
-        expected_set = [110, 220, 5, 48, 81, 200, 34, 68]
+        expected_list = [110, 220, 5, 48, 81, 200, 34, 68]
 
         # Sequential
         res = simulate_variants(
@@ -119,11 +119,11 @@ class TestVariant:
             modifier_map=MODIFIER_MAP,
             simulation_options=SIMULATION_OPTIONS,
             n_cpu=1,
-            include_existing=False
+            add_existing=False,
         )
 
         calc_list = list(pd.concat(res, axis=1).max())
-        assert set(calc_list) == set(expected_set)
+        assert set(calc_list) == set(expected_list)
 
         res = simulate_variants(
             model=model,
@@ -131,22 +131,21 @@ class TestVariant:
             modifier_map=MODIFIER_MAP,
             simulation_options=SIMULATION_OPTIONS,
             n_cpu=1,
-            include_existing=True
+            add_existing=True,
         )
 
         calc_list = list(pd.concat(res, axis=1).max())
-        assert set(calc_list) == set(expected_set)
+        assert set(calc_list) == set(expected_list)
 
-        #
-        # # Parallel
-        # res = simulate_variants(
-        #     model=model,
-        #     variant_dict=VARIANT_DICT_false,
-        #     modifier_map=MODIFIER_MAP,
-        #     simulation_options=SIMULATION_OPTIONS,
-        #     n_cpu=-1,
-        # )
-        #
-        # assert list(pd.concat(res, axis=1).max()) == [5, 81, 34, 110, 5, 81, 68, 220]
-        # # for combinations with conflictual values (several y1),
-        # # the last one erases the previous ones
+        # Parallel
+        res = simulate_variants(
+            model=model,
+            variant_dict=VARIANT_DICT_false,
+            modifier_map=MODIFIER_MAP,
+            simulation_options=SIMULATION_OPTIONS,
+            n_cpu=-1,
+        )
+
+        assert set(list(pd.concat(res, axis=1).max())) == set(expected_list)
+        # for combinations with conflictual values (several y1),
+        # the last one erases the previous ones

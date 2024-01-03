@@ -13,9 +13,10 @@ class VariantKeys(enum.Enum):
     ARGUMENTS = "ARGUMENTS"
     DESCRIPTION = "DESCRIPTION"
 
+
 def get_modifier_dict(
-        variant_dict: dict[str, dict[VariantKeys, Any]],
-        add_existing: bool = True):
+    variant_dict: dict[str, dict[VariantKeys, Any]], add_existing: bool = True
+):
     """
     Generate a dictionary that maps modifier values (name) to associated variant names.
 
@@ -27,7 +28,8 @@ def get_modifier_dict(
     :param variant_dict: A dictionary containing variant information where keys are
                         variant names and values are dictionaries with keys from the
                         VariantKeys enum (e.g., MODIFIER, ARGUMENTS, DESCRIPTION).
-    :param add_existing: A boolean flag indicating whether to include existing  variant to each modifier.
+    :param add_existing: A boolean flag indicating whether to include existing
+                        variant to each modifier.
                         If True, existing modifiers will be included;
                         if False, only non-existing modifiers will be considered.
                         Set to True by default.
@@ -41,7 +43,6 @@ def get_modifier_dict(
                 f"EXISTING_{variant_dict[var][VariantKeys.MODIFIER]}"
             ]
             for var in variant_dict.keys()
-
         }
         for var in variant_dict.keys():
             temp_dict[variant_dict[var][VariantKeys.MODIFIER]].append(var)
@@ -56,8 +57,7 @@ def get_modifier_dict(
 
 
 def get_combined_variants(
-        variant_dict: dict[str, dict[VariantKeys, Any]],
-        add_existing: bool = True
+    variant_dict: dict[str, dict[VariantKeys, Any]], add_existing: bool = True
 ):
     """
     Generate a list of combined variants based on the provided variant dictionary.
@@ -70,7 +70,8 @@ def get_combined_variants(
     :param variant_dict: A dictionary containing variant information where keys are
                         variant names and values are dictionaries with keys from the
                         VariantKeys enum (e.g., MODIFIER, ARGUMENTS, DESCRIPTION).
-    :param add_existing: A boolean flag indicating whether to include existing  variant to each modifier.
+    :param add_existing: A boolean flag indicating whether to include existing
+                        variant to each modifier.
                         If True, existing modifiers will be included;
                         if False, only non-existing modifiers will be considered.
                         Set to True by default.
@@ -81,14 +82,13 @@ def get_combined_variants(
     return list(set(itertools.product(*list(modifier_dict.values()))))
 
 
-
 def simulate_variants(
     model: Model,
     variant_dict: dict[str, dict[VariantKeys, Any]],
     modifier_map: dict[str, Callable],
     simulation_options: dict[str, Any],
     n_cpu: int = -1,
-    add_existing: bool = True
+    add_existing: bool = True,
 ):
     """
     Simulate a list of mppodel variants combination in parallel with customizable
@@ -106,7 +106,8 @@ def simulate_variants(
     :param variant_dict: A dictionary containing variant information where keys are
                         variant names and values are dictionaries with keys from the
                         VariantKeys enum (e.g., MODIFIER, ARGUMENTS, DESCRIPTION).
-    :param add_existing: A boolean flag indicating whether to include existing  variant to each modifier.
+    :param add_existing: A boolean flag indicating whether to include existing
+                    variant to each modifier.
                     If True, existing modifiers will be included;
                     if False, only non-existing modifiers will be considered.
                     Set to True by default.
