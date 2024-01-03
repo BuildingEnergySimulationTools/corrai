@@ -30,15 +30,13 @@ def get_modifier_dict(variant_dict: dict[str, dict[VariantKeys, Any]]):
 
     :return: A dictionary that maps modifier values to lists of variant names.
     """
-    temp_dict = {
-        variant_dict[var][VariantKeys.MODIFIER]: [
-            f"EXISTING_{variant_dict[var][VariantKeys.MODIFIER]}"
-        ]
-        for var in variant_dict.keys()
-    }
+    temp_dict = {}
 
     for var in variant_dict.keys():
-        temp_dict[variant_dict[var][VariantKeys.MODIFIER]].append(var)
+        modifier = variant_dict[var][VariantKeys.MODIFIER]
+        if modifier not in temp_dict:
+            temp_dict[modifier] = []
+        temp_dict[modifier].append(var)
 
     return temp_dict
 
@@ -99,14 +97,12 @@ def simulate_variants(
     for simulation in get_combined_variants(variant_dict):
         working_model = deepcopy(model)
         for variant in simulation:
-            split_var = variant.split("_")
-            if not split_var[0] == "EXISTING":
-                modifier = modifier_map[variant_dict[variant][VariantKeys.MODIFIER]]
-                modifier(
-                    model=working_model,
-                    description=variant_dict[variant][VariantKeys.DESCRIPTION],
-                    **variant_dict[variant][VariantKeys.ARGUMENTS],
-                )
+            modifier = modifier_map[variant_dict[variant][VariantKeys.MODIFIER]]
+            modifier(
+                model=working_model,
+                description=variant_dict[variant][VariantKeys.DESCRIPTION],
+                **variant_dict[variant][VariantKeys.ARGUMENTS],
+            )
         model_list.append(working_model)
 
     return run_list_of_models_in_parallel(model_list, simulation_options, n_cpu)
