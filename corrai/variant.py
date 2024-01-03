@@ -105,4 +105,3 @@ def simulate_variants(
         model_list.append(working_model)
 
     return run_list_of_models_in_parallel(model_list, simulation_options, n_cpu)
-
