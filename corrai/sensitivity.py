@@ -377,7 +377,7 @@ def plot_sample(
 
     fig = go.Figure()
 
-    for i, result in enumerate(sample_results):
+    for _, result in enumerate(sample_results):
         parameters, simulation_options, simulation_results = result
 
         if ref is not None:
@@ -479,7 +479,7 @@ def plot_pcp(
         for param in parameters
     }
 
-    for i, indicator in enumerate(indicators):
+    for _, indicator in enumerate(indicators):
         data_dict[indicator] = np.array(
             [aggregation_method(res[2][indicator]) for res in sample_results]
         )
