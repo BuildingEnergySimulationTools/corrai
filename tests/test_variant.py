@@ -19,7 +19,7 @@ def modifier_2(model, description):
     model.z1 = description["z1"]
 
 
-VARIANT_DICT = {
+VARIANT_DICT_true = {
     "Variant_1": {
         VariantKeys.MODIFIER: "mod1",
         VariantKeys.ARGUMENTS: {"multiplier": 2},
@@ -29,6 +29,39 @@ VARIANT_DICT = {
         VariantKeys.MODIFIER: "mod1_bis",
         VariantKeys.ARGUMENTS: {},
         VariantKeys.DESCRIPTION: {"y1": 30},
+    },
+    "Variant_3": {
+        VariantKeys.MODIFIER: "mod2",
+        VariantKeys.ARGUMENTS: {},
+        VariantKeys.DESCRIPTION: {"z1": 40},
+    },
+}
+
+VARIANT_DICT_false = {
+    "EXISTING_mod1": {
+        VariantKeys.MODIFIER: "mod1",
+        VariantKeys.ARGUMENTS: {"multiplier": 1},
+        VariantKeys.DESCRIPTION: {"y1": 1},
+    },
+    "Variant_1": {
+        VariantKeys.MODIFIER: "mod1",
+        VariantKeys.ARGUMENTS: {"multiplier": 2},
+        VariantKeys.DESCRIPTION: {"y1": 20},
+    },
+    "EXISTING_mod1_bis": {
+        VariantKeys.MODIFIER: "mod1_bis",
+        VariantKeys.ARGUMENTS: {"multiplier": 1},
+        VariantKeys.DESCRIPTION: {"y1": 1},
+    },
+    "Variant_2": {
+        VariantKeys.MODIFIER: "mod1_bis",
+        VariantKeys.ARGUMENTS: {},
+        VariantKeys.DESCRIPTION: {"y1": 30},
+    },
+    "EXISTING_mod2": {
+        VariantKeys.MODIFIER: "mod2",
+        VariantKeys.ARGUMENTS: {},
+        VariantKeys.DESCRIPTION: {"z1": 2},
     },
     "Variant_3": {
         VariantKeys.MODIFIER: "mod2",
@@ -48,15 +81,20 @@ SIMULATION_OPTIONS = {
 
 class TestVariant:
     def test_variant(self):
-        modifier_dict = get_modifier_dict(VARIANT_DICT)
-        assert modifier_dict == {
+        modifier_dict_true = get_modifier_dict(VARIANT_DICT_true, add_existing=True)
+        modifier_dict_false = get_modifier_dict(VARIANT_DICT_false, add_existing=False)
+        expected_dict_modifiers = {
             "mod1": ["EXISTING_mod1", "Variant_1"],
             "mod1_bis": ["EXISTING_mod1_bis", "Variant_2"],
             "mod2": ["EXISTING_mod2", "Variant_3"],
         }
+        assert modifier_dict_false == expected_dict_modifiers
+        assert modifier_dict_true == expected_dict_modifiers
 
-        variant_list = get_combined_variants(VARIANT_DICT)
-        assert variant_list == [
+        variant_list_false = get_combined_variants(VARIANT_DICT_false)
+        variant_list_true = get_combined_variants(VARIANT_DICT_true)
+
+        expected_variant_list = [
             ("EXISTING_mod1", "EXISTING_mod1_bis", "EXISTING_mod2"),
             ("EXISTING_mod1", "EXISTING_mod1_bis", "Variant_3"),
             ("EXISTING_mod1", "Variant_2", "EXISTING_mod2"),
@@ -67,88 +105,47 @@ class TestVariant:
             ("Variant_1", "Variant_2", "Variant_3"),
         ]
 
+        assert set(variant_list_true) == set(expected_variant_list)
+        assert set(variant_list_false) == set(expected_variant_list)
+
         model = VariantModel()
+
+        expected_list = [110, 220, 5, 48, 81, 200, 34, 68]
 
         # Sequential
         res = simulate_variants(
             model=model,
-            variant_dict=VARIANT_DICT,
+            variant_dict=VARIANT_DICT_false,
             modifier_map=MODIFIER_MAP,
             simulation_options=SIMULATION_OPTIONS,
             n_cpu=1,
+            add_existing=False,
         )
 
-        assert list(pd.concat(res, axis=1).max()) == [5, 81, 34, 110, 48, 200, 68, 220]
+        calc_list = list(pd.concat(res, axis=1).max())
+        assert set(calc_list) == set(expected_list)
+
+        res = simulate_variants(
+            model=model,
+            variant_dict=VARIANT_DICT_true,
+            modifier_map=MODIFIER_MAP,
+            simulation_options=SIMULATION_OPTIONS,
+            n_cpu=1,
+            add_existing=True,
+        )
+
+        calc_list = list(pd.concat(res, axis=1).max())
+        assert set(calc_list) == set(expected_list)
 
         # Parallel
         res = simulate_variants(
             model=model,
-            variant_dict=VARIANT_DICT,
+            variant_dict=VARIANT_DICT_false,
             modifier_map=MODIFIER_MAP,
             simulation_options=SIMULATION_OPTIONS,
             n_cpu=-1,
         )
 
-        assert list(pd.concat(res, axis=1).max()) == [5, 81, 34, 110, 48, 200, 68, 220]
-
-
-# VARIANT_DICT = {
-#     "EEM1_Wall_int_insulation": {
-#         VariantKeys.MODIFIER: "walls",
-#         VariantKeys.ARGUMENTS: {"boundaries": "external"},
-#         VariantKeys.DESCRIPTION: [
-#             {
-#                 "Name": "Project medium concrete block_.2",
-#                 "Thickness": 0.2,
-#                 "Conductivity": 0.51,
-#                 "Density": 1400,
-#                 "Specific_Heat": 1000,
-#             },
-#             {
-#                 "Name": "Laine_15cm",
-#                 "Thickness": 0.15,
-#                 "Conductivity": 0.032,
-#                 "Density": 40,
-#                 "Specific_Heat": 1000,
-#             },
-#         ],
-#     },
-#     "EEM2_Wall_ext_insulation": {
-#         VariantKeys.MODIFIER: "wall",
-#         VariantKeys.ARGUMENTS: {"names": "Ext_South"},
-#         VariantKeys.DESCRIPTION: [
-#             # Outside Layer
-#             {
-#                 "Name": "Coating",
-#                 "Thickness": 0.01,
-#                 "Conductivity": 0.1,
-#                 "Density": 400,
-#                 "Specific_Heat": 1200,
-#             },
-#             {
-#                 "Name": "Laine_30cm",
-#                 "Thickness": 0.30,
-#                 "Conductivity": 0.032,
-#                 "Density": 40,
-#                 "Specific_Heat": 1000,
-#             },
-#             {
-#                 "Name": "Project medium concrete block_.2",
-#                 "Thickness": 0.2,
-#                 "Conductivity": 0.51,
-#                 "Density": 1400,
-#                 "Specific_Heat": 1000,
-#             },
-#         ],
-#     },
-#     "EEM3_Double_glazing": {
-#         VariantKeys.MODIFIER: "windows",
-#         VariantKeys.ARGUMENTS: {},
-#         VariantKeys.DESCRIPTION: {
-#             "Name": "Double_glazing",
-#             "UFactor": 1.1,
-#             "Solar_Heat_Gain_Coefficient": 0.41,
-#             "Visible_Transmittance": 0.71,
-#         },
-#     },
-# }
+        assert set(list(pd.concat(res, axis=1).max())) == set(expected_list)
+        # for combinations with conflictual values (several y1),
+        # the last one erases the previous ones
