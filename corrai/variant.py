@@ -13,8 +13,9 @@ class VariantKeys(enum.Enum):
     ARGUMENTS = "ARGUMENTS"
     DESCRIPTION = "DESCRIPTION"
 
-
-def get_modifier_dict(variant_dict: dict[str, dict[VariantKeys, Any]]):
+def get_modifier_dict(
+        variant_dict: dict[str, dict[VariantKeys, Any]],
+        include_existing: bool = True):
     """
     Generate a dictionary that maps modifier values (name) to associated variant names.
 
@@ -31,21 +32,35 @@ def get_modifier_dict(variant_dict: dict[str, dict[VariantKeys, Any]]):
     """
     temp_dict = {}
 
-    for var in variant_dict.keys():
-        modifier = variant_dict[var][VariantKeys.MODIFIER]
-        if modifier not in temp_dict:
-            temp_dict[modifier] = []
-        temp_dict[modifier].append(var)
+    if include_existing:
+        temp_dict = {
+            variant_dict[var][VariantKeys.MODIFIER]: [
+                f"EXISTING_{variant_dict[var][VariantKeys.MODIFIER]}"
+            ]
+            for var in variant_dict.keys()
+
+        }
+        for var in variant_dict.keys():
+            temp_dict[variant_dict[var][VariantKeys.MODIFIER]].append(var)
+    else:
+        for var in variant_dict.keys():
+            modifier = variant_dict[var][VariantKeys.MODIFIER]
+            if modifier not in temp_dict:
+                temp_dict[modifier] = []
+            temp_dict[modifier].append(var)
 
     return temp_dict
 
 
-def get_combined_variants(variant_dict: dict[str, dict[VariantKeys, Any]]):
+def get_combined_variants(
+        variant_dict: dict[str, dict[VariantKeys, Any]],
+        include_existing: bool = True
+):
     """
     Generate a list of combined variants based on the provided variant dictionary.
 
     This function takes a dictionary containing variant information and generates a list
-    of combined variants by taking the Cartesian product the variants.
+    of combined variants by taking the Cartesian product of the variant names.
     The resulting list contains tuples, where each tuple represents a
     combination of variant to create a unique combination.
 
@@ -53,8 +68,9 @@ def get_combined_variants(variant_dict: dict[str, dict[VariantKeys, Any]]):
                         variant names and values are dictionaries with keys from the
                         VariantKeys enum (e.g., MODIFIER, ARGUMENTS, DESCRIPTION).
     """
-    modifier_dict = get_modifier_dict(variant_dict)
-    return list(itertools.product(*list(modifier_dict.values())))
+    modifier_dict = get_modifier_dict(variant_dict, include_existing)
+    return list(set(itertools.product(*list(modifier_dict.values()))))
+
 
 
 def simulate_variants(
@@ -63,6 +79,7 @@ def simulate_variants(
     modifier_map: dict[str, Callable],
     simulation_options: dict[str, Any],
     n_cpu: int = -1,
+    include_existing: bool = True
 ):
     """
     Simulate a list of mppodel variants combination in parallel with customizable
@@ -96,12 +113,14 @@ def simulate_variants(
     for simulation in get_combined_variants(variant_dict):
         working_model = deepcopy(model)
         for variant in simulation:
-            modifier = modifier_map[variant_dict[variant][VariantKeys.MODIFIER]]
-            modifier(
-                model=working_model,
-                description=variant_dict[variant][VariantKeys.DESCRIPTION],
-                **variant_dict[variant][VariantKeys.ARGUMENTS],
-            )
+            split_var = variant.split("_")
+            if not split_var[0] == "EXISTING":
+                modifier = modifier_map[variant_dict[variant][VariantKeys.MODIFIER]]
+                modifier(
+                    model=working_model,
+                    description=variant_dict[variant][VariantKeys.DESCRIPTION],
+                    **variant_dict[variant][VariantKeys.ARGUMENTS],
+                )
         model_list.append(working_model)
 
     return run_list_of_models_in_parallel(model_list, simulation_options, n_cpu)
