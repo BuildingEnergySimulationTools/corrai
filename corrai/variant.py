@@ -32,7 +32,7 @@ def get_modifier_dict(
                         variant to each modifier.
                         If True, existing modifiers will be included;
                         if False, only non-existing modifiers will be considered.
-                        Set to True by default.
+                        Set to False by default.
     :return: A dictionary that maps modifier values to lists of variant names.
     """
     temp_dict = {}
@@ -74,7 +74,7 @@ def get_combined_variants(
                         variant to each modifier.
                         If True, existing modifiers will be included;
                         if False, only non-existing modifiers will be considered.
-                        Set to True by default.
+                        Set to False by default.
     :return: A list of tuples representing combined variants based on the provided
              variant dictionary.
     """
@@ -110,7 +110,7 @@ def simulate_variants(
                     variant to each modifier.
                     If True, existing modifiers will be included;
                     if False, only non-existing modifiers will be considered.
-                    Set to True by default.
+                    Set to False by default.
     :param modifier_map: A dictionary that maps variant modifiers to modifier functions
                         for customizing model variants.
 
