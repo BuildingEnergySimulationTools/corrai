@@ -91,8 +91,10 @@ class TestVariant:
         assert modifier_dict_false == expected_dict_modifiers
         assert modifier_dict_true == expected_dict_modifiers
 
-        variant_list_false = get_combined_variants(VARIANT_DICT_false)
-        variant_list_true = get_combined_variants(VARIANT_DICT_true)
+        variant_list_false = get_combined_variants(
+            VARIANT_DICT_false, add_existing=False
+        )
+        variant_list_true = get_combined_variants(VARIANT_DICT_true, add_existing=True)
 
         expected_variant_list = [
             ("EXISTING_mod1", "EXISTING_mod1_bis", "EXISTING_mod2"),
