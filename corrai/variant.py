@@ -15,7 +15,7 @@ class VariantKeys(enum.Enum):
 
 
 def get_modifier_dict(
-    variant_dict: dict[str, dict[VariantKeys, Any]], add_existing: bool = True
+    variant_dict: dict[str, dict[VariantKeys, Any]], add_existing: bool = False
 ):
     """
     Generate a dictionary that maps modifier values (name) to associated variant names.
@@ -32,7 +32,7 @@ def get_modifier_dict(
                         variant to each modifier.
                         If True, existing modifiers will be included;
                         if False, only non-existing modifiers will be considered.
-                        Set to True by default.
+                        Set to False by default.
     :return: A dictionary that maps modifier values to lists of variant names.
     """
     temp_dict = {}
@@ -57,7 +57,7 @@ def get_modifier_dict(
 
 
 def get_combined_variants(
-    variant_dict: dict[str, dict[VariantKeys, Any]], add_existing: bool = True
+    variant_dict: dict[str, dict[VariantKeys, Any]], add_existing: bool = False
 ):
     """
     Generate a list of combined variants based on the provided variant dictionary.
@@ -74,7 +74,7 @@ def get_combined_variants(
                         variant to each modifier.
                         If True, existing modifiers will be included;
                         if False, only non-existing modifiers will be considered.
-                        Set to True by default.
+                        Set to False by default.
     :return: A list of tuples representing combined variants based on the provided
              variant dictionary.
     """
@@ -88,7 +88,7 @@ def simulate_variants(
     modifier_map: dict[str, Callable],
     simulation_options: dict[str, Any],
     n_cpu: int = -1,
-    add_existing: bool = True,
+    add_existing: bool = False,
 ):
     """
     Simulate a list of mppodel variants combination in parallel with customizable
@@ -110,7 +110,7 @@ def simulate_variants(
                     variant to each modifier.
                     If True, existing modifiers will be included;
                     if False, only non-existing modifiers will be considered.
-                    Set to True by default.
+                    Set to False by default.
     :param modifier_map: A dictionary that maps variant modifiers to modifier functions
                         for customizing model variants.
 
