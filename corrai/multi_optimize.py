@@ -3,6 +3,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
+import plotly.io as pio
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Integer, Real, Choice, Binary
 
@@ -239,7 +240,9 @@ class MyMixedProblem(ElementwiseProblem):
         )
 
 
-def plot_parcoord(data_dict, bounds, parameters, obj_res, colorby=None):
+def plot_parcoord(
+    data_dict, bounds, parameters, obj_res, colorby=None, html_file_path=None
+):
     # Define the color palette
     color_palette = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
 
@@ -276,3 +279,6 @@ def plot_parcoord(data_dict, bounds, parameters, obj_res, colorby=None):
     )
 
     fig.show()
+
+    if html_file_path:
+        pio.write_html(fig, html_file_path)

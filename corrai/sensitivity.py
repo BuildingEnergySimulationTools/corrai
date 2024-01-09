@@ -4,6 +4,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
 from SALib.analyze import fast, morris, sobol, rbd_fast
 from SALib.sample import sobol as sobol_sampler
 from SALib.sample import fast_sampler, latin
@@ -355,6 +356,7 @@ def plot_sample(
     alpha=0.5,
     loc=None,
     show_legends=False,
+    html_file_path=None,
 ):
     """
     Plot sample results for a given indicator.
@@ -371,6 +373,7 @@ def plot_sample(
     - loc (tuple, optional): Tuple specifying the time range to plot,
         e.g., (start_time, end_time).
     - show_legends (bool, optional): Whether to display legends with parameter values.
+    - html_file_path (str, optional): If provided, save the plot as an HTML file.
     """
     if indicator is None:
         raise ValueError("Please specify at least the model output name as 'indicator'")
@@ -428,9 +431,17 @@ def plot_sample(
     fig.update_layout(showlegend=show_legends)
     fig.show()
 
+    if html_file_path:
+        pio.write_html(fig, html_file_path)
+
 
 def plot_pcp(
-    sample_results, parameters, indicators, aggregation_method=np.mean, bounds=False
+    sample_results,
+    parameters,
+    indicators,
+    aggregation_method=np.mean,
+    bounds=False,
+    html_file_path=None,
 ):
     """
     Plots a parallel coordinate plot for sensitivity analysis results.
@@ -458,6 +469,10 @@ def plot_pcp(
 
     bounds : bool, optional
         If True, includes the bounds of the parameters in the plot. Default is False.
+
+    html_file_path : str, optional
+        If provided, save the plot as an HTML file.
+
 
     Returns
     -------
@@ -492,4 +507,5 @@ def plot_pcp(
         parameters=parameters,
         colorby=colorby,
         obj_res=np.array([res[2][indicators] for res in sample_results]),
+        html_file_path=html_file_path,
     )
