@@ -24,7 +24,8 @@ def get_hours_switch(X, diff_filter_threshold=0, switch="positive"):
     From a time series determine the number of hour since the beginning
     of the day when the signal rises (switch='positive') or decreases
     (switch='negative') or both (switch='both').
-    diff_filter_threshold is used to filter small variations
+    numpy argrelextrema and diff_filter_threshold are is used to filter
+    small variations
 
     :param X: pandas Series or one column DataFrame with DatetimeIndex
     :param diff_filter_threshold: float or integer
@@ -45,7 +46,7 @@ def get_hours_switch(X, diff_filter_threshold=0, switch="positive"):
     elif switch == "both":
         df = abs(df)
     else:
-        raise ValueError(f"Unknown value {switch} fo switch argument")
+        raise ValueError(f"Unknown value {switch} as switch argument")
 
     df["start_day"] = pd.DatetimeIndex(list(map(lambda x: x.date(), df.index)))
     if df.index.tz:
