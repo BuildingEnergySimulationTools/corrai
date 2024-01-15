@@ -995,7 +995,7 @@ class Scheduler:
                     new_index = pd.to_datetime(
                         date.strftime("%Y-%m-%d ") + current_day.index
                     )
-                    current_day.index = new_index
+                    current_day.index = new_index.tz_localize(self.config_dict["TZ"])
                     day_list.append(current_day)
 
         df = pd.concat(day_list)
