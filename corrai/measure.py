@@ -10,9 +10,9 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import make_pipeline
 
 import corrai.transformers as ct
+from corrai.math import time_integrate
 from corrai.transformers import PdIdentity
 from corrai.utils import check_datetime_index
-from corrai.math import time_integrate
 
 
 class Transformer(str, Enum):
@@ -51,10 +51,18 @@ TRANSFORMER_MAP = {
 class AggMethod(str, Enum):
     MEAN = "MEAN"
     SUM = "SUM"
+    CUMSUM = "CUMSUM"
+    DIFF = "DIFF"
     TIME_INTEGRATE = "TIME_INTEGRATE"
 
 
-AGG_METHOD_MAP = {"MEAN": np.mean, "SUM": np.sum, "TIME_INTEGRATE": time_integrate}
+AGG_METHOD_MAP = {
+    "MEAN": "mean",
+    "SUM": "sum",
+    "CUMSUM": "cusmsum",
+    "DIFF": "diff",
+    "TIME_INTEGRATE": time_integrate,
+}
 
 COLOR_PALETTE = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
 
@@ -233,7 +241,7 @@ class MeasuredDats:
             transformers defined in TRANSFORMER_MAP. If necessary a specific key
             "RESAMPLE" may be provided to specify an aggregation method. Method
             must be in RESAMPLE_METHS dict. If not specified, default aggreagation
-            method is np.mean. An exemple of configuration is given below
+            method is mean. An exemple of configuration is given below
 
         common_transformations (dict, optional): A dictionary specifying common
             transformations. The keys are the transformer name, the value is a list
@@ -551,7 +559,7 @@ class MeasuredDats:
                 pass
 
         if not column_config_list:
-            return ct.PdResampler(rule=rule, method=np.mean)
+            return ct.PdResampler(rule=rule, method=AGG_METHOD_MAP["MEAN"])
         else:
             return ct.PdColumnResampler(
                 rule=rule,
