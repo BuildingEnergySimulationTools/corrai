@@ -1,13 +1,13 @@
-import datetime as dt
-from abc import ABC, abstractmethod
-from functools import partial
-
-import numpy as np
 import pandas as pd
-from scipy.ndimage import gaussian_filter1d
+import numpy as np
+import datetime as dt
+from functools import partial
 from sklearn.base import TransformerMixin, BaseEstimator
 
 from corrai.math import time_gradient
+from scipy.ndimage import gaussian_filter1d
+from abc import ABC, abstractmethod
+from collections.abc import Callable
 
 
 class PdTransformerBC(TransformerMixin, BaseEstimator, ABC):
@@ -714,20 +714,12 @@ class PdColumnResampler(PdTransformerBC):
 
     """
 
-    def __init__(self, rule, columns_method, remainder="drop"):
+    def __init__(self, rule, columns_method, remainder: str | Callable = "drop"):
         super().__init__()
         self.rule = rule
         self.columns_method = columns_method
         self.resampled_index = None
-
-        if remainder != "drop" and not callable(remainder):
-            raise ValueError(
-                "If remainder is no set to drop. Aggregation "
-                "method must be provided to ensure transformed "
-                "index consistency"
-            )
-        else:
-            self.remainder = remainder
+        self.remainder = remainder
         self._check_columns_method()
 
     def _check_columns_method(self):
@@ -735,13 +727,12 @@ class PdColumnResampler(PdTransformerBC):
             raise ValueError(
                 "Columns_method must be a list of Tuple"
                 "first index shall be a list of columns names,"
-                "second index shall be an aggregation method"
+                "second index shall be an aggregation method callable or pandas"
+                "Groupby method name"
             )
         for elmt in self.columns_method:
             if not isinstance(elmt[0], list):
                 raise ValueError("Tuple first element must be a list" "of columns")
-            if not callable(elmt[1]):
-                raise ValueError("Tuple second element must be a" "callable")
 
     def _check_columns(self, X):
         for col_list, _ in self.columns_method:

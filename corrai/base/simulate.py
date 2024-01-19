@@ -12,7 +12,7 @@ def run_model(args):
     return model.simulate(parameters, simulation_options)
 
 
-def run_models_in_parallel(
+def run_simulations(
     model, parameter_samples: pd.DataFrame, simulation_options: dict, n_cpu: int = -1
 ):
     """
@@ -26,7 +26,8 @@ def run_models_in_parallel(
     - simulation_options: A dictionary of options for the simulation.
     Keys values depend on the model requirements.
     - n_cpu: The number of CPU cores to use for parallel execution. Default is -1
-        meaning all CPUs but one
+        meaning all CPUs but one, 0 is all CPU, 1 is sequential, >1 is the number
+        of cpus
 
     Returns:
     - combined_result: A list of tuples, where each tuple contains:
@@ -44,13 +45,16 @@ def run_models_in_parallel(
     prog_bar = progress_bar(range(len(grouped_sample)))
     collect = []
     for _mb, group in zip(prog_bar, grouped_sample):
-        with Pool(n_cpu) as pool:
-            results = pool.map(
-                run_model, [(param, model, simulation_options) for param in group]
-            )
+        if n_cpu == 1:
+            results = [model.simulate(group[0], simulation_options)]
+        else:
+            with Pool(n_cpu) as pool:
+                results = pool.map(
+                    run_model, [(param, model, simulation_options) for param in group]
+                )
 
         combined_result = [
-            (param, simulation_options, res) for param, res in zip(sample_dict, results)
+            (param, simulation_options, res) for param, res in zip(group, results)
         ]
         collect.append(combined_result)
 
@@ -64,7 +68,8 @@ def run_list_of_models_in_parallel(
     Run a list of models in parallel.
 
     :param n_cpu: The number of CPU cores to use for parallel execution. Default is -1
-        meaning all CPUs but one
+        meaning all CPUs but one, 0 is all CPU, 1 is sequential, >1 is the number
+        of cpus
     :param models_list: A list of Model objects to be simulated in parallel.
     :param simulation_options: A dictionary containing simulation options.
     :return: A list of Pandas DataFrames with simulation results for each model.
@@ -78,10 +83,17 @@ def run_list_of_models_in_parallel(
     prog_bar = progress_bar(range(len(grouped_sample)))
     collect = []
     for _mb, group in zip(prog_bar, grouped_sample):
-        with Pool(n_cpu) as pool:
-            results = pool.map(
-                run_model, [(None, model, simulation_options) for model in group]
-            )
+        if n_cpu == 1:
+            results = [
+                group[0].simulate(
+                    parameter_dict=None, simulation_options=simulation_options
+                )
+            ]
+        else:
+            with Pool(n_cpu) as pool:
+                results = pool.map(
+                    run_model, [(None, model, simulation_options) for model in group]
+                )
         collect.append(results)
 
     return [item for sublist in collect for item in sublist]

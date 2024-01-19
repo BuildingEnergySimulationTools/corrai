@@ -191,9 +191,9 @@ class TestDomesticWaterConsumption:
                 },
             },
             "PERIODS": [
-                (("2009-01-01", "2009-03-31"), "winter_week"),
-                (("2009-04-01", "2009-09-30"), "summer_week"),
-                (("2009-10-01", "2009-12-31"), "winter_week"),
+                (("01-01", "03-31"), "winter_week"),
+                (("04-01", "09-30"), "summer_week"),
+                (("10-01", "12-31"), "winter_week"),
             ],
             "TZ": "Europe/Paris",
         }
@@ -205,9 +205,9 @@ class TestDomesticWaterConsumption:
         )
 
         ref.index = pd.date_range(ref.index[0], periods=ref.shape[0], freq="H")
+        ref.index = ref.index.tz_convert("Europe/Paris")
 
         sched = Scheduler(config_dict=schedule_dict)
-
-        df = sched.get_dataframe(freq="H")
+        df = sched.get_full_year_time_series(freq="H", year=2009)
 
         pd.testing.assert_frame_equal(df, ref)

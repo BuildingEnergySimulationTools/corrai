@@ -1,6 +1,7 @@
-import pandas as pd
-import numpy as np
+import datetime as dt
 
+import numpy as np
+import pandas as pd
 from numpy.random import MT19937
 from numpy.random import RandomState, SeedSequence
 
@@ -903,9 +904,9 @@ class Scheduler:
                     ...
                 },
                 "PERIODS": [
-                    (("2009-01-01", "2009-03-31"), "winter_week"),
-                    (("2009-04-01", "2009-09-30"), "summer_week"),
-                    (("2009-10-01", "2009-12-31"), "winter_week"),
+                    (("01-01", "03-31"), "winter_week"),
+                    (("04-01", "09-30"), "summer_week"),
+                    (("10-01", "12-31"), "winter_week"),
                 ],
                 "TZ": "Europe/Paris",
             }
@@ -962,19 +963,23 @@ class Scheduler:
 
         return day_dict
 
-    def get_dataframe(self, freq="T"):
+    def get_full_year_time_series(self, year=None, freq="T"):
         """
         Generates and returns the scheduled DataFrame based on the configuration
         settings.
 
+        :param year: Year to generate the time series for. Default is current year
         :param str freq: output DataFrame DateTimeIndex frequency
         """
+
+        if year is None:
+            year = dt.datetime.now().year
 
         day_list = []
         for period in self.config_dict["PERIODS"]:
             period_index = pd.date_range(
-                start=period[0][0],
-                end=period[0][1],
+                start=f"{str(year)}-{period[0][0]}",
+                end=f"{str(year)}-{period[0][1]}",
                 freq="D",
                 tz=self.config_dict["TZ"],
             )
@@ -990,7 +995,7 @@ class Scheduler:
                     new_index = pd.to_datetime(
                         date.strftime("%Y-%m-%d ") + current_day.index
                     )
-                    current_day.index = new_index
+                    current_day.index = new_index.tz_localize(self.config_dict["TZ"])
                     day_list.append(current_day)
 
         df = pd.concat(day_list)

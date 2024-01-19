@@ -24,7 +24,8 @@ def get_hours_switch(X, diff_filter_threshold=0, switch="positive"):
     From a time series determine the number of hour since the beginning
     of the day when the signal rises (switch='positive') or decreases
     (switch='negative') or both (switch='both').
-    diff_filter_threshold is used to filter small variations
+    numpy argrelextrema and diff_filter_threshold are is used to filter
+    small variations
 
     :param X: pandas Series or one column DataFrame with DatetimeIndex
     :param diff_filter_threshold: float or integer
@@ -38,13 +39,14 @@ def get_hours_switch(X, diff_filter_threshold=0, switch="positive"):
     df = X.dropna().copy().diff()
     data_col_name = X.columns[0]
     if switch == "positive":
-        df = df[df > 0]
+        df.loc[df[data_col_name] < 0, data_col_name] = 0
     elif switch == "negative":
-        df = abs(df[df < 0])
+        df.loc[df[data_col_name] > 0, data_col_name] = 0
+        df = abs(df)
     elif switch == "both":
         df = abs(df)
     else:
-        raise ValueError(f"Unknown value {switch} fo switch argument")
+        raise ValueError(f"Unknown value {switch} as switch argument")
 
     df["start_day"] = pd.DatetimeIndex(list(map(lambda x: x.date(), df.index)))
     if df.index.tz:
@@ -52,7 +54,12 @@ def get_hours_switch(X, diff_filter_threshold=0, switch="positive"):
             tz=df.index.tz
         )
     df["hour_since_beg_day"] = (df.index - df.start_day).dt.total_seconds() / 60 / 60
-    df.loc[~(df[data_col_name] > diff_filter_threshold), "hour_since_beg_day"] = np.nan
+
+    max_index = argrelextrema(df[data_col_name].to_numpy(), np.greater)[0]
+    max_values = df[data_col_name].iloc[max_index]
+    filt_max_values_index = max_values.loc[max_values > diff_filter_threshold].index
+
+    df.loc[~df.index.isin(filt_max_values_index), "hour_since_beg_day"] = np.nan
 
     return float_to_hour(list(df.hour_since_beg_day.dropna()))
 

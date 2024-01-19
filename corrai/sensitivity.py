@@ -4,14 +4,16 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
 from SALib.analyze import fast, morris, sobol, rbd_fast
 from SALib.sample import sobol as sobol_sampler
 from SALib.sample import fast_sampler, latin
 from SALib.sample import morris as morris_sampler
 
 from corrai.base.parameter import Parameter
-from corrai.base.simulate import run_models_in_parallel
+from corrai.base.simulate import run_simulations
 from corrai.math import aggregate_time_series
+from corrai.multi_optimize import plot_parcoord
 
 
 class Method(enum.Enum):
@@ -141,7 +143,7 @@ class SAnalysis:
                 "draw sample using draw_sample() method"
             )
 
-        self.sample_results = run_models_in_parallel(
+        self.sample_results = run_simulations(
             model=model,
             parameter_samples=self.sample,
             simulation_options=simulation_options,
@@ -342,3 +344,168 @@ def plot_morris_scatter(
     )
 
     fig.show()
+
+
+def plot_sample(
+    sample_results,
+    indicator=None,
+    ref=None,
+    title=None,
+    y_label=None,
+    x_label=None,
+    alpha=0.5,
+    loc=None,
+    show_legends=False,
+    html_file_path=None,
+):
+    """
+    Plot sample results for a given indicator.
+
+    Parameters:
+    - sample_results (list): List of tuples, each containing parameters,
+    simulation options, and results.
+    - indicator (str): The model output indicator to plot.
+    - ref (pd.Series or pd.DataFrame, optional): Reference data for comparison.
+    - title (str, optional): Title for the plot.
+    - y_label (str, optional): Label for the y-axis.
+    - x_label (str, optional): Label for the x-axis.
+    - alpha (float, optional): Opacity of the markers.
+    - loc (tuple, optional): Tuple specifying the time range to plot,
+        e.g., (start_time, end_time).
+    - show_legends (bool, optional): Whether to display legends with parameter values.
+    - html_file_path (str, optional): If provided, save the plot as an HTML file.
+    """
+    if indicator is None:
+        raise ValueError("Please specify at least the model output name as 'indicator'")
+
+    fig = go.Figure()
+
+    for _, result in enumerate(sample_results):
+        parameters, simulation_options, simulation_results = result
+
+        if ref is not None:
+            try:
+                to_plot = simulation_results[indicator].loc[ref.index]
+            except ValueError:
+                raise ValueError("Provide Pandas Series or DataFrame as ref")
+        else:
+            to_plot = simulation_results[indicator]
+
+        if loc is not None:
+            to_plot = to_plot.loc[loc[0] : loc[1]]
+
+        # Useful for openmodelica parameters (long names)
+        rounded_parameters = {key: round(value, 2) for key, value in parameters.items()}
+        parameter_names = [
+            param.split(".")[-1] if "." in param else param
+            for param in rounded_parameters.keys()
+        ]
+        legend_str = ", ".join(
+            [
+                f"{name}: {value}"
+                for name, value in zip(parameter_names, rounded_parameters.values())
+            ]
+        )
+
+        fig.add_trace(
+            go.Scattergl(
+                name=legend_str if show_legends else None,
+                mode="markers",
+                x=to_plot.index,
+                y=np.array(to_plot),
+                marker=dict(
+                    color=f"rgba(135, 135, 135, {alpha})",
+                ),
+            )
+        )
+
+    if title is not None:
+        fig.update_layout(title=title)
+
+    if x_label is not None:
+        fig.update_layout(xaxis_title=x_label)
+
+    if y_label is not None:
+        fig.update_layout(yaxis_title=y_label)
+
+    fig.update_layout(showlegend=show_legends)
+    fig.show()
+
+    if html_file_path:
+        pio.write_html(fig, html_file_path)
+
+
+def plot_pcp(
+    sample_results,
+    parameters,
+    indicators,
+    aggregation_method=np.mean,
+    bounds=False,
+    html_file_path=None,
+):
+    """
+    Plots a parallel coordinate plot for sensitivity analysis results.
+
+    Parameters
+    ----------
+    sample_results : list
+        A list of results from sensitivity analysis simulations. Each element
+        in the list should be a tuple containing three components:
+        1. A dictionary representing the parameter values used in the simulation.
+        2. A dictionary representing simulation options.
+        3. A DataFrame containing the results of the simulation.
+
+    parameters : list
+        A list of dictionaries, where each dictionary represents a parameter and
+        contains its name, interval, and type.
+
+    indicators : list
+        A list of strings representing the indicators (columns) in the simulation
+        results DataFrame to be plotted.
+
+    aggregation_method : function, optional
+        The aggregation method used to summarize indicator values across multiple
+        simulations. Default is numpy.mean.
+
+    bounds : bool, optional
+        If True, includes the bounds of the parameters in the plot. Default is False.
+
+    html_file_path : str, optional
+        If provided, save the plot as an HTML file.
+
+
+    Returns
+    -------
+    None
+        The function displays the parallel coordinate plot using Plotly.
+
+    Notes
+    -----
+    The parallel coordinate plot visualizes the relationships between parameters
+    and indicators across multiple simulations. Each line in the plot represents a
+    simulation, and the position of each line along the axes corresponds to the
+    parameter values. The color of the lines can be determined by an indicator.
+    """
+
+    data_dict = {
+        param[Parameter.NAME]: np.array(
+            [res[0][param[Parameter.NAME]] for res in sample_results]
+        )
+        for param in parameters
+    }
+
+    for _, indicator in enumerate(indicators):
+        data_dict[indicator] = np.array(
+            [aggregation_method(res[2][indicator]) for res in sample_results]
+        )
+
+    colorby = indicators[0] if indicators else None
+
+    plot_parcoord(
+        data_dict=data_dict,
+        bounds=bounds,
+        parameters=parameters,
+        colorby=colorby,
+        obj_res=np.array([res[2][indicators] for res in sample_results]),
+        html_file_path=html_file_path,
+    )
