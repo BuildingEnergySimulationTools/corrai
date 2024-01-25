@@ -136,7 +136,7 @@ class TestLearning:
         )
 
         res = moving_window_set_point_identifier(
-            f_data["a"],
+            f_data,
             window_size=dt.timedelta(hours=10),
             slide_size=dt.timedelta(hours=10),
             estimator=KdeSetPointIdentificator(),
