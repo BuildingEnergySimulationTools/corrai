@@ -1,3 +1,5 @@
+from typing import List
+
 import pandas as pd
 import numpy as np
 import datetime as dt
@@ -794,7 +796,7 @@ class PdAddTimeLag(PdTransformerBC):
          while a negative time lag indicates that the new features will
         contain information from the future.
 
-    features_to_lag : list or None, optional (default=None)
+    features_to_lag : list of str or str or None, optional (default=None)
         The list of feature names to lag. If None, all features in the input
          DataFrame will be lagged.
 
@@ -810,27 +812,20 @@ class PdAddTimeLag(PdTransformerBC):
 
     def __init__(
         self,
-        time_lag,
-        features_to_lag=None,
-        feature_marker=None,
+        time_lag: dt.timedelta,
+        features_to_lag: str | List[str] = None,
+        feature_marker: str = None,
         drop_resulting_nan=False,
     ):
         super().__init__()
-        if not isinstance(time_lag, dt.timedelta):
-            raise ValueError(
-                "Invalid time_lag value. You must provide "
-                "a datetime.timedelta object"
-            )
         self.time_lag = time_lag
-        self.features_to_lag = features_to_lag
+        self.features_to_lag = (
+            [features_to_lag] if isinstance(features_to_lag, str) else features_to_lag
+        )
         self.drop_resulting_nan = drop_resulting_nan
-
-        if feature_marker is None:
-            self.feature_marker = str(time_lag) + "_"
-        else:
-            if not isinstance(feature_marker, str):
-                raise ValueError("feature_marker must be a string")
-            self.feature_marker = feature_marker
+        self.feature_marker = (
+            str(time_lag) + "_" if feature_marker is None else feature_marker
+        )
 
     def fit(self, X, y=None):
         return self
