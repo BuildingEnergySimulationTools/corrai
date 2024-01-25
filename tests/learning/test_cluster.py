@@ -105,7 +105,8 @@ class TestLearning:
         )
 
         res = set_point_identifier(
-            f_data, estimator=KdeSetPointIdentificator(bandwidth=0.1, lik_filter=0.6)
+            f_data,
+            estimator=KdeSetPointIdentificator(bandwidth=0.1, lik_filter=0.6),
         )
 
         ref = pd.DataFrame(
@@ -138,6 +139,7 @@ class TestLearning:
             f_data,
             window_size=dt.timedelta(hours=10),
             slide_size=dt.timedelta(hours=10),
+            estimator=KdeSetPointIdentificator(),
         )
 
         ref = pd.DataFrame(
