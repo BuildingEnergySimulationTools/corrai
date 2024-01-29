@@ -1,5 +1,3 @@
-from typing import List
-
 import pandas as pd
 import numpy as np
 import datetime as dt
@@ -812,7 +810,7 @@ class PdAddTimeLag(PdTransformerBC):
     def __init__(
         self,
         time_lag: dt.timedelta,
-        features_to_lag: str | List[str] = None,
+        features_to_lag: str | list[str] = None,
         feature_marker: str = None,
         drop_resulting_nan=False,
     ):
