@@ -31,5 +31,5 @@ class TestMetrics:
         expected = 20.75
 
         np.testing.assert_allclose(
-            cv_rmse(y_pred=y_pred, y_true=y_true), expected, rtol=10 - 7
+            smape(y_pred=y_pred, y_true=y_true), expected, rtol=10 - 7
         )

@@ -385,7 +385,7 @@ class TestCustomTransformers:
             index=pd.date_range("2009-01-01 00:00:00", freq="H", periods=24),
         )
 
-        pd.testing.assert_frame_equal(res, test_df)
+        pd.testing.assert_frame_equal(res, ref_df)
 
         test_df_phi = pd.DataFrame(
             data=np.arange(24),
