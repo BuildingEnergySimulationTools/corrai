@@ -201,7 +201,10 @@ class DomesticWaterConsumption:
     not adapted: since the method uses COSTIC water flow calculations
     for each hour and then randomly distribute showers, it does not
     work properly for small amount of water (nb of shower per hour < 1
-    results in 0 shower). Will be addressed in future work.
+    results in 0 shower). Will result in high underestimation for small
+    n_dwellings. Likewise, can result in slight under- or over-
+    estimation for high number of dwellings.
+    Will be addressed in future work.
 
     Warning2: Water consumption for showers is limited here by a
     water consumption per dwelling in liters per day, then distributed
