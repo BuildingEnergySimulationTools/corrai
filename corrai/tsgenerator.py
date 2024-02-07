@@ -304,16 +304,16 @@ class DomesticWaterConsumption:
     """
 
     def __init__(
-            self,
-            n_dwellings,
-            v_per_dwelling=110,
-            ratio_bath_shower=0.8,
-            t_shower=7,
-            d_shower=8,
-            s_moy_dwelling=49.6,
-            s_tot_building=2480,
-            n_people_per_dwelling=2,
-            method="COSTIC",
+        self,
+        n_dwellings,
+        v_per_dwelling=110,
+        ratio_bath_shower=0.8,
+        t_shower=7,
+        d_shower=8,
+        s_moy_dwelling=49.6,
+        s_tot_building=2480,
+        n_people_per_dwelling=2,
+        method="COSTIC",
     ):
         self.n_dwellings = n_dwellings
         self.v_per_dwelling = v_per_dwelling
@@ -378,9 +378,9 @@ class DomesticWaterConsumption:
                     hour_coefficients = self.coefficients["day"]["hour_sunday"]
 
                 h24 = (
-                        hour_coefficients
-                        * self.coefficients["month"][str(val.month_name())]
-                        * self.coefficients["week"][str(val.day_name())]
+                    hour_coefficients
+                    * self.coefficients["month"][str(val.month_name())]
+                    * self.coefficients["week"][str(val.day_name())]
                 )
                 val_list.append(h24[val.hour])
 
@@ -392,8 +392,8 @@ class DomesticWaterConsumption:
                     hour_coefficients = self.coefficients["day"]["hour_weekend"]
 
                 h24 = (
-                        hour_coefficients
-                        * self.coefficients["month"][str(val.month_name())]
+                    hour_coefficients
+                    * self.coefficients["month"][str(val.month_name())]
                 )
                 val_list.append(h24[val.hour])
 
@@ -428,12 +428,12 @@ class DomesticWaterConsumption:
 
         # Calculation of the number of showers per hour
         df_co["Q_ECS_COSTIC"] = (
-                df_co["coef"] * self.v_shower_bath_per_day / df_co["coef_daily_sum"]
+            df_co["coef"] * self.v_shower_bath_per_day / df_co["coef_daily_sum"]
         )
         return df_co[["Q_ECS_COSTIC"]]
 
     def costic_random_shower_distribution(
-            self, start=None, end=None, optional_columns=False, seed=None
+        self, start=None, end=None, optional_columns=False, seed=None
     ):
         """
         Calculates a random distribution of hot water
@@ -494,7 +494,7 @@ class DomesticWaterConsumption:
             starts = h[:nb_shower]
             distribution = np.zeros(60)
             for start_shower in starts:
-                distribution[start_shower: start_shower + self.t_shower] += 1
+                distribution[start_shower : start_shower + self.t_shower] += 1
             distribution_list.append(distribution)
 
         df_costic_random = pd.DataFrame(
@@ -508,7 +508,7 @@ class DomesticWaterConsumption:
         )
 
         df_costic_random["Q_ECS_COSTIC_rd"] = (
-                df_costic_random["shower_per_minute"] * self.v_used / self.t_shower
+            df_costic_random["shower_per_minute"] * self.v_used / self.t_shower
         )
         df_costic_random["Q_ECS_COSTIC_rd"] = df_costic_random[
             "Q_ECS_COSTIC_rd"
@@ -560,18 +560,18 @@ class DomesticWaterConsumption:
         return to_return
 
     def appliances_water_distribution(
-            self,
-            start,
-            end,
-            seed=False,
-            dish_washer=True,
-            washing_machine=True,
-            v_water_dish=13,
-            v_water_clothes=50,
-            cycles_clothes_pers=89,  # per year
-            cycles_dish_pers=83,  # per year
-            duration_dish=4,
-            duration_clothes=2,
+        self,
+        start,
+        end,
+        seed=False,
+        dish_washer=True,
+        washing_machine=True,
+        v_water_dish=13,
+        v_water_clothes=50,
+        cycles_clothes_pers=89,  # per year
+        cycles_dish_pers=83,  # per year
+        duration_dish=4,
+        duration_clothes=2,
     ):
         """
         Calculates the distribution of greywater consumption
@@ -646,12 +646,12 @@ class DomesticWaterConsumption:
                 k = 0  # number of cycles
                 index = rs.randint(0, 120)  # time of start of cycles
                 while (
-                        index < (len(date_index) - self.duration_dish)
-                        and k < tot_cycles_dish_pers
+                    index < (len(date_index) - self.duration_dish)
+                    and k < tot_cycles_dish_pers
                 ):
                     for i in range(self.duration_dish):
                         dish_distribution[index + i] = (
-                                dish_distribution[index + i] + Qwater_dish
+                            dish_distribution[index + i] + Qwater_dish
                         )
                     space = rs.randint(72, 120)  # day 3 to day 5
                     index = index + space
@@ -667,12 +667,12 @@ class DomesticWaterConsumption:
                 k = 0
                 index = rs.randint(0, 120)
                 while (
-                        index < (len(date_index) - self.duration_clothes)
-                        and k < tot_cycles_clot_pers
+                    index < (len(date_index) - self.duration_clothes)
+                    and k < tot_cycles_clot_pers
                 ):
                     for i in range(self.duration_clothes):
                         washing_distribution[index + i] = (
-                                washing_distribution[index + i] + Qwater_clothes
+                            washing_distribution[index + i] + Qwater_clothes
                         )
                     space = rs.randint(72, 120)
                     index = index + space
@@ -719,15 +719,15 @@ class DomesticWaterConsumption:
         return list_int
 
     def costic_random_cold_water_distribution(
-            self,
-            start,
-            end,
-            percent_showers=0.4,
-            percent_washbasin=0.13,
-            percent_cook=0.07,
-            percent_dishes=0.04,
-            percent_cleaning=0.06,
-            seed=False,
+        self,
+        start,
+        end,
+        percent_showers=0.4,
+        percent_washbasin=0.13,
+        percent_cook=0.07,
+        percent_dishes=0.04,
+        percent_cleaning=0.06,
+        seed=False,
     ):
         """
         Calculates a random distribution of cold water consumption for various usages
@@ -806,7 +806,7 @@ class DomesticWaterConsumption:
             list_washbasin += self.day_randomizer(
                 coefficient=coefficient[
                     coefficient.index.date == coefficient.index.date[0]
-                    ],
+                ],
                 nb_used=nb_washbasin,
                 volume=self.v_washbasin_used,
                 seed=seed,
@@ -814,7 +814,7 @@ class DomesticWaterConsumption:
             list_sinkcook += self.day_randomizer(
                 coefficient=coefficient[
                     coefficient.index.date == coefficient.index.date[0]
-                    ],
+                ],
                 nb_used=nb_sinkcook,
                 volume=self.v_sinkcook_used,
                 seed=seed,
@@ -823,7 +823,7 @@ class DomesticWaterConsumption:
             list_sinkdishes += self.day_randomizer(
                 coefficient=coefficient[
                     coefficient.index.date == coefficient.index.date[0]
-                    ],
+                ],
                 nb_used=nb_sinkdishes,
                 volume=self.v_sinkdishes_used,
                 seed=seed,
@@ -832,7 +832,7 @@ class DomesticWaterConsumption:
             list_sinkwash += self.day_randomizer(
                 coefficient=coefficient[
                     coefficient.index.date == coefficient.index.date[0]
-                    ],
+                ],
                 nb_used=nb_sinkcleaning,
                 volume=self.v_sinkcleaning_used,
             )
@@ -1020,10 +1020,11 @@ def calculate_power(df, deltaT, Cp):
         for each column in the input DataFrame, expressed in kW.
 
     Raises:
-        ValueError: If the sampling frequency of the DataFrame is not 'H' (hour) or 'T' (minute).
+        ValueError: If the sampling frequency of the DataFrame
+        is not 'H' (hour) or 'T' (minute).
     """
     df_powers = df * Cp * deltaT / 3.6e6
-    df_powers.columns = ['P_' + col for col in df.columns + '(kW)']
+    df_powers.columns = ["P_" + col for col in df.columns + "(kW)"]
 
     return df_powers
 
@@ -1033,8 +1034,10 @@ def resample_flow_rate(df, new_freq):
     Resample the flow rate hour columns of DataFrame to a new frequency.
 
     Parameters:
-        df (DataFrame): DataFrame containing the flow rate data to be resampled.
-        new_freq (str): New frequency desired for resampling (e.g., '30T' for every 30 minutes).
+        df (DataFrame): DataFrame containing the flow
+        rate data to be resampled.
+        new_freq (str): New frequency desired for resampling
+        (e.g., '30T' for every 30 minutes).
 
     Returns:
         DataFrame: DataFrame with flow rate columns resampled to the new frequency.
@@ -1042,8 +1045,10 @@ def resample_flow_rate(df, new_freq):
     """
     original_freq = df.index.freqstr
     if original_freq is None:
-        raise ValueError("DataFrame index does not have a frequency. "
-                         "Please set the frequency before resampling.")
+        raise ValueError(
+            "DataFrame index does not have a frequency. "
+            "Please set the frequency before resampling."
+        )
 
     resampled_df = df.resample(new_freq).first()
 
@@ -1053,6 +1058,6 @@ def resample_flow_rate(df, new_freq):
         ratio = original_minutes / new_minutes
 
         resampled_df = resampled_df / ratio
-    resampled_df = resampled_df.interpolate(method='linear')
+    resampled_df = resampled_df.interpolate(method="linear")
 
     return resampled_df
