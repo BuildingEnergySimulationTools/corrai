@@ -1005,25 +1005,28 @@ class Scheduler:
         return df.resample(freq).mean()
 
 
-def calculate_power(df, deltaT, Cp):
+def calculate_power(
+    df,
+    deltaT,
+    Cp=4180,
+    ro=1,
+):
     """
     Calculate power consumption based on given DataFrame.
 
     Parameters:
         df (DataFrame): DataFrame containing the data for power calculation.
-        The flow rates of water should be in either L/min or L/h.
-        deltaT (float): Temperature difference (in degrees Celsius).
-        Cp (float): Specific heat capacity of the fluid (in J/(kg·°C)).
+        The flow rates of water should be in L/h.
+        deltaT (float): Temperature difference (in Kelvin).
+        Cp (float): Specific heat capacity of the fluid (4180 J/(kg·Kelvin)
+            for water by default).
+        ro (float): Density of medium (1 kg/L for water by default )
 
     Returns:
         DataFrame: DataFrame containing the calculated power consumption
         for each column in the input DataFrame, expressed in kW.
-
-    Raises:
-        ValueError: If the sampling frequency of the DataFrame
-        is not 'H' (hour) or 'T' (minute).
     """
-    df_powers = df * Cp * deltaT / 3.6e6
+    df_powers = df * Cp * ro * deltaT / 3.6e6
     df_powers.columns = ["P_" + col for col in df.columns + "(kW)"]
 
     return df_powers
