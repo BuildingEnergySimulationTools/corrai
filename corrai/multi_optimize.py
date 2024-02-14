@@ -71,6 +71,7 @@ class MyProblem(ElementwiseProblem):
         constraint_names,
     ):
         self.parameters = parameters
+        _check_duplicate_params(parameters)
         if len(obj_func_list) == 0 and len(func_list) == 0:
             raise ValueError(
                 "At least one of obj_func_list or func_list should be provided"
@@ -176,6 +177,7 @@ class MyMixedProblem(ElementwiseProblem):
         constraint_names,
     ):
         self.parameters = parameters
+        _check_duplicate_params(parameters)
         if len(obj_func_list) == 0 and len(func_list) == 0:
             raise ValueError(
                 "At least one of obj_func_list or func_list should be provided"
@@ -282,3 +284,20 @@ def plot_parcoord(
 
     if html_file_path:
         pio.write_html(fig, html_file_path)
+
+
+def _check_duplicate_params(params):
+    """
+    Check for duplicate parameter names in the list of parameters.
+
+    Raises
+    ------
+    ValueError
+        If duplicate parameter names are found.
+    """
+    param_names = set()
+    for param in params:
+        name = param[Parameter.NAME]
+        if name in param_names:
+            raise ValueError(f"Duplicate parameter name: {name}")
+        param_names.add(name)
