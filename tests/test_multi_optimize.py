@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from corrai.multi_optimize import MyProblem, MyMixedProblem
+from corrai.multi_optimize import MyProblem, MyMixedProblem, _check_duplicate_params
 from corrai.base.parameter import Parameter
 
 from pymoo.algorithms.moo.nsga2 import NSGA2
@@ -16,7 +16,6 @@ from pymoo.operators.sampling.rnd import IntegerRandomSampling
 from pymoo.algorithms.soo.nonconvex.de import DE
 from pymoo.operators.sampling.lhs import LHS
 from pymoo.optimize import minimize
-
 
 PACKAGE_DIR = Path(__file__).parent / "TestLib"
 
@@ -63,6 +62,18 @@ parameters = [
 
 
 class TestMyProblem:
+    def test_duplicates(self):
+        parameters = [
+            {Parameter.NAME: "x", Parameter.INTERVAL: (-2, 10)},
+            {Parameter.NAME: "y", Parameter.INTERVAL: (-2, 10)},
+            {Parameter.NAME: "x", Parameter.INTERVAL: (-2, 12)},
+        ]
+
+        with pytest.raises(ValueError) as excinfo:
+            _check_duplicate_params(parameters)
+
+        assert "Duplicate parameter name: x" in str(excinfo.value)
+
     def test_myproblem_simple(self):
         problem = MyProblem(
             parameters=parameters,
