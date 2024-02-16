@@ -202,7 +202,10 @@ class DomesticWaterConsumption:
     not adapted: since the method uses COSTIC water flow calculations
     for each hour and then randomly distribute showers, it does not
     work properly for small amount of water (nb of shower per hour < 1
-    results in 0 shower). Will be addressed in future work.
+    results in 0 shower). Will result in high underestimation for small
+    n_dwellings. Likewise, can result in slight under- or over-
+    estimation for high number of dwellings.
+    Will be addressed in future work.
 
     Warning2: Water consumption for showers is limited here by a
     water consumption per dwelling in liters per day, then distributed
@@ -1005,3 +1008,64 @@ class Scheduler:
         df = df.shift(-1)
         df = df.ffill()
         return df.resample(freq).mean()
+
+
+def calculate_power(
+    df,
+    deltaT,
+    Cp=4180,
+    ro=1,
+):
+    """
+    Calculate power consumption based on given DataFrame.
+
+    Parameters:
+        df (DataFrame): DataFrame containing the data for power calculation.
+        The flow rates of water should be in L/h.
+        deltaT (float): Temperature difference (in Kelvin).
+        Cp (float): Specific heat capacity of the fluid (4180 J/(kg·Kelvin)
+            for water by default).
+        ro (float): Density of medium (1 kg/L for water by default )
+
+    Returns:
+        DataFrame: DataFrame containing the calculated power consumption
+        for each column in the input DataFrame, expressed in kW.
+    """
+    df_powers = df * Cp * ro * deltaT / 3.6e6
+    df_powers.columns = ["P_" + col for col in df.columns + "(kW)"]
+
+    return df_powers
+
+
+def resample_flow_rate(df, new_freq):
+    """
+    Resample the flow rate hour columns of DataFrame to a new frequency.
+
+    Parameters:
+        df (DataFrame): DataFrame containing the flow
+        rate data to be resampled.
+        new_freq (str): New frequency desired for resampling
+        (e.g., '30T' for every 30 minutes).
+
+    Returns:
+        DataFrame: DataFrame with flow rate columns resampled to the new frequency.
+
+    """
+    original_freq = df.index.freqstr
+    if original_freq is None:
+        raise ValueError(
+            "DataFrame index does not have a frequency. "
+            "Please set the frequency before resampling."
+        )
+
+    resampled_df = df.resample(new_freq).first()
+
+    if original_freq is not None:
+        original_minutes = pd.Timedelta(df.index[1] - df.index[0]).total_seconds() / 60
+        new_minutes = pd.Timedelta(new_freq).total_seconds() / 60
+        ratio = original_minutes / new_minutes
+
+        resampled_df = resampled_df / ratio
+    resampled_df = resampled_df.interpolate(method="linear")
+
+    return resampled_df

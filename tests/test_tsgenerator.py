@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from corrai.tsgenerator import DomesticWaterConsumption
 from corrai.tsgenerator import Scheduler
+from corrai.tsgenerator import resample_flow_rate, calculate_power
 import datetime as dt
 from pathlib import Path
 import pytest
@@ -111,6 +112,53 @@ class TestDomesticWaterConsumption:
         sum_clo = gw["Q_washer"].sum()
         assert np.isclose(sum_dish, dish_water_tot, rtol=0.05)
         assert np.isclose(sum_clo, clot_water_tot, rtol=0.05)
+
+    def test_resample_flow_rate(self):
+        data = {
+            "flow_rate": [100, 150, 200, 250, 200, 12, 28, 100],
+        }
+        df = pd.DataFrame(data, index=pd.date_range("2022-01-01", periods=8, freq="H"))
+
+        new_freq1 = "30T"
+        new_freq2 = "12T"
+        df_resampled1 = resample_flow_rate(df, new_freq1)
+        df_resampled2 = resample_flow_rate(df, new_freq2)
+
+        before_sampling_sum = df["flow_rate"].sum()
+        after_sampling_sum1 = df_resampled1["flow_rate"].sum()
+        after_sampling_sum2 = df_resampled2["flow_rate"].sum()
+
+        assert np.isclose(before_sampling_sum, after_sampling_sum1, rtol=0.1)
+        assert np.isclose(before_sampling_sum, after_sampling_sum2, rtol=0.1)
+
+    def test_calculate_power(self):
+        data = {
+            "flow_rate_1": [100, 200, 300],
+            "flow_rate_2": [150, 250, 350],
+        }
+        df_input = pd.DataFrame(data)
+
+        deltaT = 10
+        Cp = 4186
+
+        df_output = calculate_power(df_input, deltaT, Cp)
+
+        expected_output = pd.DataFrame(
+            {
+                "P_flow_rate_1(kW)": [
+                    100 * Cp * deltaT / 3.6e6,
+                    200 * Cp * deltaT / 3.6e6,
+                    300 * Cp * deltaT / 3.6e6,
+                ],
+                "P_flow_rate_2(kW)": [
+                    150 * Cp * deltaT / 3.6e6,
+                    250 * Cp * deltaT / 3.6e6,
+                    350 * Cp * deltaT / 3.6e6,
+                ],
+            }
+        )
+
+        pd.testing.assert_frame_equal(df_output, expected_output)
 
     def test_day_randomizer(self):
         gw = DomesticWaterConsumption(n_dwellings=100, method="COSTIC")
