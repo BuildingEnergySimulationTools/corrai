@@ -14,6 +14,7 @@ from corrai.base.parameter import Parameter
 from corrai.base.simulate import run_simulations
 from corrai.math import aggregate_time_series
 from corrai.multi_optimize import plot_parcoord
+from corrai.metrics import cv_rmse
 
 
 class Method(enum.Enum):
@@ -380,16 +381,21 @@ def plot_sample(
 
     fig = go.Figure()
 
+    if ref is not None:
+        fig.add_trace(
+            go.Scattergl(
+                name="Reference",
+                mode="lines",
+                x=ref.index,
+                y=ref.values,
+                line=dict(color="orange"),
+            )
+        )
+
     for _, result in enumerate(sample_results):
         parameters, simulation_options, simulation_results = result
 
-        if ref is not None:
-            try:
-                to_plot = simulation_results[indicator].loc[ref.index]
-            except ValueError:
-                raise ValueError("Provide Pandas Series or DataFrame as ref")
-        else:
-            to_plot = simulation_results[indicator]
+        to_plot = simulation_results[indicator]
 
         if loc is not None:
             to_plot = to_plot.loc[loc[0] : loc[1]]
@@ -439,7 +445,9 @@ def plot_pcp(
     sample_results,
     parameters,
     indicators,
+    reference=None,
     aggregation_method=np.mean,
+    reference_aggregation=cv_rmse,
     bounds=False,
     html_file_path=None,
 ):
@@ -493,13 +501,27 @@ def plot_pcp(
         )
         for param in parameters
     }
+    # print(data_dict[0])
 
     for _, indicator in enumerate(indicators):
-        data_dict[indicator] = np.array(
-            [aggregation_method(res[2][indicator]) for res in sample_results]
-        )
+        if reference is None:
+            data_dict[indicator] = np.array(
+                [aggregation_method(res[2][indicator]) for res in sample_results]
+            )
 
-    colorby = indicators[0] if indicators else None
+        else:
+            reference_values = np.array(
+                [
+                    reference_aggregation(y_true=reference, y_pred=res[2][indicator])
+                    for res in sample_results
+                ]
+            )
+            data_dict["Aggregation"] = reference_values
+
+    if indicator and reference is None:
+        colorby = indicators[0]
+    else:
+        colorby = "Aggregation"
 
     plot_parcoord(
         data_dict=data_dict,
