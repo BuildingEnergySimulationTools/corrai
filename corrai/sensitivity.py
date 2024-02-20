@@ -216,6 +216,59 @@ class SAnalysis:
                 **sensitivity_method_kwargs,
             )
 
+    def calculate_sensitivity_summary(self):
+        """
+        Calculate sensitivity summary based on the method used.
+
+        Returns:
+        - dict: A dictionary containing the calculated sensitivity summary.
+        """
+
+        if self.method == Method.FAST:
+            sum_st = sum(self.sensitivity_results["ST"])
+            conf = self.sensitivity_results["ST_conf"]
+            mean_conf = sum(conf) / len(conf)
+
+            return {"sum_st": sum_st, "mean_conf": mean_conf}
+
+        elif self.method == Method.RDB_FAST:
+            sum_st = sum(self.sensitivity_results["S1"])
+            conf = self.sensitivity_results["S1_conf"]
+            mean_conf = sum(conf) / len(conf)
+
+            return {"sum_st": sum_st, "mean_conf": mean_conf}
+
+        elif self.method == Method.SOBOL:
+            sum_st = self.sensitivity_results.to_df()[0].sum().loc["ST"]
+            mean_conf = self.sensitivity_results.to_df()[0].mean().loc["ST_conf"]
+            sum_s1 = self.sensitivity_results.to_df()[1].sum().loc["S1"]
+            mean_conf1 = self.sensitivity_results.to_df()[1].mean().loc["S1_conf"]
+            sum_s2 = self.sensitivity_results.to_df()[2].sum().loc["S2"]
+            mean_conf2 = self.sensitivity_results.to_df()[2].mean().loc["S2_conf"]
+
+            return {
+                "sum_st": sum_st,
+                "mean_conf": mean_conf,
+                "sum_s1": sum_s1,
+                "mean_conf1": mean_conf1,
+                "sum_s2": sum_s2,
+                "mean_conf2": mean_conf2,
+            }
+
+        elif self.method == Method.MORRIS:
+            morris_res = self.sensitivity_results
+            morris_res["distance"] = np.sqrt(
+                morris_res.mu_star**2 + morris_res.sigma**2
+            )
+            morris_res["dimless_distance"] = (
+                morris_res.distance / morris_res.distance.max()
+            )
+
+            return morris_res
+
+        else:
+            raise ValueError("Invalid method")
+
 
 def plot_sobol_st_bar(salib_res):
     sobol_ind = salib_res.to_df()[0]
