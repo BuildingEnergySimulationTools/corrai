@@ -89,9 +89,10 @@ def simulate_variants(
     simulation_options: dict[str, Any],
     n_cpu: int = -1,
     add_existing: bool = False,
+    custom_combination=None,
 ):
     """
-    Simulate a list of mppodel variants combination in parallel with customizable
+    Simulate a list of model variants combination in parallel with customizable
     modifiers.
 
     This function takes a base model, a dictionary of variant information, a modifier
@@ -123,7 +124,12 @@ def simulate_variants(
     :return: A list of simulation results for each model variant.
     """
     model_list = []
-    for simulation in get_combined_variants(variant_dict, add_existing):
+    if custom_combination:
+        combined_variants = custom_combination
+    else:
+        combined_variants = get_combined_variants(variant_dict, add_existing)
+
+    for _, simulation in enumerate(combined_variants, start=1):
         working_model = deepcopy(model)
         for variant in simulation:
             split_var = variant.split("_")
