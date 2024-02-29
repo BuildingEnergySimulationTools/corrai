@@ -113,6 +113,10 @@ def simulate_variants(
                     If True, existing modifiers will be included;
                     if False, only non-existing modifiers will be considered.
                     Set to False by default.
+    :param custom_combination: Optional. If provided, a custom combination
+            of variants to simulate.
+    :param save_path: Optional. Path to save the simulation files.
+            EnergyPlus building IDF files supported.
     :param modifier_map: A dictionary that maps variant modifiers to modifier functions
                         for customizing model variants.
 
@@ -152,4 +156,10 @@ def simulate_variants(
 
 
 def save_building_as_idf(building_idf, idf_save_path):
+    """
+    Save EnergyPlus building IDF files if used for simulation
+
+    :param building_idf: The EnergyPlus IDF object to be saved.
+    :param idf_save_path: The file path where the IDF file will be saved.
+    """
     building_idf.save(idf_save_path)
