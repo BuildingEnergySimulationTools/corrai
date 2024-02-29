@@ -90,6 +90,7 @@ def simulate_variants(
     n_cpu: int = -1,
     add_existing: bool = False,
     custom_combination=None,
+    save_path: str = None,
 ):
     """
     Simulate a list of model variants combination in parallel with customizable
@@ -129,7 +130,7 @@ def simulate_variants(
     else:
         combined_variants = get_combined_variants(variant_dict, add_existing)
 
-    for _, simulation in enumerate(combined_variants, start=1):
+    for idx, simulation in enumerate(combined_variants, start=1):
         working_model = deepcopy(model)
         for variant in simulation:
             split_var = variant.split("_")
@@ -142,4 +143,13 @@ def simulate_variants(
                 )
         model_list.append(working_model)
 
+        if save_path:
+            if hasattr(working_model, "idf"):
+                variant_idf_save_path = f"{save_path}/simu_{idx}.idf"
+                save_building_as_idf(working_model.idf, variant_idf_save_path)
+
     return run_list_of_models_in_parallel(model_list, simulation_options, n_cpu)
+
+
+def save_building_as_idf(building_idf, idf_save_path):
+    building_idf.save(idf_save_path)
