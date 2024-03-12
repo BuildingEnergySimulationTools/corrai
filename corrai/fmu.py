@@ -66,10 +66,16 @@ class FMUModel(Model):
             )
 
     def set_param_dict(self, param_dict):
-        self.init_parameters = param_dict
+        if self.init_parameters is None:
+            self.init_parameters = {}
+        self.init_parameters.update(param_dict)
 
     def simulate(
-        self, parameter_dict: dict = None, simulation_options: dict = None
+        self,
+        parameter_dict: dict = None,
+        simulation_options: dict = None,
+        debug_logging=False,
+        logger=None,
     ) -> pd.DataFrame:
         if parameter_dict:
             self.set_param_dict(parameter_dict)
@@ -88,6 +94,8 @@ class FMUModel(Model):
             solver=self.simulation_options.get("solver", "CVode"),
             output_interval=self.simulation_options.get("outputInterval", 3600),
             fmi_type=self.simulation_options.get("fmi_type", "ModelExchange"),
+            debug_logging=debug_logging,
+            logger=logger,
         )
 
         df = pd.DataFrame(result, columns=["time"] + self.output_list)
