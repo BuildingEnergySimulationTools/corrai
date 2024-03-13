@@ -227,6 +227,7 @@ class FmuModel(Model):
             start_time=self.simulation_options.get("startTime", 0),
             stop_time=self.simulation_options.get("stopTime", 1e6),
             step_size=self.simulation_options.get("stepSize", 3600),
+            relative_tolerance=self.simulation_options.get("tolerance", 1e-6),
             start_values=self.init_parameters,
             output=self.output_list,
             solver=self.simulation_options.get("solver", "CVode"),
