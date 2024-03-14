@@ -1,3 +1,4 @@
+import fmpy
 from fmpy import simulate_fmu
 import tempfile
 import warnings
@@ -159,8 +160,6 @@ class FmuModel(Model):
             self.init_parameters = {}
         self.init_parameters["Boundaries.fileName"] = str(new_bounds_path)
 
-        print(self.init_parameters)
-
         try:
             self.year = df.index[0].year
         except ValueError:
@@ -240,5 +239,66 @@ class FmuModel(Model):
         df = pd.DataFrame(result, columns=["time"] + self.output_list)
         adjusted_time = df["time"] + start_time
         df.index = seconds_to_datetime(adjusted_time, self.year)
+        df = df.drop(columns=["time"])
+
+        # First values are often duplicates...
+        df = df.loc[~df.index.duplicated(keep="first")]
 
         return df
+
+    def __repr__(self):
+        """
+        Generate a string representation of the FMU model's metadata and parameters.
+
+        Returns:
+            str: A string representation of the FMU model's metadata and parameters,
+            formatted for readability.
+
+        Example of the string returned:
+            Model Name: SimpleModel
+            Description: A simple model for demonstration purposes.
+            Version: 2.0
+            Parameters:
+              Name: parameter1, Default Value: 10, Description: An example parameter.
+              Name: parameter2, Default Value: Not specified,
+                Description: No description available.
+        """
+        model_description = fmpy.read_model_description(self.model_path)
+
+        model_info = f"Model Name: {model_description.modelName}\n"
+        model_info += f"Description: {fmpy.read_model_description(self.model_path)}\n"
+        model_info += f"Version: {model_description.fmiVersion}\n"
+        model_info += "Parameters:\n"
+
+        parameters = [
+            var
+            for var in model_description.modelVariables
+            if var.causality == "parameter"
+        ]
+        if not parameters:
+            model_info += "  No parameters available.\n"
+        else:
+            for param in parameters:
+                default_value = (
+                    param.start if param.start is not None else "Not specified"
+                )
+                desc = (
+                    param.description
+                    if param.description
+                    else "No description available."
+                )
+                model_info += (
+                    f"  Name: {param.name}, "
+                    f"Default Value: {default_value}, "
+                    f"Description: {desc}\n"
+                )
+
+        return model_info
+
+    def check_parameter_modifications(self):
+        """Check parameters modifications"""
+        modified_params = {}
+        for name, value in self.init_parameters.items():
+            modified_params[name] = value
+
+        return modified_params
