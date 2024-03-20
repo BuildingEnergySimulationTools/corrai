@@ -75,7 +75,7 @@ MODIFIER_MAP = {"mod1": modifier_1, "mod1_bis": modifier_1, "mod2": modifier_2}
 SIMULATION_OPTIONS = {
     "start": "2009-01-01 00:00:00",
     "end": "2009-01-01 02:00:00",
-    "timestep": "H",
+    "timestep": "h",
 }
 
 

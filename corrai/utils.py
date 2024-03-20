@@ -81,7 +81,7 @@ def apply_transformation(x, function):
         return x.apply(function)
     elif isinstance(x, pd.DataFrame):
         # applymap will be deprecated in future version
-        return x.applymap(function)
+        return x.map(function)
 
     return function(x)
 

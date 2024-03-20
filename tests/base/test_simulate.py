@@ -6,7 +6,7 @@ from tests.resources.pymodels import Ishigami
 SIMULATION_OPTIONS = {
     "start": "2009-01-01 00:00:00",
     "end": "2009-01-01 02:00:00",
-    "timestep": "H",
+    "timestep": "h",
 }
 
 
@@ -29,14 +29,14 @@ class TestSimulate:
         assert res[0][1] == {
             "end": "2009-01-01 02:00:00",
             "start": "2009-01-01 00:00:00",
-            "timestep": "H",
+            "timestep": "h",
         }
         pd.testing.assert_frame_equal(
             res[0][2],
             pd.DataFrame(
                 {"res": [5.882132011203685, 5.882132011203685, 5.882132011203685]},
                 index=pd.date_range(
-                    "2009-01-01 00:00:00", "2009-01-01 02:00:00", freq="H"
+                    "2009-01-01 00:00:00", "2009-01-01 02:00:00", freq="h"
                 ),
             ),
         )
@@ -49,14 +49,14 @@ class TestSimulate:
         assert res[0][1] == {
             "end": "2009-01-01 02:00:00",
             "start": "2009-01-01 00:00:00",
-            "timestep": "H",
+            "timestep": "h",
         }
         pd.testing.assert_frame_equal(
             res[0][2],
             pd.DataFrame(
                 {"res": [5.882132011203685, 5.882132011203685, 5.882132011203685]},
                 index=pd.date_range(
-                    "2009-01-01 00:00:00", "2009-01-01 02:00:00", freq="H"
+                    "2009-01-01 00:00:00", "2009-01-01 02:00:00", freq="h"
                 ),
             ),
         )

@@ -14,7 +14,7 @@ class TestLearning:
         x = np.arange(0.0, 10.0, 1)
         y = 4.0 + 2.0 * x
 
-        common_index = pd.date_range("2009-01-01", freq="H", periods=10)
+        common_index = pd.date_range("2009-01-01", freq="h", periods=10)
         x_df = pd.DataFrame(x, index=common_index)
         y_series = pd.Series(y, index=common_index)
 
