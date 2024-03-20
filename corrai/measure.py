@@ -216,7 +216,7 @@ def add_scatter_and_gaps(
 class MeasuredDats:
     def __init__(
         self,
-        data: pd.DataFrame,
+        data: pd.DataFrame = None,
         category_dict: dict[str, list[str]] = None,
         category_transformations=None,
         common_transformations=None,
@@ -280,6 +280,9 @@ class MeasuredDats:
 
         Methods:
         --------
+        set_data(data:DataFrame): The proper way or reset DataFrame. Check index
+            is valid, before assigning data to self.data.
+
         get_pipeline(transformers_list=None, resampling_rule=False): Creates
             and returns a data processing pipeline. Custom transformer list
             may be specified. resampling_rule add a resampler to the pipeline.
@@ -426,8 +429,10 @@ class MeasuredDats:
 
         >>>my_data.get_corrected_data()
         """
-        check_datetime_index(data)
-        self.data = data
+        if data is not None:
+            self.set_data(data)
+        else:
+            self.data = None
 
         if config_file_path is None:
             self.category_dict = category_dict
@@ -438,8 +443,8 @@ class MeasuredDats:
         else:
             self.read_config_file(config_file_path)
 
-        if self.category_dict is None:
-            self.category_dict = {"data": data.columns}
+        if self.category_dict is None and self.data is not None:
+            self.category_dict = {"data": self.data.columns}
 
         if self.category_trans is None:
             self.category_trans = {}
@@ -467,6 +472,10 @@ class MeasuredDats:
     def common_trans_names(self):
         lst = list(self.common_trans.keys())
         return list(dict.fromkeys(lst))
+
+    def set_data(self, data: pd.DataFrame):
+        check_datetime_index(data)
+        self.data = data
 
     def get_missing_value_stats(self, transformers_list=None, resampling_rule=False):
         data = self.get_corrected_data(transformers_list, resampling_rule)

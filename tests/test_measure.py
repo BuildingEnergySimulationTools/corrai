@@ -75,9 +75,8 @@ class TestMeasuredDats:
         my_measure_loc.transformers_list = ["PROCESS", "COMMON"]
         my_measure_loc.write_config_file(test_save_path / "save.json")
 
-        to_test = MeasuredDats(
-            data=TEST_DF, config_file_path=test_save_path / "save.json"
-        )
+        to_test = MeasuredDats(config_file_path=test_save_path / "save.json")
+        to_test.set_data(TEST_DF)
 
         assert to_test.category_dict == my_measure_loc.category_dict
         assert to_test.category_trans == my_measure_loc.category_trans
