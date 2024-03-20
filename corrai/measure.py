@@ -15,7 +15,7 @@ from corrai.transformers import PdIdentity
 from corrai.utils import check_datetime_index
 
 
-class Transformer(str, Enum):
+class Transformer(Enum):
     DROPNA = "DROPNA"
     RENAME_COLUMNS = "RENAME_COLUMNS"
     SK_TRANSFORMER = "SK_TRANSFORMER"
@@ -46,6 +46,8 @@ TRANSFORMER_MAP = {
     "INTERPOLATE": ct.PdInterpolate,
     "GAUSSIAN_FILTER": ct.PdGaussianFilter1D,
 }
+
+ENCODING_MAP = {"Transformer": Transformer}
 
 
 class AggMethod(str, Enum):
@@ -213,10 +215,28 @@ def add_scatter_and_gaps(
         )
 
 
+class CustomEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return {"__enum__": str(obj.__class__.__name__), "value": obj.value}
+        return json.JSONEncoder.default(self, obj)
+
+
+class CustomDecoder(json.JSONDecoder):
+    def __init__(self, *args, **kwargs):
+        super().__init__(object_hook=self.dict_to_object, *args, **kwargs)
+
+    def dict_to_object(self, d):
+        if "__enum__" in d:
+            enum_class = ENCODING_MAP[d["__enum__"]]
+            return enum_class(d["value"])
+        return d
+
+
 class MeasuredDats:
     def __init__(
         self,
-        data: pd.DataFrame,
+        data: pd.DataFrame = None,
         category_dict: dict[str, list[str]] = None,
         category_transformations=None,
         common_transformations=None,
@@ -280,6 +300,9 @@ class MeasuredDats:
 
         Methods:
         --------
+        set_data(data:DataFrame): The proper way or reset DataFrame. Check index
+            is valid, before assigning data to self.data.
+
         get_pipeline(transformers_list=None, resampling_rule=False): Creates
             and returns a data processing pipeline. Custom transformer list
             may be specified. resampling_rule add a resampler to the pipeline.
@@ -426,8 +449,10 @@ class MeasuredDats:
 
         >>>my_data.get_corrected_data()
         """
-        check_datetime_index(data)
-        self.data = data
+        if data is not None:
+            self.set_data(data)
+        else:
+            self.data = None
 
         if config_file_path is None:
             self.category_dict = category_dict
@@ -438,8 +463,8 @@ class MeasuredDats:
         else:
             self.read_config_file(config_file_path)
 
-        if self.category_dict is None:
-            self.category_dict = {"data": data.columns}
+        if self.category_dict is None and self.data is not None:
+            self.category_dict = {"data": self.data.columns}
 
         if self.category_trans is None:
             self.category_trans = {}
@@ -467,6 +492,10 @@ class MeasuredDats:
     def common_trans_names(self):
         lst = list(self.common_trans.keys())
         return list(dict.fromkeys(lst))
+
+    def set_data(self, data: pd.DataFrame):
+        check_datetime_index(data)
+        self.data = data
 
     def get_missing_value_stats(self, transformers_list=None, resampling_rule=False):
         data = self.get_corrected_data(transformers_list, resampling_rule)
@@ -576,11 +605,11 @@ class MeasuredDats:
                 "transformers_list": self.transformers_list,
                 "resampler_agg_methods": self.resampler_agg_methods,
             }
-            json.dump(to_dump, f, ensure_ascii=False, indent=4)
+            json.dump(to_dump, f, indent=4, cls=CustomEncoder)
 
     def read_config_file(self, file_path):
         with open(file_path, encoding="utf-8") as f:
-            config_dict = json.load(f)
+            config_dict = json.load(f, cls=CustomDecoder)
 
         attribute_list = [
             ("category_dict", "category_dict"),
