@@ -97,7 +97,7 @@ class TestCustomTransformers:
         pd.testing.assert_frame_equal(dropper.transform(df), df)
 
     def test_pd_drop_time_gradient(self):
-        time_index = pd.date_range("2021-01-01 00:00:00", freq="H", periods=8)
+        time_index = pd.date_range("2021-01-01 00:00:00", freq="h", periods=8)
 
         df = pd.DataFrame(
             {
@@ -136,7 +136,7 @@ class TestCustomTransformers:
         test = (
             pd.DataFrame(
                 {"cpt1": [0, 1, 2, 2, 2, 3], "cpt2": [0, 1, 2, 2, 2, 3]},
-                index=pd.date_range("2009-01-01 00:00:00", freq="10S", periods=6),
+                index=pd.date_range("2009-01-01 00:00:00", freq="10s", periods=6),
             )
             * 3600
         )
@@ -146,7 +146,7 @@ class TestCustomTransformers:
                 "cpt1": [360.0, 360.0, 180.0, -5.68e-14, 180.0, 360.0],
                 "cpt2": [360.0, 360.0, 180.0, -5.68e-14, 180.0, 360.0],
             },
-            index=pd.date_range("2009-01-01 00:00:00", freq="10S", periods=6),
+            index=pd.date_range("2009-01-01 00:00:00", freq="10s", periods=6),
         )
 
         derivator = PdTimeGradient()
@@ -210,15 +210,15 @@ class TestCustomTransformers:
     def test_pd_resampler(self):
         test = pd.DataFrame(
             {"col": [1.0, 2.0, 3.0]},
-            index=pd.date_range("2009-01-01 00:00:00", freq="H", periods=3),
+            index=pd.date_range("2009-01-01 00:00:00", freq="h", periods=3),
         )
 
         ref = pd.DataFrame(
             {"col": [2.0]},
-            index=pd.DatetimeIndex(["2009-01-01"], dtype="datetime64[ns]", freq="3H"),
+            index=pd.DatetimeIndex(["2009-01-01"], dtype="datetime64[ns]", freq="3h"),
         )
 
-        transformer = PdResampler(rule="3H", method=np.mean)
+        transformer = PdResampler(rule="3h", method=np.mean)
 
         pd.testing.assert_frame_equal(ref, transformer.fit_transform(test))
 
@@ -231,7 +231,7 @@ class TestCustomTransformers:
                 "col2": np.random.random(10),
                 "col3": np.random.random(10) * 10,
             },
-            index=pd.date_range("2009-01-01", freq="H", periods=10),
+            index=pd.date_range("2009-01-01", freq="h", periods=10),
         ).astype("float")
 
         ref = pd.DataFrame(
@@ -244,12 +244,12 @@ class TestCustomTransformers:
             index=pd.DatetimeIndex(
                 ["2009-01-01 00:00:00", "2009-01-01 05:00:00"],
                 dtype="datetime64[ns]",
-                freq="5H",
+                freq="5h",
             ),
         ).astype("float")
 
         column_resampler = PdColumnResampler(
-            rule="5H",
+            rule="5h",
             columns_method=[(["col2"], np.mean), (["col1"], np.mean)],
             remainder=np.max,
         )
@@ -259,7 +259,7 @@ class TestCustomTransformers:
         )
 
         column_resampler = PdColumnResampler(
-            rule="5H",
+            rule="5h",
             columns_method=[(["col2"], np.mean), (["col1"], np.mean)],
             remainder="drop",
         )
@@ -276,7 +276,7 @@ class TestCustomTransformers:
                 "col0": np.arange(2),
                 "col1": np.arange(2) * 10,
             },
-            index=pd.date_range("2009-01-01", freq="H", periods=2),
+            index=pd.date_range("2009-01-01", freq="h", periods=2),
         )
 
         ref = pd.DataFrame(
@@ -287,7 +287,7 @@ class TestCustomTransformers:
                 "1:00:00_col1": [0.0],
             },
             index=pd.DatetimeIndex(
-                ["2009-01-01 01:00:00"], dtype="datetime64[ns]", freq="H"
+                ["2009-01-01 01:00:00"], dtype="datetime64[ns]", freq="h"
             ),
         )
 

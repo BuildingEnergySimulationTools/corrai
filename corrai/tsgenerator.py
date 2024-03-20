@@ -363,7 +363,7 @@ class DomesticWaterConsumption:
         if not pd.Timestamp(start) or not pd.Timestamp(end):
             raise ValueError("Start and end values must be valid timestamps.")
 
-        date_index = pd.date_range(start=start, end=end, freq="H")
+        date_index = pd.date_range(start=start, end=end, freq="h")
         self.df_coefficient = pd.DataFrame(
             data=np.zeros(date_index.shape[0]), index=date_index, columns=["coef"]
         )
@@ -480,7 +480,7 @@ class DomesticWaterConsumption:
         else:
             rs = RandomState()
 
-        periods = pd.date_range(start=start, end=end, freq="T")
+        periods = pd.date_range(start=start, end=end, freq="min")
         df_costic = self.costic_shower_distribution(start, end)
         df_costic["nb_shower"] = df_costic["Q_ECS_COSTIC"] / self.v_used
         df_costic["t_shower_per_hour"] = df_costic["nb_shower"] * self.t_shower
@@ -502,7 +502,7 @@ class DomesticWaterConsumption:
             data=np.concatenate(distribution_list),
             index=pd.date_range(
                 df_costic["nb_shower_int"].index[0],
-                freq="T",
+                freq="min",
                 periods=df_costic.shape[0] * 60,
             ),
             columns=["shower_per_minute"],
@@ -539,7 +539,7 @@ class DomesticWaterConsumption:
             calculated hot water consumption for showers
             with timestamps as index.
         """
-        periods = pd.date_range(start=start, end=end, freq="H")
+        periods = pd.date_range(start=start, end=end, freq="h")
         self.get_coefficient_calc_from_period(start, end)
         # N_calculation
         if self.s_moy_dwelling < 10:
@@ -629,7 +629,7 @@ class DomesticWaterConsumption:
                 "At least one of washing machine or dish washer must be True"
             )
 
-        date_index = pd.date_range(start=start, end=end, freq="H")
+        date_index = pd.date_range(start=start, end=end, freq="h")
         if self.seed is not None:
             rs = RandomState(MT19937(SeedSequence(self.seed)))
         else:
@@ -796,7 +796,7 @@ class DomesticWaterConsumption:
 
         coef = self.get_coefficient_calc_from_period(start, end)
         coefficient = coef.mask(coef["coef"] < 0.5)
-        coefficient = coefficient.resample("T").ffill().fillna(float("0"))
+        coefficient = coefficient.resample("min").ffill().fillna(float("0"))
 
         list_washbasin = []
         list_sinkcook = []
@@ -959,14 +959,16 @@ class Scheduler:
         """
         day_dict = {}
         for day in self.config_dict["DAYS"].keys():
-            day_df = pd.DataFrame(index=["00:00"])
-            for hour, prog in self.config_dict["DAYS"][day].items():
-                day_df.loc[hour, prog.keys()] = prog.values()
+            day_df = pd.DataFrame.from_dict(
+                self.config_dict["DAYS"][day], orient="index"
+            )
+            if "00:00" not in day_df.index:
+                day_df.loc["00:00", :] = [np.nan] * len(day_df.columns)
             day_dict[day] = day_df
 
         return day_dict
 
-    def get_full_year_time_series(self, year=None, freq="T"):
+    def get_full_year_time_series(self, year=None, freq="min"):
         """
         Generates and returns the scheduled DataFrame based on the configuration
         settings.
@@ -1004,7 +1006,7 @@ class Scheduler:
         df = pd.concat(day_list)
         df.sort_index(inplace=True)
         df = df.bfill()
-        df = df.resample("T").bfill()
+        df = df.resample("min").bfill()
         df = df.shift(-1)
         df = df.ffill()
         return df.resample(freq).mean()
