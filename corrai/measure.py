@@ -15,7 +15,7 @@ from corrai.transformers import PdIdentity
 from corrai.utils import check_datetime_index
 
 
-class Transformer(str, Enum):
+class Transformer(Enum):
     DROPNA = "DROPNA"
     RENAME_COLUMNS = "RENAME_COLUMNS"
     SK_TRANSFORMER = "SK_TRANSFORMER"
@@ -46,6 +46,8 @@ TRANSFORMER_MAP = {
     "INTERPOLATE": ct.PdInterpolate,
     "GAUSSIAN_FILTER": ct.PdGaussianFilter1D,
 }
+
+ENCODING_MAP = {"Transformer": Transformer}
 
 
 class AggMethod(str, Enum):
@@ -211,6 +213,24 @@ def add_scatter_and_gaps(
                 yaxis=yaxis,
             )
         )
+
+
+class CustomEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return {"__enum__": str(obj.__class__.__name__), "value": obj.value}
+        return json.JSONEncoder.default(self, obj)
+
+
+class CustomDecoder(json.JSONDecoder):
+    def __init__(self, *args, **kwargs):
+        super().__init__(object_hook=self.dict_to_object, *args, **kwargs)
+
+    def dict_to_object(self, d):
+        if "__enum__" in d:
+            enum_class = ENCODING_MAP[d["__enum__"]]
+            return enum_class(d["value"])
+        return d
 
 
 class MeasuredDats:
@@ -585,11 +605,11 @@ class MeasuredDats:
                 "transformers_list": self.transformers_list,
                 "resampler_agg_methods": self.resampler_agg_methods,
             }
-            json.dump(to_dump, f, ensure_ascii=False, indent=4)
+            json.dump(to_dump, f, indent=4, cls=CustomEncoder)
 
     def read_config_file(self, file_path):
         with open(file_path, encoding="utf-8") as f:
-            config_dict = json.load(f)
+            config_dict = json.load(f, cls=CustomDecoder)
 
         attribute_list = [
             ("category_dict", "category_dict"),
