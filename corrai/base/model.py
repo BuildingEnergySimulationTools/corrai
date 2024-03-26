@@ -1,5 +1,6 @@
 import pandas as pd
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 
 class Model(ABC):
@@ -15,7 +16,7 @@ class Model(ABC):
         pass
 
     @abstractmethod
-    def save(self, file_path: str, extension: str = None):
+    def save(self, file_path: Path, extension: str = None):
         """
         Save the current parameters of the model to a file.
 

@@ -2,6 +2,7 @@ from corrai.base.model import Model
 
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
 
 class Ishigami(Model):
@@ -24,7 +25,7 @@ class Ishigami(Model):
             ),
         )
 
-    def save(self, file_path: str, extension: str = None):
+    def save(self, file_path: Path, extension: str = None):
         pass
 
 

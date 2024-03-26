@@ -299,7 +299,7 @@ class FmuModel(Model):
 
         return df
 
-    def save(self, file_path: str, extension: str = ".fmu"):
+    def save(self, file_path: Path, extension: str = ".fmu"):
         """
         Save the FMU file to the specified location.
 
@@ -307,10 +307,7 @@ class FmuModel(Model):
             file_path (str): The path where the FMU file will be saved.
             extension (str): The extension of the file. Defaults to ".fmu".
         """
-        if not extension.startswith("."):
-            extension = "." + extension
-
-        target_path = file_path + extension
+        target_path = file_path.as_posix() + extension
         shutil.copyfile(self.model_path, target_path)
 
     def __repr__(self):
