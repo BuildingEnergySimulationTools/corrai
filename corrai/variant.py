@@ -91,6 +91,7 @@ def simulate_variants(
     add_existing: bool = False,
     custom_combination=None,
     save_path: str = None,
+    file_extension: str = ".txt",
 ):
     """
     Simulate a list of model variants combination in parallel with customizable
@@ -125,6 +126,8 @@ def simulate_variants(
     :param n_cpu: The number of CPU cores to use for parallel execution. Default is -1
         meaning all CPUs but one, 0 is all CPU, 1 is sequential, >1 is the number
         of cpus
+    :param file_extension: Optional. The extension to use for saving the model files.
+                   Defaults to ".txt".
 
     :return: A list of simulation results for each model variant.
     """
@@ -148,20 +151,6 @@ def simulate_variants(
         model_list.append(working_model)
 
         if save_path:
-            if hasattr(working_model, "idf"):
-                variant_idf_save_path = f"{save_path}/simu_{idx}.idf"
-                save_building_as_idf(working_model.idf, variant_idf_save_path)
-            else:
-                raise ValueError("No IDF file to save.")
+            working_model.save(f"{save_path}/Model{idx}", extension=file_extension)
 
     return run_list_of_models_in_parallel(model_list, simulation_options, n_cpu)
-
-
-def save_building_as_idf(building_idf, idf_save_path):
-    """
-    Save EnergyPlus building IDF files if used for simulation
-
-    :param building_idf: The EnergyPlus IDF object to be saved.
-    :param idf_save_path: The file path where the IDF file will be saved.
-    """
-    building_idf.save(idf_save_path)
