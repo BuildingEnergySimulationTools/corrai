@@ -52,3 +52,16 @@ class VariantModel(Model):
         )
 
         return df
+
+    def save(self, file_path: str, extension: str = ".txt"):
+        """
+        Save the current parameters of the model to a file.
+
+        :param file_path: The file path where the parameters will be saved.
+        :param extension: The file extension to use for saving the model.
+                          If not provided, it defaults to ".txt".
+        """
+        with open(f"{file_path}{extension}", "w") as file:
+            file.write(f"y1={self.y1}\n")
+            file.write(f"z1={self.z1}\n")
+            file.write(f"multiplier={self.multiplier}\n")

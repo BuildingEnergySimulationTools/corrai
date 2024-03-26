@@ -8,7 +8,8 @@ from corrai.variant import (
 import pandas as pd
 from tests.resources.pymodels import VariantModel
 import tempfile
-import pytest
+import os
+import shutil
 
 
 def modifier_1(model, description, multiplier=None):
@@ -198,11 +199,14 @@ class TestVariant:
         with tempfile.TemporaryDirectory() as temp_dir:
             save_path = temp_dir
 
-            with pytest.raises(ValueError):
-                simulate_variants(
-                    model=model,
-                    variant_dict=variant_dict,
-                    modifier_map=modifier_map,
-                    simulation_options=simulation_options,
-                    save_path=save_path,
-                )
+            simulate_variants(
+                model=model,
+                variant_dict=variant_dict,
+                modifier_map=modifier_map,
+                simulation_options=simulation_options,
+                save_path=save_path,
+            )
+
+            assert os.path.exists(save_path)
+            assert os.path.exists(os.path.join(save_path, "Model1.txt"))
+            shutil.rmtree(save_path)
