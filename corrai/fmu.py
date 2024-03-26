@@ -6,6 +6,7 @@ import warnings
 from pathlib import Path
 import pandas as pd
 import datetime as dt
+import shutil
 
 from corrai.base.model import Model
 
@@ -297,6 +298,17 @@ class FmuModel(Model):
         df = df.loc[~df.index.duplicated(keep="first")]
 
         return df
+
+    def save(self, file_path: Path, extension: str = ".fmu"):
+        """
+        Save the FMU file to the specified location.
+
+        Parameters:
+            file_path (str): The path where the FMU file will be saved.
+            extension (str): The extension of the file. Defaults to ".fmu".
+        """
+        target_path = file_path.as_posix() + extension
+        shutil.copyfile(self.model_path, target_path)
 
     def __repr__(self):
         """

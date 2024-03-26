@@ -89,9 +89,12 @@ def simulate_variants(
     simulation_options: dict[str, Any],
     n_cpu: int = -1,
     add_existing: bool = False,
+    custom_combination=None,
+    save_path: str = None,
+    file_extension: str = ".txt",
 ):
     """
-    Simulate a list of mppodel variants combination in parallel with customizable
+    Simulate a list of model variants combination in parallel with customizable
     modifiers.
 
     This function takes a base model, a dictionary of variant information, a modifier
@@ -111,6 +114,10 @@ def simulate_variants(
                     If True, existing modifiers will be included;
                     if False, only non-existing modifiers will be considered.
                     Set to False by default.
+    :param custom_combination: Optional. If provided, a custom combination
+            of variants to simulate.
+    :param save_path: Optional. Path to save the simulation files.
+            EnergyPlus building IDF files supported.
     :param modifier_map: A dictionary that maps variant modifiers to modifier functions
                         for customizing model variants.
 
@@ -119,11 +126,18 @@ def simulate_variants(
     :param n_cpu: The number of CPU cores to use for parallel execution. Default is -1
         meaning all CPUs but one, 0 is all CPU, 1 is sequential, >1 is the number
         of cpus
+    :param file_extension: Optional. The extension to use for saving the model files.
+                   Defaults to ".txt".
 
     :return: A list of simulation results for each model variant.
     """
     model_list = []
-    for simulation in get_combined_variants(variant_dict, add_existing):
+    if custom_combination is not None:
+        combined_variants = custom_combination
+    else:
+        combined_variants = get_combined_variants(variant_dict, add_existing)
+
+    for idx, simulation in enumerate(combined_variants, start=1):
         working_model = deepcopy(model)
         for variant in simulation:
             split_var = variant.split("_")
@@ -135,5 +149,8 @@ def simulate_variants(
                     **variant_dict[variant][VariantKeys.ARGUMENTS],
                 )
         model_list.append(working_model)
+
+        if save_path:
+            working_model.save(f"{save_path}/Model{idx}", extension=file_extension)
 
     return run_list_of_models_in_parallel(model_list, simulation_options, n_cpu)

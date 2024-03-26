@@ -3,6 +3,9 @@ import numpy as np
 from pathlib import Path
 import pytest
 
+import tempfile
+import os
+
 import platform
 
 from corrai.fmu import FmuModel
@@ -111,3 +114,13 @@ class TestFmu:
 
         with pytest.raises(ValueError):
             simul_boundaries.set_boundaries_df(invalid_df)
+
+    def test_save(self, simul):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_path = os.path.join(temp_dir, "test_model")
+
+            simul.save(file_path)
+            assert os.path.exists(temp_dir)
+            assert "test_model.fmu" in os.listdir(temp_dir)
+
+            # os.remove(temp_dir)
