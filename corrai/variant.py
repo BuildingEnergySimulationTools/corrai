@@ -129,7 +129,7 @@ def simulate_variants(
     :return: A list of simulation results for each model variant.
     """
     model_list = []
-    if custom_combination:
+    if custom_combination is not None:
         combined_variants = custom_combination
     else:
         combined_variants = get_combined_variants(variant_dict, add_existing)
@@ -138,9 +138,7 @@ def simulate_variants(
         working_model = deepcopy(model)
         for variant in simulation:
             split_var = variant.split("_")
-            if (
-                not split_var[0] == "EXISTING" and add_existing
-            ) or add_existing is False:
+            if not split_var[0] == "EXISTING":
                 modifier = modifier_map[variant_dict[variant][VariantKeys.MODIFIER]]
                 modifier(
                     model=working_model,
@@ -153,6 +151,8 @@ def simulate_variants(
             if hasattr(working_model, "idf"):
                 variant_idf_save_path = f"{save_path}/simu_{idx}.idf"
                 save_building_as_idf(working_model.idf, variant_idf_save_path)
+            else:
+                raise ValueError("No IDF file to save.")
 
     return run_list_of_models_in_parallel(model_list, simulation_options, n_cpu)
 
