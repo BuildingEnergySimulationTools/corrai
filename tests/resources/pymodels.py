@@ -24,6 +24,9 @@ class Ishigami(Model):
             ),
         )
 
+    def save(self, file_path: str, extension: str = None):
+        pass
+
 
 class VariantModel(Model):
     def __init__(self):
