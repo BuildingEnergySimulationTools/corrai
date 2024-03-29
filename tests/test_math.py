@@ -1,5 +1,5 @@
 import pandas as pd
-from corrai.math import time_gradient, time_integrate, aggregate_time_series
+from corrai.base.math import time_gradient, time_integrate, aggregate_time_series
 from corrai.metrics import nmbe
 
 

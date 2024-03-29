@@ -12,7 +12,7 @@ from SALib.sample import morris as morris_sampler
 
 from corrai.base.parameter import Parameter
 from corrai.base.simulate import run_simulations
-from corrai.math import aggregate_time_series
+from corrai.base.math import aggregate_time_series
 from corrai.multi_optimize import plot_parcoord
 
 
