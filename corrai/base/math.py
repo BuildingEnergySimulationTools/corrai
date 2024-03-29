@@ -4,8 +4,8 @@ import numpy as np
 from scipy import integrate
 from collections.abc import Callable
 
-from corrai.utils import as_1_column_dataframe
-from corrai.utils import check_datetime_index
+from corrai.base.utils import as_1_column_dataframe
+from corrai.base.utils import check_datetime_index
 
 
 def time_gradient(data):
