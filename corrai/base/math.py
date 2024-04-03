@@ -208,3 +208,20 @@ def aggregate_time_series(
             ],
             index=result_df.columns,
         )
+
+
+def cosd(angle):
+    """
+    Cosine with angle input in degrees
+    """
+    res = np.cos(np.radians(angle))
+    return res
+
+
+def sind(angle):
+    """
+    Sine with angle input in degrees
+    """
+
+    res = np.sin(np.radians(angle))
+    return res
