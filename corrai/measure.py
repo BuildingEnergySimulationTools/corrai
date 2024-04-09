@@ -517,14 +517,14 @@ class MeasuredDats:
         if transformers_list is None:
             transformers_list = self.transformers_list.copy()
 
-        if Transformer.RESAMPLE in transformers_list and not resampling_rule:
+        if Transformer.RESAMPLE.value in transformers_list and not resampling_rule:
             raise ValueError(
                 "RESAMPLE is present in transformers_list but no rule"
                 "have been specified. use resampling_rule argument"
             )
 
-        if resampling_rule and Transformer.RESAMPLE not in transformers_list:
-            transformers_list += [Transformer.RESAMPLE]
+        if resampling_rule and Transformer.RESAMPLE.value not in transformers_list:
+            transformers_list += [Transformer.RESAMPLE.value]
 
         if not transformers_list:
             obj_list = [PdIdentity()]
@@ -533,7 +533,7 @@ class MeasuredDats:
             for trans in transformers_list:
                 if trans in self.category_trans_names:
                     obj_list.append(self.get_category_transformer(trans))
-                elif trans == Transformer.RESAMPLE:
+                elif trans == Transformer.RESAMPLE.value:
                     obj_list.append(self.get_resampler(resampling_rule))
                 else:
                     obj_list.append(self.get_common_transformer(trans))
