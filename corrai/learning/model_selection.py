@@ -14,7 +14,7 @@ from sklearn.svm import SVR
 from sklearn.utils.validation import check_is_fitted
 
 from corrai.metrics import nmbe, cv_rmse
-from corrai.utils import as_1_column_dataframe
+from corrai.base.utils import as_1_column_dataframe
 
 
 class Model(str, enum.Enum):

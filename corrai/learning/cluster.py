@@ -11,7 +11,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from corrai.transformers import PdSkTransformer
-from corrai.utils import (
+from corrai.base.utils import (
     as_1_column_dataframe,
     check_datetime_index,
     float_to_hour,

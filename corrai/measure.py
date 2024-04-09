@@ -10,9 +10,9 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import make_pipeline
 
 import corrai.transformers as ct
-from corrai.math import time_integrate
+from corrai.base.math import time_integrate
 from corrai.transformers import PdIdentity
-from corrai.utils import check_datetime_index
+from corrai.base.utils import check_datetime_index
 
 
 class Transformer(Enum):
