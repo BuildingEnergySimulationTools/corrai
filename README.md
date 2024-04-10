@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/BuildingEnergySimulationTools/corrai/main/logo_corrai.svg" alt="CorrAI" width="200"/>
 </p>
 
-[![PyPI](https://img.shields.io/pypi/v/bayesbuilding?label=pypi%20package)](https://pypi.org/project/corrai/)
+[![PyPI](https://img.shields.io/pypi/v/corrai?label=pypi%20package)](https://pypi.org/project/corrai/)
 [![Static Badge](https://img.shields.io/badge/python-3.10_%7C_3.12-blue)](https://pypi.org/project/corrai/)
 [![codecov](https://codecov.io/gh/BuildingEnergySimulationTools/corrai/branch/main/graph/badge.svg?token=F51O9CXI61)](https://codecov.io/gh/BuildingEnergySimulationTools/corrai)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
