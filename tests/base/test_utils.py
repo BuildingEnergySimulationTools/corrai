@@ -3,12 +3,12 @@ import numpy as np
 
 import pytest
 
-from corrai.utils import _reshape_1d
-from corrai.utils import as_1_column_dataframe
-from corrai.utils import check_datetime_index
-from corrai.utils import float_to_hour
-from corrai.utils import hour_to_float
-from corrai.utils import get_reversed_dict
+from corrai.base.utils import _reshape_1d
+from corrai.base.utils import as_1_column_dataframe
+from corrai.base.utils import check_datetime_index
+from corrai.base.utils import float_to_hour
+from corrai.base.utils import hour_to_float
+from corrai.base.utils import get_reversed_dict
 
 
 class TestUtils:
