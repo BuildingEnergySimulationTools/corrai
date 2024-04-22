@@ -1,11 +1,16 @@
+import os
+import shutil
+import tempfile
+from pathlib import Path
+
+import pandas as pd
+
 from corrai.variant import (
     simulate_variants,
     VariantKeys,
     get_combined_variants,
     get_modifier_dict,
 )
-
-import pandas as pd
 from tests.resources.pymodels import VariantModel
 
 
@@ -151,3 +156,59 @@ class TestVariant:
         assert set(list(pd.concat(res, axis=1).max())) == set(expected_list)
         # for combinations with conflictual values (several y1),
         # the last one erases the previous ones
+
+    def test_custom_combination(self):
+        model = VariantModel()
+
+        custom_combination = [
+            ("EXISTING_mod1", "Variant_2", "Variant_3"),
+            ("Variant_1", "EXISTING_mod1_bis", "EXISTING_mod2"),
+        ]
+
+        expected_list = [48, 110]
+
+        # Sequential
+        res = simulate_variants(
+            model=model,
+            variant_dict=VARIANT_DICT_false,
+            modifier_map=MODIFIER_MAP,
+            simulation_options=SIMULATION_OPTIONS,
+            n_cpu=1,
+            custom_combination=custom_combination,
+            add_existing=False,
+        )
+
+        calc_list = list(pd.concat(res, axis=1).max())
+        assert set(calc_list) == set(expected_list)
+
+    def test_save_path(self):
+        model = VariantModel()
+        variant_dict = {
+            "Variant_1": {
+                VariantKeys.MODIFIER: "mod1",
+                VariantKeys.ARGUMENTS: {"multiplier": 2},
+                VariantKeys.DESCRIPTION: {"y1": 20},
+            }
+        }
+
+        modifier_map = {"mod1": modifier_1}
+        simulation_options = {
+            "start": "2009-01-01 00:00:00",
+            "end": "2009-01-01 02:00:00",
+            "timestep": "H",
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            save_path = Path(temp_dir)
+
+            simulate_variants(
+                model=model,
+                variant_dict=variant_dict,
+                modifier_map=modifier_map,
+                simulation_options=simulation_options,
+                save_dir=save_path,
+            )
+
+            assert os.path.exists(save_path)
+            assert os.path.exists(save_path / "Model_1.txt")
+            shutil.rmtree(save_path)

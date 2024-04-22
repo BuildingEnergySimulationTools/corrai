@@ -6,6 +6,7 @@ import warnings
 from pathlib import Path
 import pandas as pd
 import datetime as dt
+import shutil
 
 from corrai.base.model import Model
 
@@ -109,7 +110,7 @@ class FmuModel(Model):
 
     def __init__(
         self,
-        model_path,
+        model_path: Path,
         simulation_options,
         output_list,
         init_parameters=None,
@@ -147,10 +148,8 @@ class FmuModel(Model):
                 a warning is raised indicating that `year` will be
                 ignored and derived from `boundary_df` instead.
         """
-        self.model_path = (
-            Path(model_path) if isinstance(model_path, str) else model_path
-        )
-        self._simulation_path = Path(tempfile.mkdtemp())
+        self.model_path = model_path
+        self._simulation_dir = Path(tempfile.mkdtemp())
 
         self.init_parameters = init_parameters or {}
 
@@ -205,7 +204,7 @@ class FmuModel(Model):
             ValueError: If the DataFrame's index is not a DateTimeIndex,
             an error is raised indicating the requirement for datetime indices.
         """
-        new_bounds_path = self._simulation_path / "boundaries.txt"
+        new_bounds_path = self._simulation_dir / "boundaries.txt"
         df_to_combitimetable(df, new_bounds_path)
 
         if self.init_parameters is None:
@@ -297,6 +296,15 @@ class FmuModel(Model):
         df = df.loc[~df.index.duplicated(keep="first")]
 
         return df
+
+    def save(self, file_path: Path):
+        """
+        Save the FMU file to the specified location.
+
+        Parameters:
+            file_path (Path): The path where the FMU file will be saved.
+        """
+        shutil.copyfile(self.model_path, file_path)
 
     def __repr__(self):
         """
