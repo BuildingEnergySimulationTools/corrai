@@ -16,7 +16,7 @@ class Model(ABC):
         pass
 
     @abstractmethod
-    def save(self, file_path: Path, extension: str = None):
+    def save(self, file_path: Path):
         """
         Save the current parameters of the model to a file.
 

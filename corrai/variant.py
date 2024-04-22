@@ -1,11 +1,12 @@
 import enum
+import itertools
+from collections.abc import Callable
+from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
-from collections.abc import Callable
 from corrai.base.model import Model
 from corrai.base.simulate import run_list_of_models_in_parallel
-from copy import deepcopy
-import itertools
 
 
 class VariantKeys(enum.Enum):
@@ -90,7 +91,7 @@ def simulate_variants(
     n_cpu: int = -1,
     add_existing: bool = False,
     custom_combination=None,
-    save_path: str = None,
+    save_dir: Path = None,
     file_extension: str = ".txt",
 ):
     """
@@ -116,7 +117,7 @@ def simulate_variants(
                     Set to False by default.
     :param custom_combination: Optional. If provided, a custom combination
             of variants to simulate.
-    :param save_path: Optional. Path to save the simulation files.
+    :param save_dir: Optional. Path to save the simulation files.
             EnergyPlus building IDF files supported.
     :param modifier_map: A dictionary that maps variant modifiers to modifier functions
                         for customizing model variants.
@@ -150,7 +151,7 @@ def simulate_variants(
                 )
         model_list.append(working_model)
 
-        if save_path:
-            working_model.save(f"{save_path}/Model{idx}", extension=file_extension)
+        if save_dir:
+            working_model.save((save_dir / f"Model_{idx}").with_suffix(file_extension))
 
     return run_list_of_models_in_parallel(model_list, simulation_options, n_cpu)

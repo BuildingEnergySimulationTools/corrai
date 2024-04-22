@@ -117,9 +117,9 @@ class TestFmu:
 
     def test_save(self, simul):
         with tempfile.TemporaryDirectory() as temp_dir:
-            file_path = os.path.join(temp_dir, "test_model")
+            file_path = os.path.join(temp_dir, "test_model.fmu")
 
-            simul.save(file_path)
+            simul.save(Path(file_path))
             assert os.path.exists(temp_dir)
             assert "test_model.fmu" in os.listdir(temp_dir)
 
