@@ -8,7 +8,42 @@ master_bar, progress_bar = force_console_behavior()
 
 
 class SimulationSampler:
+    """
+    A class for sampling parameter sets and running simulations using a simulator.
+
+    Parameters:
+    - parameters (list): A list of dictionaries describing the parameters to be sampled.
+        Each dictionary should contain keys 'NAME', 'INTERVAL', and 'TYPE' to define
+        the parameter name, its range (interval), and its data type
+    (Integer, Real, etc.).
+    - simulator: An instance of the simulator used for running simulations.
+    - sampling_method (str): The name of the sampling method to be used.
+
+    Attributes:
+    - parameters (list): List of parameter dictionaries.
+    - simulator: Instance of the simulator.
+    - sampling_method (str): Name of the sampling method.
+    - sample (numpy.ndarray): An array containing the sampled
+        parameter sets.
+    - sample_results (list): A list containing the results of
+        simulations for each sampled parameter set.
+
+    Methods:
+    - get_boundary_sample(): Generates a sample covering the parameter space boundaries.
+    - add_sample(sample_size, seed=None): Adds a new sample of parameter sets.
+    """
+
     def __init__(self, parameters, simulator, sampling_method="LatinHypercube"):
+        """
+        Initialize the SimulationSampler instance.
+
+        :param parameters: A list of dictionaries describing
+            the parameters to be sampled.
+        :param simulator: An instance of the simulator
+            used for running simulations.
+        :param sampling_method: The name of the sampling method
+            to be used (default is "LatinHypercube").
+        """
         self.parameters = parameters
         self.simulator = simulator
         self.sampling_method = sampling_method
@@ -18,11 +53,22 @@ class SimulationSampler:
             self.sampling_method = LatinHypercube
 
     def get_boundary_sample(self):
+        """
+        Generate a sample covering the parameter space boundaries.
+
+        :return: A numpy array containing the boundary sample.
+        """
         return np.array(
             [[par[Parameter.INTERVAL][i] for i in range(2)] for par in self.parameters]
         )
 
     def add_sample(self, sample_size, seed=None):
+        """
+        Add a new sample of parameter sets.
+
+        :param sample_size: The size of the new sample.
+        :param seed: The seed for the random number generator (default is None).
+        """
         sampler = LatinHypercube(d=len(self.parameters), seed=seed)
         new_sample = sampler.random(n=sample_size)
         new_sample_value = np.empty(shape=(0, len(self.parameters)))
