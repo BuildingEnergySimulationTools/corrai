@@ -21,6 +21,5 @@ class Model(ABC):
         Save the current parameters of the model to a file.
 
         :param file_path: The file path where the parameters will be saved.
-        :param extension: The file extension to use for saving the model.
         """
         pass

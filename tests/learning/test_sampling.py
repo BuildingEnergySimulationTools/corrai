@@ -36,6 +36,9 @@ class Simul(Model):
         df_out = pd.DataFrame({"df": [df]})
         return df_out
 
+    def save(self, file_path: Path):
+        pass
+
 
 class TestSimulationSampler:
     def test_get_boundary_sample(self):
