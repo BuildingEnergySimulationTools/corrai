@@ -32,7 +32,7 @@ class Simul(Model):
         self, parameter_dict: dict = None, simulation_options: dict = None
     ) -> pd.DataFrame:
         Parameter1, Parameter2, Parameter3, Parameter4 = parameter_dict.values()
-        df = Parameter1 + Parameter2 - Parameter3 + 0 * Parameter4
+        df = Parameter1 + Parameter2 - Parameter3 + 2 * Parameter4
         df_out = pd.DataFrame({"df": [df]})
         return df_out
 
@@ -82,10 +82,31 @@ class TestSimulationSampler:
                 elif par[Parameter.TYPE] == "Binary":
                     assert val in [0, 1]
 
+        sampler.clear_sample()
+        sampler.add_sample(1, seed=42)
+
+        expected_result = sampler.sample_results
+
+        expected_sample = np.array(
+            [[1.35626, 2, 0.2, 1], [0, 1, 0.02, 0], [6, 4, 0.2, 1]]
+        )
+        np.testing.assert_allclose(
+            sampler.sample, expected_sample, atol=1e-8, rtol=1e-5
+        )
+
+        expected_result = [
+            pd.DataFrame([5.156264], columns=["df"]),
+            pd.DataFrame([0.98], columns=["df"]),
+            pd.DataFrame([11.8], columns=["df"]),
+        ]
+        np.testing.assert_allclose(
+            sampler.sample_results, expected_result, atol=1e-8, rtol=1e-5
+        )
+
     def test_clear_sample(self):
         Simulator = Simul()
         sampler = SimulationSampler(parameters, simulator=Simulator)
         sampler.add_sample(1)
         sampler.clear_sample()
 
-        assert sampler.sample is None
+        assert np.array_equal(sampler.sample, np.empty(shape=(0, len(parameters))))

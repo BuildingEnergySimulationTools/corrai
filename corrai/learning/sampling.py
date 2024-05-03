@@ -123,9 +123,7 @@ class SimulationSampler:
         """
         interval = parameter[Parameter.INTERVAL]
         if parameter[Parameter.TYPE] == "Integer":
-            sampled_val = np.round(interval[0] + value * (interval[1] - interval[0]))
-            sampled_val = max(interval[0], min(sampled_val, interval[1]))
-            return int(sampled_val)
+            return int(interval[0] + value * (interval[1] - interval[0]))
         elif parameter[Parameter.TYPE] == "Choice":
             return np.random.choice(interval)
         elif parameter[Parameter.TYPE] == "Binary":
