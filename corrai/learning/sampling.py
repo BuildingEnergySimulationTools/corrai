@@ -105,3 +105,9 @@ class SimulationSampler:
             self.sample_results.append(results)
 
         self.sample = np.vstack((self.sample, new_sample_value))
+
+    def clear_sample(self):
+        """
+        Clear the current sample set.
+        """
+        self.sample = None

@@ -55,3 +55,11 @@ class TestSpling:
         assert len(sampler.sample_results) == sample_size + new_sample_size + len(
             parameters
         )
+
+    def test_clear_sample(self):
+        Simulator = Simul()
+        sampler = SimulationSampler(parameters, simulator=Simulator)
+        sampler.add_sample(1)
+        sampler.clear_sample()
+
+        assert sampler.sample is None
