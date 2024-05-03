@@ -81,6 +81,9 @@ class SimulationSampler:
         :param sample_size: The size of the new sample.
         :param seed: The seed for the random number generator (default is None).
         """
+        if seed is not None:
+            np.random.seed(seed)
+
         sampler = LatinHypercube(d=len(self.parameters), seed=seed)
         new_sample = sampler.random(n=sample_size)
         new_sample_value = np.empty(shape=(0, len(self.parameters)))
@@ -96,7 +99,6 @@ class SimulationSampler:
             )
         if self.sample.size == 0:
             bound_sample = self.get_boundary_sample()
-            print(bound_sample.T, new_sample_value)
             new_sample_value = np.vstack((new_sample_value, bound_sample.T))
 
         prog_bar = progress_bar(range(new_sample_value.shape[0]))
@@ -127,7 +129,7 @@ class SimulationSampler:
         elif parameter[Parameter.TYPE] == "Choice":
             return np.random.choice(interval)
         elif parameter[Parameter.TYPE] == "Binary":
-            return np.random.choice([0, 1])
+            return np.random.randint(0, 2)
         else:
             return interval[0] + value * (interval[1] - interval[0])
 
