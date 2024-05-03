@@ -136,5 +136,7 @@ class SimulationSampler:
     def clear_sample(self):
         """
         Clear the current sample set.
+        And current results.
         """
-        self.sample = None
+        self.sample = np.empty(shape=(0, len(self.parameters)))
+        self.sample_results = []
