@@ -58,9 +58,21 @@ class SimulationSampler:
 
         :return: A numpy array containing the boundary sample.
         """
-        return np.array(
-            [[par[Parameter.INTERVAL][i] for i in range(2)] for par in self.parameters]
-        )
+        boundary_sample = []
+        for par in self.parameters:
+            interval = par[Parameter.INTERVAL]
+            param_type = par.get(Parameter.TYPE, "Real")  # Default type is Real
+
+            if param_type == "Real" or param_type == "Integer":
+                boundary_sample.append([interval[0], interval[1]])
+
+            elif param_type == "Choice":
+                boundary_sample.append([min(interval), max(interval)])
+
+            elif param_type == "Binary":
+                boundary_sample.append([0, 1])
+
+        return np.array(boundary_sample)
 
     def add_sample(self, sample_size, seed=None):
         """
@@ -77,22 +89,15 @@ class SimulationSampler:
                 (
                     new_sample_value,
                     [
-                        par[Parameter.INTERVAL][0]
-                        + val
-                        * (par[Parameter.INTERVAL][1] - par[Parameter.INTERVAL][0])
+                        self._sample_parameter(par, val)
                         for par, val in zip(self.parameters, s)
                     ],
                 )
             )
         if self.sample.size == 0:
             bound_sample = self.get_boundary_sample()
-            bound_sample = np.hstack(
-                (
-                    bound_sample,
-                    np.tile(bound_sample[:, [-1]], (1, new_sample_value.shape[1] - 2)),
-                )
-            )
-            new_sample_value = np.vstack((new_sample_value, bound_sample))
+            print(bound_sample.T, new_sample_value)
+            new_sample_value = np.vstack((new_sample_value, bound_sample.T))
 
         prog_bar = progress_bar(range(new_sample_value.shape[0]))
         for _, simul in zip(prog_bar, new_sample_value):
@@ -105,6 +110,26 @@ class SimulationSampler:
             self.sample_results.append(results)
 
         self.sample = np.vstack((self.sample, new_sample_value))
+
+    def _sample_parameter(self, parameter, value):
+        """
+        Sample a parameter based on its type.
+
+        :param parameter: The parameter dictionary.
+        :param value: The sampled value.
+        :return: The adjusted sampled value based on the parameter type.
+        """
+        interval = parameter[Parameter.INTERVAL]
+        if parameter[Parameter.TYPE] == "Integer":
+            sampled_val = np.round(interval[0] + value * (interval[1] - interval[0]))
+            sampled_val = max(interval[0], min(sampled_val, interval[1]))
+            return int(sampled_val)
+        elif parameter[Parameter.TYPE] == "Choice":
+            return np.random.choice(interval)
+        elif parameter[Parameter.TYPE] == "Binary":
+            return np.random.choice([0, 1])
+        else:
+            return interval[0] + value * (interval[1] - interval[0])
 
     def clear_sample(self):
         """
