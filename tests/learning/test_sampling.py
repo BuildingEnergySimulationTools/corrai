@@ -39,7 +39,7 @@ class Simul(Model):
 
 class TestSimulationSampler:
     def test_get_boundary_sample(self):
-        sampler = SimulationSampler(parameters, simulator=None)
+        sampler = SimulationSampler(parameters, model=None)
 
         boundary_sample = sampler.get_boundary_sample()
 
@@ -58,7 +58,7 @@ class TestSimulationSampler:
 
     def test_add_sample(self):
         Simulator = Simul()
-        sampler = SimulationSampler(parameters, simulator=Simulator)
+        sampler = SimulationSampler(parameters, model=Simulator)
         sample_size = 10
         sampler.add_sample(sample_size)
 
@@ -85,8 +85,6 @@ class TestSimulationSampler:
         sampler.clear_sample()
         sampler.add_sample(1, seed=42)
 
-        expected_result = sampler.sample_results
-
         expected_sample = np.array(
             [[1.35626, 2, 0.2, 1], [0, 1, 0.02, 0], [6, 4, 0.2, 1]]
         )
@@ -105,7 +103,7 @@ class TestSimulationSampler:
 
     def test_clear_sample(self):
         Simulator = Simul()
-        sampler = SimulationSampler(parameters, simulator=Simulator)
+        sampler = SimulationSampler(parameters, model=Simulator)
         sampler.add_sample(1)
         sampler.clear_sample()
 

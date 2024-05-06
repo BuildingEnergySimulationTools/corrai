@@ -16,12 +16,12 @@ class SimulationSampler:
         Each dictionary should contain keys 'NAME', 'INTERVAL', and 'TYPE' to define
         the parameter name, its range (interval), and its data type
     (Integer, Real, etc.).
-    - simulator: An instance of the simulator used for running simulations.
+    - model: An instance of the model used for running simulations.
     - sampling_method (str): The name of the sampling method to be used.
 
     Attributes:
     - parameters (list): List of parameter dictionaries.
-    - simulator: Instance of the simulator.
+    - model: Instance of the model.
     - sampling_method (str): Name of the sampling method.
     - sample (numpy.ndarray): An array containing the sampled
         parameter sets.
@@ -33,19 +33,19 @@ class SimulationSampler:
     - add_sample(sample_size, seed=None): Adds a new sample of parameter sets.
     """
 
-    def __init__(self, parameters, simulator, sampling_method="LatinHypercube"):
+    def __init__(self, parameters, model, sampling_method="LatinHypercube"):
         """
         Initialize the SimulationSampler instance.
 
         :param parameters: A list of dictionaries describing
             the parameters to be sampled.
-        :param simulator: An instance of the simulator
+        :param model: An instance of the simulator
             used for running simulations.
         :param sampling_method: The name of the sampling method
             to be used (default is "LatinHypercube").
         """
         self.parameters = parameters
-        self.simulator = simulator
+        self.model = model
         self.sampling_method = sampling_method
         self.sample = np.empty(shape=(0, len(parameters)))
         self.sample_results = []
@@ -108,7 +108,7 @@ class SimulationSampler:
             }
             prog_bar.comment = "Simulations"
 
-            results = self.simulator.simulate(parameter_dict=sim_config)
+            results = self.model.simulate(parameter_dict=sim_config)
             self.sample_results.append(results)
 
         self.sample = np.vstack((self.sample, new_sample_value))
