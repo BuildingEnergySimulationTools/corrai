@@ -4,7 +4,77 @@ from corrai.base.parameter import Parameter
 from scipy.stats.qmc import LatinHypercube
 from fastprogress.fastprogress import force_console_behavior
 
+import random
+import itertools
+
 master_bar, progress_bar = force_console_behavior()
+
+
+class VariantSubSampler:
+    """
+    A class to sample subsets of variant combinations from a
+    given dictionary of variants, ensuring that each
+    unique variant appears at least once in the final sample
+    and avoiding duplicate combinations.
+
+    Attributes:
+        # modifier_dict (dict): Dictionary mapping modifier values
+        to lists of variant names.
+        combinations (list): List of all possible combinations
+        from the product of modifier values.
+        sample (list): List containing the selected unique samples.
+    """
+
+    def __init__(self, combinations):
+        """
+        Initializes the VariantSubSampler with a list of combinations.
+
+        :param combinations: Pre-generated list of
+        all possible combinations of variants.
+        """
+        self.combinations = combinations
+        random.shuffle(self.combinations)  # Shuffle to ensure random selection
+        self.sample = []
+        self.all_variants = set(itertools.chain(*combinations))
+        self.variant_coverage = {variant: False for variant in self.all_variants}
+
+    def add_sample(self, sample_size):
+        """
+        Adds the exact number of new unique combinations
+        requested to the existing sample list,
+        ensuring each variant appears at least once initially.
+
+        :param sample_size: Number of new samples to add.
+        """
+        current_sample_count = 0
+
+        if not all(self.variant_coverage.values()):
+            for combination in self.combinations:
+                if any(not self.variant_coverage[variant] for variant in combination):
+                    self.sample.append(combination)
+                    current_sample_count += 1
+                    for variant in combination:
+                        self.variant_coverage[variant] = True
+
+                    # Break if all variants are covered
+                    if all(self.variant_coverage.values()):
+                        break
+
+        # Additional samples if more are requested and initial are done
+        additional_needed = sample_size - current_sample_count
+        if additional_needed > 0:
+            for combination in self.combinations:
+                if combination not in self.sample:
+                    self.sample.append(combination)
+                    additional_needed -= 1
+                    if additional_needed == 0:
+                        break
+
+        if additional_needed > 0:
+            print(
+                "Warning: Not enough unique combinations "
+                "to meet the additional requested sample size."
+            )
 
 
 class SimulationSampler:
