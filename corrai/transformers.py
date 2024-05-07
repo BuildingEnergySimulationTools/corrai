@@ -83,6 +83,47 @@ class PdIdentity(PdTransformerBC):
         return X
 
 
+class PdReplaceDuplicated(PdTransformerBC):
+    """This transformer replaces duplicated values in each column by
+    specified new value.
+
+    Parameters
+    ----------
+    keep : str, default 'first'
+        Specify which of the duplicated (if any) value to keep.
+        Allowed arguments : ‘first’, ‘last’, False.
+
+    Attributes
+    ----------
+    value : str, default np.nan
+        value used to replace not kept duplicated.
+
+    Methods
+    -------
+    fit(X, y=None)
+        Returns self.
+
+    transform(X)
+        Drops the duplicated values in the Pandas DataFrame `X`
+        Returns the DataFrame with the duplicated filled with 'value'
+    """
+
+    def __init__(self, keep="first", value=np.nan):
+        super().__init__()
+        self.keep = keep
+        self.value = value
+
+    def fit(self, X, y=None):
+        self.columns = X.columns
+        self.index = X.index
+        return self
+
+    def transform(self, X):
+        for col in X.columns:
+            X.loc[X[col].duplicated(keep=self.keep), col] = self.value
+        return X
+
+
 class PdDropna(PdTransformerBC):
     """A class to drop NaN values in a Pandas DataFrame.
 
