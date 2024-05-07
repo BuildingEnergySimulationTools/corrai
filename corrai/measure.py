@@ -29,6 +29,7 @@ class Transformer(Enum):
     RESAMPLE = "RESAMPLE"
     INTERPOLATE = "INTERPOLATE"
     GAUSSIAN_FILTER = "GAUSSIAN_FILTER"
+    REPLACE_DUPLICATED = "REPLACE_DUPLICATED"
 
 
 TRANSFORMER_MAP = {
@@ -45,6 +46,7 @@ TRANSFORMER_MAP = {
     "RESAMPLE": ct.PdResampler,
     "INTERPOLATE": ct.PdInterpolate,
     "GAUSSIAN_FILTER": ct.PdGaussianFilter1D,
+    "REPLACE_DUPLICATED": ct.PdReplaceDuplicated,
 }
 
 ENCODING_MAP = {"Transformer": Transformer}

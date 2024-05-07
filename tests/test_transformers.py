@@ -22,6 +22,7 @@ from corrai.transformers import (
     PdResampler,
     PdSkTransformer,
     PdTimeGradient,
+    PdReplaceDuplicated,
 )
 
 
@@ -34,6 +35,22 @@ class TestCustomTransformers:
 
         assert df.columns == identity.get_feature_names_out()
         pd.testing.assert_frame_equal(df, res)
+
+    def test_pd_replace_duplicated(self):
+        df = pd.DataFrame(
+            {"a": [1.0, 1.0, 2.0], "b": [3.0, np.nan, 3.0]},
+            pd.date_range("2009-01-01", freq="h", periods=3),
+        )
+
+        res = pd.DataFrame(
+            {"a": [1.0, np.nan, 2.0], "b": [3.0, np.nan, np.nan]},
+            pd.date_range("2009-01-01", freq="h", periods=3),
+        )
+
+        rep_dup = PdReplaceDuplicated(keep="first", value=np.nan)
+        res_dup = rep_dup.fit_transform(df)
+
+        pd.testing.assert_frame_equal(res_dup, res)
 
     def test_pd_dropna(self):
         df = pd.DataFrame({"a": [1.0, 2.0, np.nan], "b": [3.0, 4.0, 5.0]})
