@@ -76,6 +76,12 @@ class VariantSubSampler:
                 "to meet the additional requested sample size."
             )
 
+    def clear_sample(self):
+        """
+        Clear the current sample set.
+        """
+        self.sample = []
+
 
 class SimulationSampler:
     """
