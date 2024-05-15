@@ -11,20 +11,6 @@ master_bar, progress_bar = force_console_behavior()
 
 
 class VariantSubSampler:
-    """
-    A class to sample subsets of variant combinations from a
-    given dictionary of variants, ensuring that each
-    unique variant appears at least once in the final sample
-    and avoiding duplicate combinations.
-
-    Attributes:
-        # modifier_dict (dict): Dictionary mapping modifier values
-        to lists of variant names.
-        combinations (list): List of all possible combinations
-        from the product of modifier values.
-        sample (list): List containing the selected unique samples.
-    """
-
     def __init__(self, combinations):
         """
         Initializes the VariantSubSampler with a list of combinations.
@@ -33,24 +19,35 @@ class VariantSubSampler:
         all possible combinations of variants.
         """
         self.combinations = combinations
-        random.shuffle(self.combinations)  # Shuffle to ensure random selection
         self.sample = []
         self.all_variants = set(itertools.chain(*combinations))
         self.variant_coverage = {variant: False for variant in self.all_variants}
 
-    def add_sample(self, sample_size):
+    def add_sample(self, sample_size, seed=None):
         """
         Adds the exact number of new unique combinations
         requested to the existing sample list,
         ensuring each variant appears at least once initially.
 
         :param sample_size: Number of new samples to add.
+        :param seed: Optional; Seed for the random number generator.
+
         """
+        if seed is not None:
+            random.seed(seed)
+
+        # Shuffling only after setting the seed
+        shuffled_combinations = self.combinations[:]
+        random.shuffle(shuffled_combinations)
+
         current_sample_count = 0
 
         if not all(self.variant_coverage.values()):
-            for combination in self.combinations:
-                if any(not self.variant_coverage[variant] for variant in combination):
+            for combination in shuffled_combinations:
+                if (
+                    any(not self.variant_coverage[variant] for variant in combination)
+                    and combination not in self.sample
+                ):
                     self.sample.append(combination)
                     current_sample_count += 1
                     for variant in combination:
@@ -63,7 +60,7 @@ class VariantSubSampler:
         # Additional samples if more are requested and initial are done
         additional_needed = sample_size - current_sample_count
         if additional_needed > 0:
-            for combination in self.combinations:
+            for combination in shuffled_combinations:
                 if combination not in self.sample:
                     self.sample.append(combination)
                     additional_needed -= 1
