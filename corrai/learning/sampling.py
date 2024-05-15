@@ -11,6 +11,23 @@ master_bar, progress_bar = force_console_behavior()
 
 
 class VariantSubSampler:
+    """
+    A class designed to sample subsets of variant combinations efficiently,
+    ensuring that each unique variant appears at least once in the final sample
+    and avoiding duplicate combinations. This sampler is useful in scenarios
+    where it's crucial to cover all variations at least once, such as in
+    testing or simulations.
+
+    Attributes:
+        combinations (list of tuples): A pre-generated list of all possible combinations
+            of variants which can be sampled.
+        sample (list): A list containing the currently selected unique samples.
+        all_variants (set): A set of all unique variants extracted
+        from the combinations.
+        variant_coverage (dict): A dictionary tracking the coverage of each variant
+            in the sample.
+    """
+
     def __init__(self, combinations):
         """
         Initializes the VariantSubSampler with a list of combinations.
