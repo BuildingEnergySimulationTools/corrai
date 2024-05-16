@@ -97,7 +97,7 @@ class VariantSubSampler:
         self.sample = []
 
 
-class SimulationSampler:
+class ModelSampler:
     """
     A class for sampling parameter sets and running simulations using a simulator.
 

@@ -2,7 +2,7 @@ from pathlib import Path
 from corrai.base.model import Model
 import numpy as np
 import pandas as pd
-from corrai.learning.sampling import SimulationSampler
+from corrai.learning.sampling import ModelSampler
 from corrai.base.parameter import Parameter
 
 FILES_PATH = Path(__file__).parent / "resources"
@@ -42,7 +42,7 @@ class Simul(Model):
 
 class TestSimulationSampler:
     def test_get_boundary_sample(self):
-        sampler = SimulationSampler(parameters, model=None)
+        sampler = ModelSampler(parameters, model=None)
 
         boundary_sample = sampler.get_boundary_sample()
 
@@ -61,7 +61,7 @@ class TestSimulationSampler:
 
     def test_add_sample(self):
         Simulator = Simul()
-        sampler = SimulationSampler(parameters, model=Simulator)
+        sampler = ModelSampler(parameters, model=Simulator)
         sample_size = 10
         sampler.add_sample(sample_size)
 
@@ -106,7 +106,7 @@ class TestSimulationSampler:
 
     def test_clear_sample(self):
         Simulator = Simul()
-        sampler = SimulationSampler(parameters, model=Simulator)
+        sampler = ModelSampler(parameters, model=Simulator)
         sampler.add_sample(1)
         sampler.clear_sample()
 
