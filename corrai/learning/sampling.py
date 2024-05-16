@@ -1,5 +1,8 @@
 import numpy as np
+from pathlib import Path
+
 from corrai.base.parameter import Parameter
+from corrai.variant import simulate_variants
 
 from scipy.stats.qmc import LatinHypercube
 from fastprogress.fastprogress import force_console_behavior
@@ -12,74 +15,97 @@ master_bar, progress_bar = force_console_behavior()
 
 class VariantSubSampler:
     """
-    A class designed to sample subsets of variant combinations efficiently,
-    ensuring that each unique variant appears at least once in the final sample
-    and avoiding duplicate combinations. This sampler is useful in scenarios
-    where it's crucial to cover all variations at least once, such as in
-    testing or simulations.
-
-    Attributes:
-        combinations (list of tuples): A pre-generated list of all possible combinations
-            of variants which can be sampled.
-        sample (list): A list containing the currently selected unique samples.
-        all_variants (set): A set of all unique variants extracted
-        from the combinations.
-        variant_coverage (dict): A dictionary tracking the coverage of each variant
-            in the sample.
+    A class for subsampling variants from a given set of combinations.
     """
 
-    def __init__(self, combinations):
+    def __init__(self, model, combinations, simulation_options=None):
         """
-        Initializes the VariantSubSampler with a list of combinations.
+        Initialize the VariantSubSampler.
 
-        :param combinations: Pre-generated list of
-        all possible combinations of variants.
+        Args:
+            model: The model to be used for simulations.
+            combinations: List of lists, each inner list
+            representing a combination of variants.
+            simulation_options (optional): Options for simulations. Defaults to None.
         """
+        self.model = model
         self.combinations = combinations
+        self.simulation_options = simulation_options
         self.sample = []
         self.all_variants = set(itertools.chain(*combinations))
+        self.sample_results = []
+        self.not_simulated_combinations = []
         self.variant_coverage = {variant: False for variant in self.all_variants}
 
-    def add_sample(self, sample_size, seed=None):
+    def add_sample(
+        self,
+        sample_size,
+        modifier_map,
+        simulate=True,
+        seed=None,
+        ensure_full_coverage=False,
+        n_cpu=-1,
+        simulation_options=None,
+        save_dir=None,
+        file_extension=".txt",
+    ):
         """
-        Adds the exact number of new unique combinations
-        requested to the existing sample list,
-        ensuring each variant appears at least once initially.
+        Add a sample to the VariantSubSampler.
 
-        :param sample_size: Number of new samples to add.
-        :param seed: Optional; Seed for the random number generator.
-
+        Args:
+            sample_size: The size of the sample to be added.
+            modifier_map: A map of modifiers for simulation.
+            simulate (optional): Whether to perform simulation
+            after adding the sample. Defaults to True.
+            seed (optional): Seed for random number generation. Defaults to None.
+            ensure_full_coverage (optional): Whether to ensure
+            full coverage of variants in the sample. Defaults to False.
+            n_cpu (optional): Number of CPU cores to use for simulation. Defaults to -1.
+            simulation_options (optional): Options for simulations. Defaults to None.
+            save_dir (optional): Directory to save simulation results. Defaults to None.
+            file_extension (optional): File extension for
+            saved simulation results. Defaults to ".txt".
         """
+        effective_simulation_options = (
+            simulation_options
+            if simulation_options is not None
+            else self.simulation_options
+        )
+        if effective_simulation_options is None:
+            raise ValueError(
+                "Simulation options must be provided either "
+                "during initialization or when adding samples."
+            )
+
         if seed is not None:
             random.seed(seed)
 
-        # Shuffling only after setting the seed
         shuffled_combinations = self.combinations[:]
         random.shuffle(shuffled_combinations)
 
         current_sample_count = 0
 
-        if not all(self.variant_coverage.values()):
+        if ensure_full_coverage and not all(self.variant_coverage.values()):
             for combination in shuffled_combinations:
                 if (
                     any(not self.variant_coverage[variant] for variant in combination)
                     and combination not in self.sample
                 ):
                     self.sample.append(combination)
+                    self.not_simulated_combinations.append(combination)
                     current_sample_count += 1
                     for variant in combination:
                         self.variant_coverage[variant] = True
 
-                    # Break if all variants are covered
                     if all(self.variant_coverage.values()):
                         break
 
-        # Additional samples if more are requested and initial are done
         additional_needed = sample_size - current_sample_count
         if additional_needed > 0:
             for combination in shuffled_combinations:
                 if combination not in self.sample:
                     self.sample.append(combination)
+                    self.not_simulated_combinations.append(combination)
                     additional_needed -= 1
                     if additional_needed == 0:
                         break
@@ -90,11 +116,98 @@ class VariantSubSampler:
                 "to meet the additional requested sample size."
             )
 
+        if simulate:
+            self.simulate_combinations(
+                modifier_map,
+                effective_simulation_options,
+                n_cpu,
+                save_dir,
+                file_extension,
+            )
+
+    def draw_sample(
+        self,
+        sample_size,
+        modifier_map,
+        simulate=False,
+        seed=None,
+        ensure_full_coverage=False,
+        n_cpu=-1,
+    ):
+        """
+        Draw a sample from the VariantSubSampler.
+
+        Args:
+            sample_size: The size of the sample to be drawn.
+            modifier_map: A map of modifiers for simulation.
+            simulate (optional): Whether to perform simulation
+            after drawing the sample. Defaults to False.
+            seed (optional): Seed for random number generation.
+            Defaults to None.
+            ensure_full_coverage (optional): Whether to ensure
+            full coverage of variants in the sample. Defaults to False.
+            n_cpu (optional): Number of CPU cores to use for
+            simulation. Defaults to -1.
+        """
+        self.add_sample(
+            sample_size,
+            modifier_map,
+            simulate=simulate,
+            seed=seed,
+            ensure_full_coverage=ensure_full_coverage,
+            n_cpu=n_cpu,
+        )
+        # return list(self.not_simulated_combinations)
+
+    def simulate_combinations(
+        self,
+        modifier_map,
+        simulation_options,
+        n_cpu=-1,
+        save_dir=None,
+        file_extension=".txt",
+    ):
+        """
+        Simulate combinations in the VariantSubSampler.
+
+        Args:
+            modifier_map: A map of modifiers for simulation.
+            simulation_options: Options for simulations.
+            n_cpu (optional): Number of CPU cores to use for simulation. Defaults to -1.
+            save_dir (optional): Directory to save simulation results. Defaults to None.
+            file_extension (optional): File extension for saved
+            simulation results. Defaults to ".txt".
+        """
+        if self.not_simulated_combinations:
+            results = simulate_variants(
+                self.model,
+                modifier_map,
+                simulation_options,
+                n_cpu,
+                custom_combination=self.not_simulated_combinations,
+                save_dir=Path(save_dir) if save_dir else None,
+                file_extension=file_extension,
+            )
+            self.sample_results.extend(results)
+            self.not_simulated_combinations = []  # Clear the list after simulation
+
     def clear_sample(self):
         """
-        Clear the current sample set.
+        Clears all samples and related simulation data from the sampler. This method is
+        useful for resetting the sampler's state, typically used when starting a new set
+        of simulations or after a complete set of simulations has been processed and the
+        data is no longer needed.
+
+        Parameters:
+        - None
+
+        Returns:
+        - None: The method resets the internal state related to samples but does not
+          return any value.
         """
         self.sample = []
+        self.sample_results = []
+        self.not_simulated_combinations = []
 
 
 class ModelSampler:
