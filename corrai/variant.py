@@ -83,43 +83,6 @@ def get_combined_variants(
     return list(set(itertools.product(*list(modifier_dict.values()))))
 
 
-# def generate_variant_dict(
-#     combined_variants: list[tuple[str, ...]], mod_dict: dict[str, list[str]]
-# ) -> dict[str, dict]:
-#     """
-#     Generate a variant dictionary from combinations and a mod_dict.
-#
-#     This function takes a list of combinations and a modifier dictionary and generates
-#     a variant dictionary where each variant has a modifier,
-#     an empty arguments dictionary,
-#     and an empty description dictionary.
-#
-#     :param combined_variants: A list of combinations of variants.
-#     :param mod_dict: A dictionary containing modifier information where keys are
-#                      modifier names and values are lists of variant names associated
-#                      with that modifier.
-#
-#     :return: A variant dictionary.
-#     """
-#     variant_dict = {}
-#     for combination in combined_variants:
-#         for variant in combination:
-#             if variant not in variant_dict:
-#                 modifier_key = None
-#                 for key, variants in mod_dict.items():
-#                     if variant in variants:
-#                         modifier_key = key
-#                         break
-#                 if modifier_key is None:
-#                     raise ValueError(f"No modifier found for variant {variant}")
-#                 variant_dict[variant] = {
-#                     VariantKeys.MODIFIER: modifier_key,
-#                     VariantKeys.ARGUMENTS: {},
-#                     VariantKeys.DESCRIPTION: {},
-#                 }
-#     return variant_dict
-
-
 def simulate_variants(
     model: Model,
     variant_dict: dict[str, dict[VariantKeys, Any]],
@@ -127,7 +90,7 @@ def simulate_variants(
     simulation_options: dict[str, Any],
     n_cpu: int = -1,
     add_existing: bool = False,
-    custom_combination=None,
+    custom_combinations=None,
     save_dir: Path = None,
     file_extension: str = ".txt",
 ):
@@ -152,7 +115,7 @@ def simulate_variants(
                     If True, existing modifiers will be included;
                     if False, only non-existing modifiers will be considered.
                     Set to False by default.
-    :param custom_combination: Optional. If provided, a custom combination
+    :param custom_combinations: Optional. If provided, a custom combination
             of variants to simulate.
     :param save_dir: Optional. Path to save the simulation files.
             EnergyPlus building IDF files supported.
@@ -170,8 +133,8 @@ def simulate_variants(
     :return: A list of simulation results for each model variant.
     """
     model_list = []
-    if custom_combination is not None:
-        combined_variants = custom_combination
+    if custom_combinations is not None:
+        combined_variants = custom_combinations
     else:
         combined_variants = get_combined_variants(variant_dict, add_existing)
 
