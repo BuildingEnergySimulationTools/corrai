@@ -83,6 +83,43 @@ def get_combined_variants(
     return list(set(itertools.product(*list(modifier_dict.values()))))
 
 
+# def generate_variant_dict(
+#     combined_variants: list[tuple[str, ...]], mod_dict: dict[str, list[str]]
+# ) -> dict[str, dict]:
+#     """
+#     Generate a variant dictionary from combinations and a mod_dict.
+#
+#     This function takes a list of combinations and a modifier dictionary and generates
+#     a variant dictionary where each variant has a modifier,
+#     an empty arguments dictionary,
+#     and an empty description dictionary.
+#
+#     :param combined_variants: A list of combinations of variants.
+#     :param mod_dict: A dictionary containing modifier information where keys are
+#                      modifier names and values are lists of variant names associated
+#                      with that modifier.
+#
+#     :return: A variant dictionary.
+#     """
+#     variant_dict = {}
+#     for combination in combined_variants:
+#         for variant in combination:
+#             if variant not in variant_dict:
+#                 modifier_key = None
+#                 for key, variants in mod_dict.items():
+#                     if variant in variants:
+#                         modifier_key = key
+#                         break
+#                 if modifier_key is None:
+#                     raise ValueError(f"No modifier found for variant {variant}")
+#                 variant_dict[variant] = {
+#                     VariantKeys.MODIFIER: modifier_key,
+#                     VariantKeys.ARGUMENTS: {},
+#                     VariantKeys.DESCRIPTION: {},
+#                 }
+#     return variant_dict
+
+
 def simulate_variants(
     model: Model,
     variant_dict: dict[str, dict[VariantKeys, Any]],
