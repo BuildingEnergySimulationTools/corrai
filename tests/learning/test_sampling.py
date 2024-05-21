@@ -98,11 +98,11 @@ class TestVariantSubSampler:
         self.mod_map = {"mod1": modifier_1, "mod1_bis": modifier_1, "mod2": modifier_2}
 
         self.sampler = VariantSubSampler(
-            VariantModel(),
-            self.combinations,
-            self.variant_dict,
-            self.mod_map,
-            SIMULATION_OPTIONS,
+            model=VariantModel(),
+            combinations=self.combinations,
+            variant_dict=self.variant_dict,
+            modifier_map=self.mod_map,
+            simulation_options=SIMULATION_OPTIONS,
         )
 
     def test_add_sample_with_simulation(self):
@@ -122,6 +122,13 @@ class TestVariantSubSampler:
             actual_results.extend(df["res"].tolist())
 
         assert set(actual_results) == set(expected_list)
+
+    def test_clear_sample(self):
+        self.sampler.add_sample(1, simulate=False, ensure_full_coverage=True, n_cpu=1)
+        self.sampler.clear_sample()
+        assert len(self.sampler.sample) == 0
+        assert len(self.sampler.sample_results) == 0
+        assert len(self.sampler.not_simulated_combinations) == 0
 
     def test_draw_sample(self):
         sample_size = 2
@@ -153,13 +160,6 @@ class TestVariantSubSampler:
         sampler2.clear_sample()
         sampler2.add_sample(sample_size, seed=seed, simulate=False)
         assert sampler1.sample != sampler2.sample
-
-    def test_clear_sample(self):
-        self.sampler.add_sample(1, simulate=False, ensure_full_coverage=True, n_cpu=1)
-        self.sampler.clear_sample()
-        assert len(self.sampler.sample) == 0
-        assert len(self.sampler.sample_results) == 0
-        assert len(self.sampler.not_simulated_combinations) == 0
 
     def test_ensure_full_coverage(self):
         n_sample = 3
