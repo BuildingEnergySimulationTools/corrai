@@ -18,7 +18,16 @@ class VariantSubSampler:
     A class for subsampling variants from a given set of combinations.
     """
 
-    def __init__(self, model, combinations, simulation_options=None):
+    def __init__(
+        self,
+        model,
+        combinations,
+        variant_dict=None,
+        modifier_map=None,
+        simulation_options=None,
+        save_dir=None,
+        file_extension=".txt",
+    ):
         """
         Initialize the VariantSubSampler.
 
@@ -26,11 +35,23 @@ class VariantSubSampler:
             model: The model to be used for simulations.
             combinations: List of lists, each inner list
             representing a combination of variants.
+            variant_dict (optional): A dictionary containing variant information where
+                                     keys are variant names and values are dictionaries
+                                     with keys from the VariantKeys enum.
+            modifier_map (optional): A map of modifiers for simulation.
             simulation_options (optional): Options for simulations. Defaults to None.
+            save_dir (optional): Directory to save simulation results. Defaults to None.
+            file_extension (optional): File extension for
+            saved simulation results. Defaults to ".txt".
+
         """
         self.model = model
         self.combinations = combinations
+        self.variant_dict = variant_dict
+        self.modifier_map = modifier_map
         self.simulation_options = simulation_options
+        self.save_dir = save_dir
+        self.file_extension = file_extension
         self.sample = []
         self.all_variants = set(itertools.chain(*combinations))
         self.sample_results = []
@@ -40,21 +61,17 @@ class VariantSubSampler:
     def add_sample(
         self,
         sample_size,
-        modifier_map,
         simulate=True,
         seed=None,
         ensure_full_coverage=False,
         n_cpu=-1,
         simulation_options=None,
-        save_dir=None,
-        file_extension=".txt",
     ):
         """
         Add a sample to the VariantSubSampler.
 
         Args:
             sample_size: The size of the sample to be added.
-            modifier_map: A map of modifiers for simulation.
             simulate (optional): Whether to perform simulation
             after adding the sample. Defaults to True.
             seed (optional): Seed for random number generation. Defaults to None.
@@ -62,20 +79,7 @@ class VariantSubSampler:
             full coverage of variants in the sample. Defaults to False.
             n_cpu (optional): Number of CPU cores to use for simulation. Defaults to -1.
             simulation_options (optional): Options for simulations. Defaults to None.
-            save_dir (optional): Directory to save simulation results. Defaults to None.
-            file_extension (optional): File extension for
-            saved simulation results. Defaults to ".txt".
         """
-        effective_simulation_options = (
-            simulation_options
-            if simulation_options is not None
-            else self.simulation_options
-        )
-        if effective_simulation_options is None:
-            raise ValueError(
-                "Simulation options must be provided either "
-                "during initialization or when adding samples."
-            )
 
         if seed is not None:
             random.seed(seed)
@@ -117,29 +121,36 @@ class VariantSubSampler:
             )
 
         if simulate:
+            effective_simulation_options = (
+                simulation_options
+                if simulation_options is not None
+                else self.simulation_options
+            )
+            if effective_simulation_options is None:
+                raise ValueError(
+                    "Simulation options must be provided either "
+                    "during initialization or when adding samples."
+                )
+
             self.simulate_combinations(
-                modifier_map,
-                effective_simulation_options,
-                n_cpu,
-                save_dir,
-                file_extension,
+                n_cpu=n_cpu,
+                simulation_options=effective_simulation_options,
             )
 
     def draw_sample(
         self,
         sample_size,
-        modifier_map,
         simulate=False,
         seed=None,
         ensure_full_coverage=False,
         n_cpu=-1,
+        simulation_options=None,
     ):
         """
         Draw a sample from the VariantSubSampler.
 
         Args:
             sample_size: The size of the sample to be drawn.
-            modifier_map: A map of modifiers for simulation.
             simulate (optional): Whether to perform simulation
             after drawing the sample. Defaults to False.
             seed (optional): Seed for random number generation.
@@ -148,46 +159,48 @@ class VariantSubSampler:
             full coverage of variants in the sample. Defaults to False.
             n_cpu (optional): Number of CPU cores to use for
             simulation. Defaults to -1.
+            simulation_options (optional): Options for simulations.
+            Defaults to None.
         """
         self.add_sample(
             sample_size,
-            modifier_map,
             simulate=simulate,
             seed=seed,
             ensure_full_coverage=ensure_full_coverage,
             n_cpu=n_cpu,
+            simulation_options=simulation_options,
         )
-        # return list(self.not_simulated_combinations)
 
     def simulate_combinations(
         self,
-        modifier_map,
-        simulation_options,
         n_cpu=-1,
         save_dir=None,
         file_extension=".txt",
+        simulation_options=None,
     ):
         """
         Simulate combinations in the VariantSubSampler.
 
         Args:
-            modifier_map: A map of modifiers for simulation.
-            simulation_options: Options for simulations.
             n_cpu (optional): Number of CPU cores to use for simulation. Defaults to -1.
             save_dir (optional): Directory to save simulation results. Defaults to None.
             file_extension (optional): File extension for saved
             simulation results. Defaults to ".txt".
+            simulation_options (optional): Options for simulations. Defaults to None.
         """
         if self.not_simulated_combinations:
+            print("yes, not simulated", self.not_simulated_combinations)
             results = simulate_variants(
                 self.model,
-                modifier_map,
+                self.variant_dict,
+                self.modifier_map,
                 simulation_options,
                 n_cpu,
-                custom_combination=self.not_simulated_combinations,
-                save_dir=Path(save_dir) if save_dir else None,
-                file_extension=file_extension,
+                custom_combinations=list(self.not_simulated_combinations),
+                save_dir=Path(self.save_dir) if self.save_dir else None,
+                file_extension=self.file_extension,
             )
+
             self.sample_results.extend(results)
             self.not_simulated_combinations = []  # Clear the list after simulation
 
