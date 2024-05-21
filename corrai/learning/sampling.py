@@ -174,8 +174,6 @@ class VariantSubSampler:
     def simulate_combinations(
         self,
         n_cpu=-1,
-        save_dir=None,
-        file_extension=".txt",
         simulation_options=None,
     ):
         """
@@ -183,9 +181,6 @@ class VariantSubSampler:
 
         Args:
             n_cpu (optional): Number of CPU cores to use for simulation. Defaults to -1.
-            save_dir (optional): Directory to save simulation results. Defaults to None.
-            file_extension (optional): File extension for saved
-            simulation results. Defaults to ".txt".
             simulation_options (optional): Options for simulations. Defaults to None.
         """
         if self.not_simulated_combinations:
