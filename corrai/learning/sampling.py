@@ -22,6 +22,7 @@ class VariantSubSampler:
         self,
         model,
         combinations,
+        add_existing=False,
         variant_dict=None,
         modifier_map=None,
         simulation_options=None,
@@ -35,6 +36,11 @@ class VariantSubSampler:
             model: The model to be used for simulations.
             combinations: List of lists, each inner list
             representing a combination of variants.
+            add_existing: A boolean flag indicating whether to include existing
+                variant to each modifier.
+                If True, existing modifiers will be included;
+                if False, only non-existing modifiers will be considered.
+                Set to False by default.
             variant_dict (optional): A dictionary containing variant information where
                                      keys are variant names and values are dictionaries
                                      with keys from the VariantKeys enum.
@@ -47,6 +53,7 @@ class VariantSubSampler:
         """
         self.model = model
         self.combinations = combinations
+        self.add_existing = add_existing
         self.variant_dict = variant_dict
         self.modifier_map = modifier_map
         self.simulation_options = simulation_options
@@ -191,6 +198,7 @@ class VariantSubSampler:
                 self.modifier_map,
                 simulation_options,
                 n_cpu,
+                add_existing=self.add_existing,
                 custom_combinations=list(self.not_simulated_combinations),
                 save_dir=Path(self.save_dir) if self.save_dir else None,
                 file_extension=self.file_extension,
