@@ -191,7 +191,6 @@ class VariantSubSampler:
             simulation_options (optional): Options for simulations. Defaults to None.
         """
         if self.not_simulated_combinations:
-            print("yes, not simulated", self.not_simulated_combinations)
             results = simulate_variants(
                 self.model,
                 self.variant_dict,
