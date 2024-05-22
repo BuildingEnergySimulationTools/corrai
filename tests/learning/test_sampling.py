@@ -1,9 +1,13 @@
+import itertools
 from pathlib import Path
 from corrai.base.model import Model
 import numpy as np
 import pandas as pd
-from corrai.learning.sampling import SimulationSampler
+from corrai.learning.sampling import ModelSampler
 from corrai.base.parameter import Parameter
+from corrai.learning.sampling import VariantSubSampler
+from corrai.variant import VariantKeys, get_combined_variants
+from tests.resources.pymodels import VariantModel
 
 FILES_PATH = Path(__file__).parent / "resources"
 
@@ -26,6 +30,12 @@ parameters = [
     },
 ]
 
+SIMULATION_OPTIONS = {
+    "start": "2009-01-01 00:00:00",
+    "end": "2009-01-01 00:00:00",
+    "timestep": "h",
+}
+
 
 class Simul(Model):
     def simulate(
@@ -40,9 +50,134 @@ class Simul(Model):
         pass
 
 
+def modifier_1(model, description, multiplier=None):
+    model.y1 = description["y1"]
+    if multiplier is not None:
+        model.multiplier = multiplier
+
+
+def modifier_2(model, description):
+    model.z1 = description["z1"]
+
+
+class TestVariantSubSampler:
+    def setup_method(self):
+        self.variant_dict = {
+            "EXISTING_mod1": {
+                VariantKeys.MODIFIER: "mod1",
+                VariantKeys.ARGUMENTS: {"multiplier": 1},
+                VariantKeys.DESCRIPTION: {"y1": 1},
+            },
+            "Variant_1": {
+                VariantKeys.MODIFIER: "mod1",
+                VariantKeys.ARGUMENTS: {"multiplier": 2},
+                VariantKeys.DESCRIPTION: {"y1": 20},
+            },
+            "EXISTING_mod1_bis": {
+                VariantKeys.MODIFIER: "mod1_bis",
+                VariantKeys.ARGUMENTS: {"multiplier": 1},
+                VariantKeys.DESCRIPTION: {"y1": 1},
+            },
+            "Variant_2": {
+                VariantKeys.MODIFIER: "mod1_bis",
+                VariantKeys.ARGUMENTS: {},
+                VariantKeys.DESCRIPTION: {"y1": 30},
+            },
+            "EXISTING_mod2": {
+                VariantKeys.MODIFIER: "mod2",
+                VariantKeys.ARGUMENTS: {},
+                VariantKeys.DESCRIPTION: {"z1": 2},
+            },
+            "Variant_3": {
+                VariantKeys.MODIFIER: "mod2",
+                VariantKeys.ARGUMENTS: {},
+                VariantKeys.DESCRIPTION: {"z1": 40},
+            },
+        }
+        self.combinations = get_combined_variants(self.variant_dict)
+        self.mod_map = {"mod1": modifier_1, "mod1_bis": modifier_1, "mod2": modifier_2}
+
+        self.sampler = VariantSubSampler(
+            model=VariantModel(),
+            combinations=self.combinations,
+            variant_dict=self.variant_dict,
+            modifier_map=self.mod_map,
+            simulation_options=SIMULATION_OPTIONS,
+        )
+
+    def test_add_sample_with_simulation(self):
+        initial_sample_size = 10
+        self.sampler.add_sample(
+            initial_sample_size,
+            simulate=True,
+            n_cpu=1,
+        )
+
+        assert len(self.sampler.sample_results) > 0
+
+        expected_list = [110, 220, 5, 48, 81, 200, 34, 68]
+
+        actual_results = []
+        for df in self.sampler.sample_results:
+            actual_results.extend(df["res"].tolist())
+
+        assert set(actual_results) == set(expected_list)
+
+    def test_clear_sample(self):
+        self.sampler.add_sample(1, simulate=False, ensure_full_coverage=True, n_cpu=1)
+        self.sampler.clear_sample()
+        assert len(self.sampler.sample) == 0
+        assert len(self.sampler.sample_results) == 0
+        assert len(self.sampler.not_simulated_combinations) == 0
+
+    def test_draw_sample(self):
+        sample_size = 2
+        self.sampler.draw_sample(sample_size, ensure_full_coverage=True)
+
+        covered_variants = set(itertools.chain(*self.sampler.sample))
+        all_variants = set(itertools.chain(*self.combinations))
+        assert covered_variants == all_variants
+        assert len(self.sampler.sample) >= sample_size
+
+    def test_add_sample_without_simulation(self):
+        initial_sample_size = 2
+        self.sampler.add_sample(initial_sample_size, simulate=False)
+        assert len(self.sampler.sample) >= initial_sample_size
+        assert len(self.sampler.sample_results) == 0
+
+    def test_seed_consistency(self):
+        sampler1 = VariantSubSampler(Simul(), self.combinations)
+        sampler2 = VariantSubSampler(Simul(), self.combinations)
+        seed = 42
+        sample_size = 2
+
+        sampler1.add_sample(sample_size, seed=seed, simulate=False)
+        sampler2.add_sample(sample_size, seed=seed, simulate=False)
+
+        sampler1.clear_sample()
+        sampler2.clear_sample()
+
+        sampler2.clear_sample()
+        sampler2.add_sample(sample_size, seed=seed, simulate=False)
+        assert sampler1.sample != sampler2.sample
+
+    def test_ensure_full_coverage(self):
+        n_sample = 3
+        self.sampler.add_sample(
+            n_sample,
+            simulate=False,
+            ensure_full_coverage=True,
+            n_cpu=1,
+        )
+        covered_variants = set(itertools.chain(*self.sampler.sample))
+        all_variants = set(itertools.chain(*self.combinations))
+        assert covered_variants == all_variants
+        assert len(self.sampler.sample) >= n_sample
+
+
 class TestSimulationSampler:
     def test_get_boundary_sample(self):
-        sampler = SimulationSampler(parameters, model=None)
+        sampler = ModelSampler(parameters, model=None)
 
         boundary_sample = sampler.get_boundary_sample()
 
@@ -61,7 +196,7 @@ class TestSimulationSampler:
 
     def test_add_sample(self):
         Simulator = Simul()
-        sampler = SimulationSampler(parameters, model=Simulator)
+        sampler = ModelSampler(parameters, model=Simulator)
         sample_size = 10
         sampler.add_sample(sample_size)
 
@@ -106,7 +241,7 @@ class TestSimulationSampler:
 
     def test_clear_sample(self):
         Simulator = Simul()
-        sampler = SimulationSampler(parameters, model=Simulator)
+        sampler = ModelSampler(parameters, model=Simulator)
         sampler.add_sample(1)
         sampler.clear_sample()
 

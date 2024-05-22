@@ -174,7 +174,7 @@ class TestVariant:
             modifier_map=MODIFIER_MAP,
             simulation_options=SIMULATION_OPTIONS,
             n_cpu=1,
-            custom_combination=custom_combination,
+            custom_combinations=custom_combination,
             add_existing=False,
         )
 

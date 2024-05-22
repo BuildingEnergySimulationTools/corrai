@@ -90,7 +90,7 @@ def simulate_variants(
     simulation_options: dict[str, Any],
     n_cpu: int = -1,
     add_existing: bool = False,
-    custom_combination=None,
+    custom_combinations=None,
     save_dir: Path = None,
     file_extension: str = ".txt",
 ):
@@ -115,7 +115,7 @@ def simulate_variants(
                     If True, existing modifiers will be included;
                     if False, only non-existing modifiers will be considered.
                     Set to False by default.
-    :param custom_combination: Optional. If provided, a custom combination
+    :param custom_combinations: Optional. If provided, a custom combination
             of variants to simulate.
     :param save_dir: Optional. Path to save the simulation files.
             EnergyPlus building IDF files supported.
@@ -133,8 +133,8 @@ def simulate_variants(
     :return: A list of simulation results for each model variant.
     """
     model_list = []
-    if custom_combination is not None:
-        combined_variants = custom_combination
+    if custom_combinations is not None:
+        combined_variants = custom_combinations
     else:
         combined_variants = get_combined_variants(variant_dict, add_existing)
 
