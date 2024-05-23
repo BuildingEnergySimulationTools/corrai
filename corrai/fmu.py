@@ -1,23 +1,34 @@
-import fmpy
-from fmpy import simulate_fmu
-import tempfile
-import warnings
-
-from pathlib import Path
-import pandas as pd
 import datetime as dt
 import shutil
+import tempfile
+from pathlib import Path
+
+import fmpy
+import pandas as pd
+from fmpy import simulate_fmu
 
 from corrai.base.model import Model
 
 
-def seconds_to_datetime(index_second, ref_year):
+def seconds_index_to_datetime_index(
+    index_second: pd.Index, ref_year: int
+) -> pd.DatetimeIndex:
     since = dt.datetime(ref_year, 1, 1, tzinfo=dt.timezone.utc)
     diff_seconds = index_second + since.timestamp()
     return pd.DatetimeIndex(pd.to_datetime(diff_seconds, unit="s"))
 
 
-def df_to_combitimetable(df, filename):
+def datetime_index_to_seconds_index(index_datetime: pd.DatetimeIndex) -> pd.Index:
+    time_start = dt.datetime(index_datetime[0].year, 1, 1, tzinfo=dt.timezone.utc)
+    new_index = index_datetime.to_frame().diff().squeeze()
+    new_index[0] = dt.timedelta(
+        seconds=index_datetime[0].timestamp() - time_start.timestamp()
+    )
+    sec_dt = [elmt.total_seconds() for elmt in new_index]
+    return pd.Series(sec_dt).cumsum()
+
+
+def df_to_combitimetable(df: pd.DataFrame, filename):
     """
     Write a text file compatible with modelica Combitimetables object from a
     Pandas DataFrame with a DatetimeIndex. DataFrames with non monotonically increasing
@@ -27,12 +38,6 @@ def df_to_combitimetable(df, filename):
     @param filename: string or Path to the output file
     @return: None
     """
-    if not isinstance(df, pd.DataFrame):
-        raise ValueError(f"df must be an instance of pandas DataFrame. Got {type(df)}")
-    if not isinstance(df.index, pd.DatetimeIndex):
-        raise ValueError(
-            f"DataFrame index must be an instance of DatetimeIndex. " f"Got {type(df)}"
-        )
     if not df.index.is_monotonic_increasing:
         raise ValueError(
             "df DateTimeIndex is not monotonically increasing, this will"
@@ -49,248 +54,208 @@ def df_to_combitimetable(df, filename):
             line += f"\t({i + 1}){col}"
         file.write(f"{line} \n")
 
-        df.index = datetime_to_seconds(df.index)
+        if isinstance(df.index, pd.DatetimeIndex):
+            df.index = datetime_index_to_seconds_index(df.index)
 
         file.write(df.to_csv(header=False, sep="\t", lineterminator="\n"))
 
 
-def datetime_to_seconds(index_datetime):
-    time_start = dt.datetime(index_datetime[0].year, 1, 1, tzinfo=dt.timezone.utc)
-    new_index = index_datetime.to_frame().diff().squeeze()
-    new_index[0] = dt.timedelta(
-        seconds=index_datetime[0].timestamp() - time_start.timestamp()
-    )
-    sec_dt = [elmt.total_seconds() for elmt in new_index]
-    return list(pd.Series(sec_dt).cumsum())
-
-
-class FmuModel(Model):
+class ModelicaFmuModel(Model):
     """
-    A model class for simulating FMUs (Functional Mock-up Units)
-        in a standardized and flexible way,integrating various data
-        sources and simulation parameters.
+    A class used to wrap an FMU (Functional Mock-up Unit) into the corrai
+    Model class formalism.
 
-    The `FmuModel` class provides functionalities for setting up and
-        running simulations of FMUs, including handling initial parameters,
-        boundary conditions, and simulation options.It is designed to
-        facilitate easy integration of simulation results into larger workflows,
-        with support for converting boundary conditions from Pandas DataFrames
-        and adjusting simulation parameters dynamically.
+    Attributes:
+        fmu_path (Path): Path to the FMU file.
 
+        simulation_options (dict[str, float | str | int]): Simulation options for
+        the FMU. It may include the following keys : startTime, stopTime, stepSize,
+        solver, outputInterval, tolerance, fmi_type.
 
-    Methods:
+        x (pd.DataFrame): Input boundary data. Will be passed to the model using
+        a Combitimetable.
 
-        set_simulation_options(self, simulation_options):
-            Updates the simulation options.
+        x_combitimetable_name (to be defines in the modelica model). with a
+        txt file.
 
-        set_boundaries_df(self, df):
-            Sets boundary conditions from a Pandas DataFrame and updates
-                the model's initial parameters to include these boundaries.
+        output_list (list[str]): List of variables to output from the simulation.
 
-        set_param_dict(self, param_dict):
-            Updates the initial parameters of the model with
-                the values from `param_dict`.
+        simulation_dir (Path): Directory for simulation files. will create a temp dir
+        if not given
 
-        simulate: Runs the FMU simulation with the specified parameters and options,
-             returning the results as a Pandas DataFrame indexed by datetime.
+        parameters (dict): Dictionary to store simulation parameters.
 
-            Parameters:
-                parameter_dict (dict, optional): Parameter values to
-                    override or update before simulation. simulation_options:
-                    Simulation options to override or update before simulation.
-                debug_logging (bool, optional): Enables or disables debug
-                    logging for the simulation.
-                logger (logging.Logger, optional): A logging.Logger instance
-                 for recording simulation logs.
+        _begin_year (int): The year the simulation starts, extracted from input data.
+        Used to retrieve datetime after the simulation
 
-            Returns:
-                pd.DataFrame: A DataFrame containing the simulation results,
-                    with timestamps as the index.
+        _x (pd.DataFrame): Stored x data. Is used to prevent unecessary reset of data in
+        the txt file.
+
+        _set_x(df: pd.DataFrame):
+
+        _set_x_sim_options(
+
+        _set_simuopt_start_stop_from_x(x: pd.DataFrame):
+            Sets the start and stop times for the simulation based on the input data.
+
+        save(file_path: Path):
+            Saves the FMU file to the specified location.
+
+        __repr__():
+            Returns a string representation of the FMU model, including its parameters.
     """
 
     def __init__(
         self,
-        model_path: Path,
-        simulation_options,
-        output_list,
-        init_parameters=None,
-        boundary_df=None,
-        year=None,
+        fmu_path: Path,
+        simulation_options: dict[str, float | str | int] = None,
+        x: pd.DataFrame = None,
+        output_list: list[str] = None,
+        x_combitimetable_name: str = None,
+        simulation_dir: Path = None,
+    ):
+        self._x = pd.DataFrame()
+        self.simulation_options = {
+            "startTime": 0,
+            "stopTime": 24 * 3600,
+            "stepSize": 60,
+            "solver": "CVode",
+            "outputInterval": 1,
+            "tolerance": 1e-6,
+            "fmi_type": "ModelExchange",
+        }
+        self._set_x_sim_options(x, simulation_options)
+        self.model_path = fmu_path
+        self.simulation_dir = (
+            Path(tempfile.mkdtemp()) if simulation_dir is None else simulation_dir
+        )
+        self.output_list = output_list
+        self.parameters = {}
+        self._begin_year = None
+        self.x_combitimetable_name = (
+            x_combitimetable_name if x_combitimetable_name is not None else "Boundaries"
+        )
+
+    def _set_x(self, df: pd.DataFrame):
+        """Sets the input data for the simulation and updates the corresponding file."""
+
+        if not self._x.equals(df):
+            new_bounds_path = self.simulation_dir / "boundaries.txt"
+            df_to_combitimetable(df, new_bounds_path)
+            self.parameters[
+                f"{self.x_combitimetable_name}.fileName"
+            ] = new_bounds_path.as_posix()
+            self._x = df
+
+    def _set_x_sim_options(
+        self,
+        x: pd.DataFrame = None,
+        simulation_options: dict[str, float | str | int] = None,
     ):
         """
-        Initialize an instance of the FmuModel class.
+        Sets the input data and simulation options, updates start and stop times if
+        necessary.
+        If only x is specified, it will set simulationStart and simulationStop based
+        on x.index min() and max().  Whether it is datetime or integer (seconds).
+        If simulationStart and simulationStop are specified in the simulation_options,
+        it will overwrite the values set by x. If provided values are not in the
+        same format, or are outside x.index boundaries, it will raise an error
 
-        This method sets up the model with necessary paths, simulation options,
-            output variables, initial parameters, boundary conditions,
-            and the simulation year.
-
-        Parameters:
-            model_path (str or Path): The file path to the FMU model.
-                Can be a string or a Path object.
-            simulation_options (dict): Options for configuring the simulation,
-                such as start time, stop time, step size, solver, etc.
-            output_list (list of str): A list of output variables
-                that the simulation should record.
-            init_parameters (dict, optional): Initial values for
-                parameters within the FMU model. Defaults to an
-                empty dict if None is provided.
-            boundary_df (pd.DataFrame, optional): A DataFrame containing
-                boundary conditions for the simulation. Must have datetime indices.
-                If provided, it will set initial conditions based on this data.
-            year (int, optional): The year in which the simulation's
-                time series starts. This is important for aligning
-                the simulation results with real-world dates.
-                Ignored if `boundary_df` is provided since the year
-                will be derived from the DataFrame's index.
-
-        Raises:
-            Warning: If both `boundary_df` and `year` are provided,
-                a warning is raised indicating that `year` will be
-                ignored and derived from `boundary_df` instead.
+        :param x (pd.DataFrame): The Dataframe describing the boundary conditions
+        :param simulation_options (dict): Simulation options for  the FMU. It may
+        include the following keys : startTime, stopTime, stepSize, solver,
+        outputInterval, tolerance, fmi_type
         """
-        self.model_path = model_path
-        self._simulation_dir = Path(tempfile.mkdtemp())
+        if x is not None:
+            self._set_x(x)
+            self._set_simuopt_start_stop_from_x(x)
 
-        self.init_parameters = init_parameters or {}
+        if simulation_options is not None:
+            for key, val in simulation_options.items():
+                if key not in ["startTime", "stopTime"]:
+                    self.simulation_options[key] = val
+                else:
+                    if not self._x.equals(pd.DataFrame()):
+                        try:
+                            if self._x.index.min() <= val <= self._x.index.max():
+                                self.simulation_options[key] = val
+                        except TypeError:
+                            raise TypeError(
+                                f"self._x has {type(self._x.index)} type,"
+                                f"cannot specify a {key} value of type {type(val)}"
+                            )
+                    else:
+                        self.simulation_options[key] = val
 
-        self.simulation_options = simulation_options
-
-        self.output_list = output_list
-
-        if boundary_df is not None:
-            self.set_boundaries_df(boundary_df)
-            if year is not None:
-                warnings.warn(
-                    "Simulator year is read from boundary"
-                    "DAtaFrame. Argument year is ignored"
-                )
-        elif year is not None:
-            self.year = year
+    def _set_simuopt_start_stop_from_x(self, x: pd.DataFrame):
+        # Overwrite simulation options
+        if isinstance(x.index, pd.DatetimeIndex):
+            idx = datetime_index_to_seconds_index(x.index)
+            self._begin_year = x.index[0].year
         else:
-            self.year = dt.date.today().year
-
-    def set_simulation_options(self, simulation_options):
-        """
-        Update the simulation options for the model.
-
-        This method allows for dynamic adjustment of the
-            simulation settings, such as changing the solver
-            or the time frame of the simulation.
-
-        Parameters:
-            simulation_options (dict): A dictionary containing the
-                simulation options to be updated. Options might
-                include 'startTime', 'stopTime', 'stepSize', 'solver',
-                'outputInterval', and 'fmi_type'.
-        """
-        self.simulation_options = simulation_options
-
-    def set_boundaries_df(self, df):
-        """
-        Set boundary conditions for the simulation
-            from a Pandas DataFrame.
-
-        The DataFrame should contain time series data
-            that will be used to generate a boundary
-            condition file.The index of the DataFrame
-            must be a DateTimeIndex, as it determines
-            the simulation's time frame.
-
-        Parameters:
-            df (pd.DataFrame): A DataFrame containing the boundary
-                conditions with a DateTimeIndex.
-
-        Raises:
-            ValueError: If the DataFrame's index is not a DateTimeIndex,
-            an error is raised indicating the requirement for datetime indices.
-        """
-        new_bounds_path = self._simulation_dir / "boundaries.txt"
-        df_to_combitimetable(df, new_bounds_path)
-
-        if self.init_parameters is None:
-            self.init_parameters = {}
-        self.init_parameters["Boundaries.fileName"] = str(new_bounds_path)
-
-        try:
-            self.year = df.index[0].year
-        except ValueError:
-            raise ValueError(
-                "Could not read date from boundary condition. "
-                "Please verify that DataFrame index is a datetime."
-            )
-
-    def set_param_dict(self, param_dict):
-        """
-        Update the initial parameter values for the model.
-
-        This method allows for the dynamic setting or updating of
-            initial parameters before running the simulation.
-
-        Parameters:
-            param_dict (dict): A dictionary where keys are parameter
-                names and values are the corresponding values
-                to be set or updated in the model.
-        """
-        if self.init_parameters is None:
-            self.init_parameters = {}
-        self.init_parameters.update(param_dict)
+            idx = x.index
+        self.simulation_options["startTime"] = idx.min()
+        self.simulation_options["stopTime"] = idx.max()
 
     def simulate(
         self,
-        parameter_dict: dict = None,
+        parameter_dict: dict[str, float | int | str] = None,
         simulation_options: dict = None,
-        debug_logging=False,
+        x: pd.DataFrame = None,
+        debug_logging: bool = False,
         logger=None,
     ) -> pd.DataFrame:
         """
-        Run the simulation with the current model configuration.
+        Run FMU simulation for the given parameters and simulation_options.
 
-        This method executes the FMU simulation according to the specified
-            parameters and options, and returns the simulation
-            results as a Pandas DataFrame indexed by datetime.
-
-        Parameters:
-            parameter_dict (dict, optional): Additional or overriding
-             parameter values for this simulation run.
-            simulation_options (dict, optional): Additional or
-                overriding   simulation options for this run.
-            debug_logging (bool, optional): Whether to enable
-                detailed logging of the simulation process. Defaults to False.
-            logger (logging.Logger, optional): A logger for capturing
-                simulation logs, if debug_logging is True.
-
-        Returns:
-            pd.DataFrame: A DataFrame containing the simulation results.
-                Columns include 'time' and the specified output variables,
-                with the DataFrame indexed by datetime reflecting
-                the simulation period.
+        :param x: Input boundary data. Will be passed to the model using a
+        Combitimetable
+        :param simulation_options: Simulation options for the FMU.
+        It may include the following keys : startTime, stopTime, stepSize, solver,
+        outputInterval, tolerance, fmi_type.
+        :param parameter_dict: Dictionary of parameters values
+        :param debug_logging:
+        :param logger:
+        :return: PandasDataFrame
         """
-        if parameter_dict:
-            self.set_param_dict(parameter_dict)
-        if simulation_options:
-            self.set_simulation_options(simulation_options)
 
-        start_time = self.simulation_options.get("startTime", 0)
+        self.parameters.update(parameter_dict or {})
+        self._set_x_sim_options(x, simulation_options)
+
+        start_time = self.simulation_options.get("startTime")
+        stop_time = self.simulation_options.get("stopTime")
+
+        if isinstance(start_time, (dt.datetime, pd.Timestamp)):
+            self._begin_year = start_time.year
+            idx = datetime_index_to_seconds_index(
+                pd.DatetimeIndex([start_time, stop_time])
+            )
+            self.simulation_options["startTime"] = idx.min()
+            self.simulation_options["stopTime"] = idx.max()
+        else:
+            self._begin_year = None
 
         result = simulate_fmu(
             filename=self.model_path,
-            start_time=self.simulation_options.get("startTime", 0),
-            stop_time=self.simulation_options.get("stopTime", 1e6),
-            step_size=self.simulation_options.get("stepSize", 3600),
-            relative_tolerance=self.simulation_options.get("tolerance", 1e-6),
-            start_values=self.init_parameters,
+            start_time=self.simulation_options["startTime"],
+            stop_time=self.simulation_options["stopTime"],
+            step_size=self.simulation_options["stepSize"],
+            relative_tolerance=self.simulation_options["tolerance"],
+            start_values=self.parameters,
             output=self.output_list,
-            solver=self.simulation_options.get("solver", "CVode"),
-            output_interval=self.simulation_options.get("outputInterval", 3600),
-            fmi_type=self.simulation_options.get("fmi_type", "ModelExchange"),
+            solver=self.simulation_options["solver"],
+            output_interval=self.simulation_options["outputInterval"],
+            fmi_type=self.simulation_options["fmi_type"],
             debug_logging=debug_logging,
             logger=logger,
         )
 
         df = pd.DataFrame(result, columns=["time"] + self.output_list)
-        adjusted_time = df["time"] + start_time
-        df.index = seconds_to_datetime(adjusted_time, self.year)
-        df = df.drop(columns=["time"])
+        adjusted_time = df["time"] + self.simulation_options["startTime"]
+
+        if self._begin_year is not None:
+            df.index = seconds_index_to_datetime_index(adjusted_time, self._begin_year)
+            df = df.drop(columns=["time"])
 
         # First values are often duplicates...
         df = df.loc[~df.index.duplicated(keep="first")]
@@ -307,26 +272,12 @@ class FmuModel(Model):
         shutil.copyfile(self.model_path, file_path)
 
     def __repr__(self):
-        """
-        Generate a string representation of the FMU model's metadata and parameters.
-
-        Returns:
-            str: A string representation of the FMU model's metadata and parameters,
-            formatted for readability.
-
-        Example of the string returned:
-            Model Name: SimpleModel
-            Description: A simple model for demonstration purposes.
-            Version: 2.0
-            Parameters:
-              Name: parameter1, Default Value: 10, Description: An example parameter.
-              Name: parameter2, Default Value: Not specified,
-                Description: No description available.
-        """
-        model_description = fmpy.read_model_description(self.model_path)
+        model_description = fmpy.read_model_description(self.model_path.as_posix())
 
         model_info = f"Model Name: {model_description.modelName}\n"
-        model_info += f"Description: {fmpy.read_model_description(self.model_path)}\n"
+        model_info += (
+            f"Description: {fmpy.read_model_description(self.model_path.as_posix())}\n"
+        )
         model_info += f"Version: {model_description.fmiVersion}\n"
         model_info += "Parameters:\n"
 
@@ -354,11 +305,3 @@ class FmuModel(Model):
                 )
 
         return model_info
-
-    def check_parameter_modifications(self):
-        """Check parameters modifications"""
-        modified_params = {}
-        for name, value in self.init_parameters.items():
-            modified_params[name] = value
-
-        return modified_params
