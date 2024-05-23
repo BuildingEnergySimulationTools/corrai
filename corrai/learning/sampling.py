@@ -88,11 +88,24 @@ class VariantSubSampler:
             simulation_options (optional): Options for simulations. Defaults to None.
         """
 
-        if seed is not None:
-            random.seed(seed)
+        effective_simulation_options = (
+            simulation_options
+            if simulation_options is not None
+            else self.simulation_options
+        )
+        if effective_simulation_options is None:
+            raise ValueError(
+                "Simulation options must be provided either during "
+                "initialization or when adding samples."
+            )
 
         shuffled_combinations = self.combinations[:]
-        random.shuffle(shuffled_combinations)
+
+        if seed is not None:
+            random.Random(seed).shuffle(shuffled_combinations)
+
+        else:
+            random.shuffle(shuffled_combinations)
 
         current_sample_count = 0
 
@@ -128,26 +141,13 @@ class VariantSubSampler:
             )
 
         if simulate:
-            effective_simulation_options = (
-                simulation_options
-                if simulation_options is not None
-                else self.simulation_options
-            )
-            if effective_simulation_options is None:
-                raise ValueError(
-                    "Simulation options must be provided either "
-                    "during initialization or when adding samples."
-                )
-
             self.simulate_combinations(
-                n_cpu=n_cpu,
-                simulation_options=effective_simulation_options,
+                n_cpu=n_cpu, simulation_options=effective_simulation_options
             )
 
     def draw_sample(
         self,
         sample_size,
-        simulate=False,
         seed=None,
         ensure_full_coverage=False,
         n_cpu=-1,
@@ -158,8 +158,6 @@ class VariantSubSampler:
 
         Args:
             sample_size: The size of the sample to be drawn.
-            simulate (optional): Whether to perform simulation
-            after drawing the sample. Defaults to False.
             seed (optional): Seed for random number generation.
             Defaults to None.
             ensure_full_coverage (optional): Whether to ensure
@@ -171,7 +169,7 @@ class VariantSubSampler:
         """
         self.add_sample(
             sample_size,
-            simulate=simulate,
+            simulate=False,
             seed=seed,
             ensure_full_coverage=ensure_full_coverage,
             n_cpu=n_cpu,
@@ -190,12 +188,20 @@ class VariantSubSampler:
             n_cpu (optional): Number of CPU cores to use for simulation. Defaults to -1.
             simulation_options (optional): Options for simulations. Defaults to None.
         """
+        effective_simulation_options = (
+            simulation_options
+            if simulation_options is not None
+            else self.simulation_options
+        )
+        if not effective_simulation_options:
+            raise ValueError("Simulation options are " "not available for simulation.")
+
         if self.not_simulated_combinations:
             results = simulate_variants(
                 self.model,
                 self.variant_dict,
                 self.modifier_map,
-                simulation_options,
+                effective_simulation_options,
                 n_cpu,
                 add_existing=self.add_existing,
                 custom_combinations=list(self.not_simulated_combinations),
