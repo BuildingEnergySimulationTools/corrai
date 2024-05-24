@@ -48,6 +48,11 @@ def get_hours_switch(X, diff_filter_threshold=0, switch="positive"):
     else:
         raise ValueError(f"Unknown value {switch} as switch argument")
 
+    # Add second diff, because in some case (system), measured decrease
+    # has a maximum. eg for some reason AHU measured flowrate
+    # cannot decrease by more than Xm3/h per minutes
+    df = df.diff().fillna(0)
+    df.loc[df[data_col_name] < 0] = 0
     df["start_day"] = pd.DatetimeIndex(list(map(lambda x: x.date(), df.index)))
     if df.index.tz:
         df["start_day"] = pd.DatetimeIndex(list(df["start_day"])).tz_localize(
