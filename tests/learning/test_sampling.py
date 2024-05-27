@@ -8,6 +8,7 @@ from corrai.base.parameter import Parameter
 from corrai.learning.sampling import VariantSubSampler
 from corrai.variant import VariantKeys, get_combined_variants
 from tests.resources.pymodels import VariantModel
+import pytest
 
 FILES_PATH = Path(__file__).parent / "resources"
 
@@ -109,7 +110,6 @@ class TestVariantSubSampler:
         initial_sample_size = 10
         self.sampler.add_sample(
             initial_sample_size,
-            simulate=True,
             n_cpu=1,
         )
 
@@ -167,6 +167,20 @@ class TestVariantSubSampler:
             actual_results.extend(df["res"].tolist())
 
         assert set(actual_results) == set(expected_list)
+
+    def test_warning_errors(self):
+        sampler_warning = VariantSubSampler(
+            model=VariantModel(),
+            combinations=self.combinations,
+            variant_dict=self.variant_dict,
+            modifier_map=self.mod_map,
+        )
+        with pytest.raises(ValueError):
+            sampler_warning.add_sample(sample_size=2, n_cpu=1)
+
+        sampler_warning.add_sample(sample_size=2, simulate=False, simulation_options={})
+        with pytest.raises(ValueError):
+            sampler_warning.simulate_combinations(n_cpu=1)
 
     def test_seed_consistency(self):
         sampler1 = VariantSubSampler(
