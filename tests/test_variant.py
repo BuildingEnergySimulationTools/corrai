@@ -112,8 +112,8 @@ class TestVariant:
             ("Variant_1", "Variant_2", "Variant_3"),
         ]
 
-        assert set(variant_list_true) == set(expected_variant_list)
-        assert set(variant_list_false) == set(expected_variant_list)
+        assert variant_list_true == expected_variant_list
+        assert variant_list_false == expected_variant_list
 
         model = VariantModel()
 

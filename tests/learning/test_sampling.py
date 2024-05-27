@@ -8,6 +8,7 @@ from corrai.base.parameter import Parameter
 from corrai.learning.sampling import VariantSubSampler
 from corrai.variant import VariantKeys, get_combined_variants
 from tests.resources.pymodels import VariantModel
+import pytest
 
 FILES_PATH = Path(__file__).parent / "resources"
 
@@ -109,7 +110,6 @@ class TestVariantSubSampler:
         initial_sample_size = 10
         self.sampler.add_sample(
             initial_sample_size,
-            simulate=True,
             n_cpu=1,
         )
 
@@ -130,6 +130,13 @@ class TestVariantSubSampler:
         assert len(self.sampler.sample_results) == 0
         assert len(self.sampler.not_simulated_combinations) == 0
 
+    def test_dump_sample(self):
+        self.sampler.add_sample(1, simulate=True, ensure_full_coverage=True, n_cpu=1)
+        self.sampler.add_sample(1, simulate=False, ensure_full_coverage=False, n_cpu=1)
+        self.sampler.dump_sample()
+        assert len(self.sampler.sample) > 0
+        assert len(self.sampler.not_simulated_combinations) == 0
+
     def test_draw_sample(self):
         sample_size = 2
         self.sampler.draw_sample(sample_size, ensure_full_coverage=True)
@@ -140,25 +147,66 @@ class TestVariantSubSampler:
         assert len(self.sampler.sample) >= sample_size
 
     def test_add_sample_without_simulation(self):
+        self.sampler.clear_sample()
+
         initial_sample_size = 2
         self.sampler.add_sample(initial_sample_size, simulate=False)
         assert len(self.sampler.sample) >= initial_sample_size
-        assert len(self.sampler.sample_results) == 0
+        assert len(self.sampler.not_simulated_combinations) == initial_sample_size
+
+    def test_draw_sample_then_simulate(self):
+        self.sampler.clear_sample()
+        sample_size = 2
+        self.sampler.draw_sample(sample_size, ensure_full_coverage=False, seed=42)
+        self.sampler.simulate_combinations(n_cpu=1)
+        assert len(self.sampler.sample) == sample_size
+        expected_list = [48, 110]
+
+        actual_results = []
+        for df in self.sampler.sample_results:
+            actual_results.extend(df["res"].tolist())
+
+        assert set(actual_results) == set(expected_list)
+
+    def test_warning_errors(self):
+        sampler_warning = VariantSubSampler(
+            model=VariantModel(),
+            combinations=self.combinations,
+            variant_dict=self.variant_dict,
+            modifier_map=self.mod_map,
+        )
+        with pytest.raises(ValueError):
+            sampler_warning.add_sample(sample_size=2, n_cpu=1)
+
+        sampler_warning.add_sample(sample_size=2, simulate=False, simulation_options={})
+        with pytest.raises(ValueError):
+            sampler_warning.simulate_combinations(n_cpu=1)
 
     def test_seed_consistency(self):
-        sampler1 = VariantSubSampler(Simul(), self.combinations)
-        sampler2 = VariantSubSampler(Simul(), self.combinations)
+        sampler1 = VariantSubSampler(
+            model=Simul(), simulation_options={}, combinations=self.combinations
+        )
+        sampler2 = VariantSubSampler(
+            model=Simul(), simulation_options={}, combinations=self.combinations
+        )
         seed = 42
         sample_size = 2
 
         sampler1.add_sample(sample_size, seed=seed, simulate=False)
         sampler2.add_sample(sample_size, seed=seed, simulate=False)
+        expected_list = [
+            ("EXISTING_mod1", "Variant_2", "Variant_3"),
+            ("Variant_1", "EXISTING_mod1_bis", "EXISTING_mod2"),
+        ]
+        assert list(sampler1.sample) == expected_list
+        assert list(sampler1.sample) == list(sampler2.sample)
 
         sampler1.clear_sample()
         sampler2.clear_sample()
 
-        sampler2.clear_sample()
-        sampler2.add_sample(sample_size, seed=seed, simulate=False)
+        new_seed = 43
+        sampler1.add_sample(sample_size, seed=seed, simulate=False)
+        sampler2.add_sample(sample_size, seed=new_seed, simulate=False)
         assert sampler1.sample != sampler2.sample
 
     def test_ensure_full_coverage(self):

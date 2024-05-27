@@ -80,7 +80,7 @@ def get_combined_variants(
              variant dictionary.
     """
     modifier_dict = get_modifier_dict(variant_dict, add_existing)
-    return list(set(itertools.product(*list(modifier_dict.values()))))
+    return list(itertools.product(*list(modifier_dict.values())))
 
 
 def simulate_variants(
