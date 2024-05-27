@@ -130,6 +130,13 @@ class TestVariantSubSampler:
         assert len(self.sampler.sample_results) == 0
         assert len(self.sampler.not_simulated_combinations) == 0
 
+    def test_dump_sample(self):
+        self.sampler.add_sample(1, simulate=True, ensure_full_coverage=True, n_cpu=1)
+        self.sampler.add_sample(1, simulate=False, ensure_full_coverage=False, n_cpu=1)
+        self.sampler.dump_sample()
+        assert len(self.sampler.sample) > 0
+        assert len(self.sampler.not_simulated_combinations) == 0
+
     def test_draw_sample(self):
         sample_size = 2
         self.sampler.draw_sample(sample_size, ensure_full_coverage=True)

@@ -194,7 +194,7 @@ class VariantSubSampler:
             else self.simulation_options
         )
         if not effective_simulation_options:
-            raise ValueError("Simulation options are " "not available for simulation.")
+            raise ValueError("Simulation options are not available for simulation.")
 
         if self.not_simulated_combinations:
             results = simulate_variants(
@@ -228,6 +228,19 @@ class VariantSubSampler:
         """
         self.sample = []
         self.sample_results = []
+        self.not_simulated_combinations = []
+
+    def dump_sample(self):
+        """
+        Clears all non-simulated samples.
+
+        Parameters:
+        - None
+
+        Returns:
+        - None: The method resets the internal state
+        related to non-simulated samples.
+        """
         self.not_simulated_combinations = []
 
 
