@@ -115,8 +115,7 @@ class TestVariantSubSampler:
 
         assert len(self.sampler.sample_results) > 0
 
-        expected_list = [110, 220, 5, 48, 81, 200, 34, 68]
-
+        expected_list = [5, 81, 34, 110, 5, 81, 68, 220]
         actual_results = []
         for df in self.sampler.sample_results:
             actual_results.extend(df["res"].tolist())
@@ -160,7 +159,7 @@ class TestVariantSubSampler:
         self.sampler.draw_sample(sample_size, ensure_full_coverage=False, seed=42)
         self.sampler.simulate_combinations(n_cpu=1)
         assert len(self.sampler.sample) == sample_size
-        expected_list = [48, 110]
+        expected_list = [5, 110]
 
         actual_results = []
         for df in self.sampler.sample_results:

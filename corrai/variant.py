@@ -142,7 +142,7 @@ def simulate_variants(
         working_model = deepcopy(model)
         for variant in simulation:
             split_var = variant.split("_")
-            if not split_var[0] == "EXISTING":
+            if (add_existing and (not split_var[0] == "EXISTING")) or not add_existing:
                 modifier = modifier_map[variant_dict[variant][VariantKeys.MODIFIER]]
                 modifier(
                     model=working_model,
