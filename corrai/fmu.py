@@ -142,9 +142,9 @@ class ModelicaFmuModel(Model):
         if not self._x.equals(df):
             new_bounds_path = self.simulation_dir / "boundaries.txt"
             df_to_combitimetable(df, new_bounds_path)
-            self.parameters[
-                f"{self.x_combitimetable_name}.fileName"
-            ] = new_bounds_path.as_posix()
+            self.parameters[f"{self.x_combitimetable_name}.fileName"] = (
+                new_bounds_path.as_posix()
+            )
             self._x = df
 
     def _set_x_sim_options(
@@ -168,7 +168,8 @@ class ModelicaFmuModel(Model):
         """
         if x is not None:
             self._set_x(x)
-            self._set_simuopt_start_stop_from_x(x)
+            self.simulation_options["startTime"] = x.index.min()
+            self.simulation_options["stopTime"] = x.index.max()
 
         if simulation_options is not None:
             for key, val in simulation_options.items():
@@ -186,16 +187,6 @@ class ModelicaFmuModel(Model):
                             )
                     else:
                         self.simulation_options[key] = val
-
-    def _set_simuopt_start_stop_from_x(self, x: pd.DataFrame):
-        # Overwrite simulation options
-        if isinstance(x.index, pd.DatetimeIndex):
-            idx = datetime_index_to_seconds_index(x.index)
-            self._begin_year = x.index[0].year
-        else:
-            idx = x.index
-        self.simulation_options["startTime"] = idx.min()
-        self.simulation_options["stopTime"] = idx.max()
 
     def simulate(
         self,
@@ -255,7 +246,10 @@ class ModelicaFmuModel(Model):
 
         if self._begin_year is not None:
             df.index = seconds_index_to_datetime_index(adjusted_time, self._begin_year)
-            df = df.drop(columns=["time"])
+        else:
+            df.index = [round(t, 3) for t in df["time"]]
+
+        df.drop(columns=["time"], inplace=True)
 
         # First values are often duplicates...
         df = df.loc[~df.index.duplicated(keep="first")]
