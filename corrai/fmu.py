@@ -3,9 +3,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
-import fmpy
 import pandas as pd
-from fmpy import simulate_fmu
+from fmpy import simulate_fmu, read_model_description, extract, instantiate_fmu
 
 from corrai.base.model import Model
 
@@ -114,6 +113,11 @@ class ModelicaFmuModel(Model):
         x_combitimetable_name: str = None,
         simulation_dir: Path = None,
     ):
+        self.unzipdir = extract(fmu_path)
+        self.model_description = read_model_description(self.unzipdir)
+        self.fmu_instance = instantiate_fmu(
+            self.unzipdir, self.model_description, "ModelExchange"
+        )
         self._x = pd.DataFrame()
         self.simulation_options = {
             "startTime": 0,
@@ -142,9 +146,9 @@ class ModelicaFmuModel(Model):
         if not self._x.equals(df):
             new_bounds_path = self.simulation_dir / "boundaries.txt"
             df_to_combitimetable(df, new_bounds_path)
-            self.parameters[f"{self.x_combitimetable_name}.fileName"] = (
-                new_bounds_path.as_posix()
-            )
+            self.parameters[
+                f"{self.x_combitimetable_name}.fileName"
+            ] = new_bounds_path.as_posix()
             self._x = df
 
     def _set_x_sim_options(
@@ -210,6 +214,7 @@ class ModelicaFmuModel(Model):
         :return: PandasDataFrame
         """
 
+        self.fmu_instance.reset()
         self.parameters.update(parameter_dict or {})
         self._set_x_sim_options(x, simulation_options)
 
@@ -227,7 +232,9 @@ class ModelicaFmuModel(Model):
             self._begin_year = None
 
         result = simulate_fmu(
-            filename=self.model_path,
+            filename=self.unzipdir,
+            model_description=self.model_description,
+            fmu_instance=self.fmu_instance,
             start_time=self.simulation_options["startTime"],
             stop_time=self.simulation_options["stopTime"],
             step_size=self.simulation_options["stepSize"],
@@ -254,6 +261,9 @@ class ModelicaFmuModel(Model):
         # First values are often duplicates...
         df = df.loc[~df.index.duplicated(keep="first")]
 
+        # self.fmu_instance.freeInstance()
+        # shutil.rmtree(self.unzipdir, ignore_errors=True)
+
         return df
 
     def save(self, file_path: Path):
@@ -266,11 +276,11 @@ class ModelicaFmuModel(Model):
         shutil.copyfile(self.model_path, file_path)
 
     def __repr__(self):
-        model_description = fmpy.read_model_description(self.model_path.as_posix())
+        model_description = read_model_description(self.model_path.as_posix())
 
         model_info = f"Model Name: {model_description.modelName}\n"
         model_info += (
-            f"Description: {fmpy.read_model_description(self.model_path.as_posix())}\n"
+            f"Description: {read_model_description(self.model_path.as_posix())}\n"
         )
         model_info += f"Version: {model_description.fmiVersion}\n"
         model_info += "Parameters:\n"
