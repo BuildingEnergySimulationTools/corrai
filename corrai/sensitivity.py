@@ -20,7 +20,7 @@ class Method(enum.Enum):
     FAST = "FAST"
     MORRIS = "MORRIS"
     SOBOL = "SOBOL"
-    RDB_FAST = "RBD_FAST"
+    RBD_FAST = "RBD_FAST"
 
 
 METHOD_SAMPLER_DICT = {
@@ -33,7 +33,7 @@ METHOD_SAMPLER_DICT = {
         "method": sobol,
         "sampling": sobol_sampler,
     },
-    Method.RDB_FAST: {
+    Method.RBD_FAST: {
         "method": rbd_fast,
         "sampling": latin,
     },
@@ -175,7 +175,7 @@ class SAnalysis:
         - agg_method_kwarg (dict, optional): Additional keyword arguments for the
             aggregation method.
         - reference_df (pd.DataFrame, optional): Reference data to pass to the
-            aggregation method. Usually usefull for error function analysis.
+            aggregation method. Usually useful for error function analysis.
             (eg. mean_error(simulation, reference_measurement)
         - sensitivity_method_kwargs (dict, optional): Additional keyword arguments for
             the sensitivity analysis method.
