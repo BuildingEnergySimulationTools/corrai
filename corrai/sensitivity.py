@@ -200,13 +200,18 @@ class SAnalysis:
             raise ValueError("Specified indicator not in computed outputs")
 
         analyser = METHOD_SAMPLER_DICT[self.method]["method"]
-
         results_2d = pd.concat(
             [s_res[2][indicator] for s_res in self.sample_results], axis=1
         )
+        if reference_df is not None:
+            reference_df_duplicated = pd.concat(
+                [reference_df] * len(results_2d.columns), axis=1
+            )
+        else:
+            reference_df_duplicated = None
         y_array = np.array(
             aggregate_time_series(
-                results_2d, agg_method, agg_method_kwarg, reference_df
+                results_2d, agg_method, agg_method_kwarg, reference_df_duplicated
             )
         )
 
