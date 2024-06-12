@@ -128,7 +128,13 @@ class SAnalysis:
 
         self.sample = pd.DataFrame(sample_temp, columns=self._salib_problem["names"])
 
-    def evaluate(self, model, simulation_options: dict, n_cpu: int = 1):
+    def evaluate(
+        self,
+        model,
+        simulation_options: dict,
+        n_cpu: int = 1,
+        simulate_kwargs: dict = None,
+    ):
         """
         Evaluate the model for the generated samples.
 
@@ -148,6 +154,7 @@ class SAnalysis:
             parameter_samples=self.sample,
             simulation_options=simulation_options,
             n_cpu=n_cpu,
+            simulate_kwargs=simulate_kwargs,
         )
 
     def analyze(

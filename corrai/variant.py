@@ -93,6 +93,7 @@ def simulate_variants(
     custom_combinations=None,
     save_dir: Path = None,
     file_extension: str = ".txt",
+    simulate_kwargs: dict = None,
 ):
     """
     Simulate a list of model variants combination in parallel with customizable
@@ -132,6 +133,7 @@ def simulate_variants(
 
     :return: A list of simulation results for each model variant.
     """
+    simulate_kwargs = {} if simulate_kwargs is None else simulate_kwargs
     model_list = []
     if custom_combinations is not None:
         combined_variants = custom_combinations
@@ -154,4 +156,6 @@ def simulate_variants(
         if save_dir:
             working_model.save((save_dir / f"Model_{idx}").with_suffix(file_extension))
 
-    return run_list_of_models_in_parallel(model_list, simulation_options, n_cpu)
+    return run_list_of_models_in_parallel(
+        model_list, simulation_options, n_cpu, simulate_kwargs
+    )
