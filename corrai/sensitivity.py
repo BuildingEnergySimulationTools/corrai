@@ -390,18 +390,11 @@ def plot_sample(
     for _, result in enumerate(sample_results):
         parameters, simulation_options, simulation_results = result
 
-        if ref is not None:
-            try:
-                to_plot = simulation_results[indicator].loc[ref.index]
-            except ValueError:
-                raise ValueError("Provide Pandas Series or DataFrame as ref")
-        else:
-            to_plot = simulation_results[indicator]
+        to_plot_indicator = simulation_results[indicator]
 
         if loc is not None:
-            to_plot = to_plot.loc[loc[0] : loc[1]]
+            to_plot_indicator = to_plot_indicator.loc[loc[0] : loc[1]]
 
-        # Useful for openmodelica parameters (long names)
         rounded_parameters = {key: round(value, 2) for key, value in parameters.items()}
         parameter_names = [
             param.split(".")[-1] if "." in param else param
@@ -416,12 +409,30 @@ def plot_sample(
 
         fig.add_trace(
             go.Scattergl(
-                name=legend_str if show_legends else None,
+                name=legend_str if show_legends else "Simulations",
                 mode="markers",
-                x=to_plot.index,
-                y=np.array(to_plot),
+                x=to_plot_indicator.index,
+                y=np.array(to_plot_indicator),
                 marker=dict(
                     color=f"rgba(135, 135, 135, {alpha})",
+                ),
+            )
+        )
+
+    if ref is not None:
+        if loc is not None:
+            to_plot_ref = ref.loc[loc[0] : loc[1]]
+        else:
+            to_plot_ref = ref
+
+        fig.add_trace(
+            go.Scattergl(
+                name="Reference",
+                mode="lines",
+                x=to_plot_ref.index,
+                y=np.array(to_plot_ref),
+                marker=dict(
+                    color="red",
                 ),
             )
         )
@@ -501,7 +512,10 @@ def plot_pcp(
         for param in parameters
     }
 
-    for _, indicator in enumerate(indicators):
+    if isinstance(indicators, str):
+        indicators = [indicators]
+
+    for indicator in indicators:
         data_dict[indicator] = np.array(
             [aggregation_method(res[2][indicator]) for res in sample_results]
         )
