@@ -314,8 +314,6 @@ class SAnalysis:
 
 
 def plot_sobol_st_bar(salib_res):
-    # print(salib_res)
-
     sobol_ind = salib_res.to_df()[0]
     sobol_ind.sort_values(by="ST", ascending=True, inplace=True)
 
@@ -335,6 +333,49 @@ def plot_sobol_st_bar(salib_res):
         title="Sobol Total indices",
         xaxis_title="Parameters",
         yaxis_title="Sobol total index value [0-1]",
+    )
+
+    figure.show()
+
+
+def plot_morris_st_bar(salib_res, distance_metric="normalized euclidian distance"):
+    if distance_metric not in ["euclidian distance", "normalized euclidian distance"]:
+        raise ValueError(
+            "Distance metric must be either 'euclidian distance'"
+            " or 'normalized euclidian distance'"
+        )
+
+    salib_res = salib_res.to_df()
+    salib_res.sort_values(by=distance_metric, ascending=True, inplace=True)
+
+    if distance_metric == "euclidian":
+        distance_values = salib_res["euclidian distance"]
+        distance_conf = None
+        title = "Morris Sensitivity Analysis - euclidian Distance"
+    else:
+        distance_values = salib_res["normalized euclidian distance"]
+        distance_conf = None
+        title = "Morris Sensitivity Analysis - Normalized euclidian Distance"
+
+    figure = go.Figure()
+    figure.add_trace(
+        go.Bar(
+            x=salib_res.index,
+            y=distance_values,
+            name=distance_metric.capitalize(),
+            marker_color="orange",
+            error_y=dict(
+                type="data",
+                array=distance_conf.to_numpy() if distance_conf is not None else None,
+            ),
+            yaxis="y1",
+        )
+    )
+
+    figure.update_layout(
+        title=title,
+        xaxis_title="Parameters",
+        yaxis_title=f"{distance_metric.capitalize()} (d)",
     )
 
     figure.show()
