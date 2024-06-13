@@ -227,14 +227,40 @@ class SAnalysis:
                 **sensitivity_method_kwargs,
             )
 
-    def calculate_sensitivity_summary(self):
+    def calculate_sensitivity_indicators(self):
         """
-        Calculate sensitivity summary based on the method used.
+        Returns sensitivity indicators based on the method used.
 
         Returns:
         - dict: A dictionary containing the calculated sensitivity summary.
-        """
 
+        If the method is FAST or RBD_FAST:
+            - sum_st (float): Sum of the sensitivity indices (ST or S1).
+            - mean_conf (float): Mean confidence level of the sensitivity indices.
+
+        If the method is SOBOL:
+            - sum_st (float): Sum of the first-order sensitivity indices (ST).
+            - mean_conf (float): Mean confidence level of the first-order
+            sensitivity indices (ST_conf).
+            - sum_s1 (float): Sum of the first-order sensitivity indices (S1).
+            - mean_conf1 (float): Mean confidence level of the first-order
+            sensitivity indices (S1_conf).
+            - sum_s2 (float): Sum of the second-order sensitivity indices (S2).
+            - mean_conf2 (float): Mean confidence level of the second-order
+            sensitivity indices (S2_conf).
+
+        If the method is MORRIS:
+            - euclidian distance (array-like): Euclidian distance
+             between mu_star and sigma.
+            Mu_star represents the average elementary effects of the outputs
+            with respect to each input factor, while sigma measures the total
+            variability induced by each input factor.
+            - normalized euclidian distance (array-like): Normalized euclidian
+             distance between mu_star and sigma. The normalized euclidian distance
+             is the euclidian distance divided by its maximum value, providing a
+             relative measure of the variability induced by each input factor.
+
+        """
         if self.method == Method.FAST:
             sum_st = sum(self.sensitivity_results["ST"])
             conf = self.sensitivity_results["ST_conf"]
@@ -268,21 +294,27 @@ class SAnalysis:
 
         elif self.method == Method.MORRIS:
             morris_res = self.sensitivity_results
-            morris_res["distance"] = np.sqrt(
+            morris_res["euclidian distance"] = np.sqrt(
                 morris_res["mu_star"] ** 2 + morris_res["sigma"] ** 2
             )
-            morris_res["dimless_distance"] = (
-                morris_res["distance"] / morris_res["distance"].max()
+            morris_res["normalized euclidian distance"] = (
+                morris_res["euclidian distance"]
+                / morris_res["euclidian distance"].max()
             )
 
-            return morris_res
+            return {
+                "euclidian distance": morris_res["euclidian distance"].data,
+                "normalized euclidian distance": morris_res[
+                    "normalized euclidian distance"
+                ].data,
+            }
 
         else:
             raise ValueError("Invalid method")
 
 
 def plot_sobol_st_bar(salib_res):
-    print(salib_res)
+    # print(salib_res)
 
     sobol_ind = salib_res.to_df()[0]
     sobol_ind.sort_values(by="ST", ascending=True, inplace=True)
