@@ -335,20 +335,21 @@ def plot_sobol_st_bar(salib_res):
         yaxis_title="Sobol total index value [0-1]",
     )
 
-    figure.show()
+    return figure
 
 
-def plot_morris_st_bar(salib_res, distance_metric="normalized euclidian distance"):
-    if distance_metric not in ["euclidian distance", "normalized euclidian distance"]:
-        raise ValueError(
-            "Distance metric must be either 'euclidian distance'"
-            " or 'normalized euclidian distance'"
-        )
+def plot_morris_st_bar(salib_res, distance_metric="normalized"):
+    if distance_metric not in ["absolute", "normalized"]:
+        raise ValueError("Distance metric must be either 'absolute'" " or 'normalized'")
 
     salib_res = salib_res.to_df()
-    salib_res.sort_values(by=distance_metric, ascending=True, inplace=True)
+    if distance_metric == "absolute":
+        dist = "euclidian distance"
+    else:
+        dist = "normalized euclidian distance"
+    salib_res.sort_values(by=dist, ascending=True, inplace=True)
 
-    if distance_metric == "euclidian":
+    if distance_metric == "absolute":
         distance_values = salib_res["euclidian distance"]
         distance_conf = None
         title = "Morris Sensitivity Analysis - euclidian Distance"
@@ -378,7 +379,7 @@ def plot_morris_st_bar(salib_res, distance_metric="normalized euclidian distance
         yaxis_title=f"{distance_metric.capitalize()} (d)",
     )
 
-    figure.show()
+    return figure
 
 
 def plot_morris_scatter(
@@ -483,7 +484,7 @@ def plot_morris_scatter(
         yaxis_range=y_lim,
     )
 
-    fig.show()
+    return fig
 
 
 def plot_sample(
@@ -580,10 +581,10 @@ def plot_sample(
         fig.update_layout(yaxis_title=y_label)
 
     fig.update_layout(showlegend=show_legends)
-    fig.show()
 
     if html_file_path:
         pio.write_html(fig, html_file_path)
+    return fig
 
 
 def plot_pcp(
