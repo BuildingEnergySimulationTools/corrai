@@ -804,8 +804,7 @@ class ObjectiveFunction:
         float
             The calculated value of the objective function.
         """
-        if isinstance(x, float):
-            x = [x]
+        x = [x] if isinstance(x, (float, int)) else x
         x_dict = {
             self.param_list[i][Parameter.NAME]: x[i]
             for i in range(len(self.param_list))
