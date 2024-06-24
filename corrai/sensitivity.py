@@ -664,3 +664,72 @@ def plot_pcp(
         obj_res=np.array([res[2][indicators] for res in sample_results]),
         html_file_path=html_file_path,
     )
+
+
+class ObjectiveFunction:
+    def __init__(
+        self,
+        model,
+        simulation_options,
+        param_list,
+        indicators,
+        agg_methods_dict=None,
+        reference_dict=None,
+        reference_df=None,
+        custom_ind_dict=None,
+    ):
+        self.model = model
+        self.param_list = param_list
+        self.indicators = indicators
+        self.simulation_options = simulation_options
+
+        if agg_methods_dict is None:
+            self.agg_methods_dict = {ind: np.mean for ind in self.indicators}
+        else:
+            self.agg_methods_dict = agg_methods_dict
+        if (reference_dict is not None and reference_df is None) or (
+            reference_dict is None and reference_df is not None
+        ):
+            raise ValueError("Both reference_dict and reference_df should be provided")
+        self.reference_dict = reference_dict
+        self.reference_df = reference_df
+        self.custom_ind_dict = custom_ind_dict if custom_ind_dict is not None else []
+
+    def function(self, x_dict):
+        temp_dict = {
+            param[Parameter.NAME]: x_dict[param[Parameter.NAME]]
+            for param in self.param_list
+        }
+
+        res = self.model.simulate(temp_dict, simulation_options=self.simulation_options)
+        function_results = {}
+
+        for ind in self.indicators:
+            if ind in res:
+                function_results[ind] = res[ind]
+
+        for ind in self.indicators:
+            if ind in function_results and ind in self.agg_methods_dict:
+                if self.reference_dict and ind in self.reference_dict:
+                    ref_values = self.reference_df[self.reference_dict[ind]]
+                    function_results[ind] = self.agg_methods_dict[ind](
+                        function_results[ind], ref_values
+                    )
+
+                else:
+                    function_results[ind] = self.agg_methods_dict[ind](
+                        function_results[ind]
+                    )
+
+        res_series = pd.Series(function_results, dtype="float64")
+        return res_series
+
+    def scipy_obj_function(self, x):
+        if isinstance(x, float):
+            x = [x]
+        x_dict = {
+            self.param_list[i][Parameter.NAME]: x[i]
+            for i in range(len(self.param_list))
+        }
+        result = self.function(x_dict)
+        return float(result.iloc[0])
