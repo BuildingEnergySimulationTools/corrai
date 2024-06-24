@@ -667,6 +667,40 @@ def plot_pcp(
 
 
 class ObjectiveFunction:
+    """
+    A class to represent the objective function for model
+    calibration and optimization using scipy.
+
+    Attributes
+    ----------
+    model : Model
+        The model to be calibrated
+    simulation_options : dict
+        Dictionary containing simulation options, including input data.
+    param_list : list of dict
+        List of dictionaries specifying the parameters to be calibrated.
+    indicators : list of str
+        List of indicators to be used in the objective function.
+    agg_methods_dict : dict, optional
+        Dictionary specifying aggregation methods for each indicator. Defaults to mean.
+    reference_dict : dict, optional
+        Dictionary mapping indicators to reference columns in
+        reference dataframe. Required if reference is provided.
+    reference_df : pd.DataFrame, optional
+        DataFrame containing reference data for the indicators.
+        Required if reference_dict is provided.
+    custom_ind_dict : dict, optional
+        Dictionary for custom indicators.
+
+    Methods
+    -------
+    function(x_dict)
+        Calculate the objective function for given parameter values.
+    scipy_obj_function(x)
+        Wrapper for scipy.optimize that calculates the objective
+        function for given parameter values.
+    """
+
     def __init__(
         self,
         model,
@@ -678,6 +712,24 @@ class ObjectiveFunction:
         reference_df=None,
         custom_ind_dict=None,
     ):
+        """
+        Initialize the ObjectiveFunction class with the model,
+        simulation options, parameters, and indicators.
+
+        Parameters
+        ----------
+        model : Model
+            The model to be calibrated.
+        simulation_options : dict
+            Dictionary containing simulation options, including input data.
+        param_list : list of dict
+            List of dictionaries specifying the parameters to be calibrated.
+        indicators : list of str
+            List of indicators to be used in the objective function.
+        agg_methods_dict : dict, optional
+            Dictionary specifying aggregation methods for each indicator.
+            Defaults to mean.
+        """
         self.model = model
         self.param_list = param_list
         self.indicators = indicators
@@ -696,6 +748,19 @@ class ObjectiveFunction:
         self.custom_ind_dict = custom_ind_dict if custom_ind_dict is not None else []
 
     def function(self, x_dict):
+        """
+        Calculate the objective function for given parameter values.
+
+        Parameters
+        ----------
+        x_dict : dict
+            Dictionary containing parameter names and their values.
+
+        Returns
+        -------
+        pd.Series
+            A series containing the calculated values for each indicator.
+        """
         temp_dict = {
             param[Parameter.NAME]: x_dict[param[Parameter.NAME]]
             for param in self.param_list
@@ -725,6 +790,20 @@ class ObjectiveFunction:
         return res_series
 
     def scipy_obj_function(self, x):
+        """
+        Wrapper for scipy.optimize that calculates the
+        objective function for given parameter values.
+
+        Parameters
+        ----------
+        x : float or list of float
+            List of parameter values or a single parameter value.
+
+        Returns
+        -------
+        float
+            The calculated value of the objective function.
+        """
         if isinstance(x, float):
             x = [x]
         x_dict = {
