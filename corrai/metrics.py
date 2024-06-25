@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from sklearn.utils import check_consistent_length
 
 # from sklearn.metrics._regression import _check_reg_targets
@@ -15,6 +16,8 @@ def nmbe(y_pred, y_true):
     Normalized Mean biased error as float
     """
     check_consistent_length(y_pred, y_true)
+    y_pred = y_pred.to_numpy() if isinstance(y_pred, pd.DataFrame) else y_pred
+    y_true = y_true.to_numpy() if isinstance(y_true, pd.DataFrame) else y_true
     # y_type, y_true, y_pred, multioutput = _check_reg_targets(
     #     y_true, y_pred, "uniform_average"
     # )
@@ -33,6 +36,8 @@ def cv_rmse(y_pred, y_true):
     Coefficient of variation of root mean squared error as float
     """
     check_consistent_length(y_pred, y_true)
+    y_pred = y_pred.to_numpy() if isinstance(y_pred, pd.DataFrame) else y_pred
+    y_true = y_true.to_numpy() if isinstance(y_true, pd.DataFrame) else y_true
     # y_type, y_true, y_pred, multioutput = _check_reg_targets(
     #     y_true, y_pred, "uniform_average"
     # )
