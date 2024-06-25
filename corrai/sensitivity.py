@@ -747,6 +747,39 @@ class ObjectiveFunction:
         self.reference_df = reference_df
         self.custom_ind_dict = custom_ind_dict if custom_ind_dict is not None else []
 
+    @property
+    def bounds(self):
+        """
+        Get the bounds from param_list.
+
+        Returns
+        -------
+        list of tuple
+            A list of tuples containing the bounds for each parameter.
+            If one parameter, returns a tuple.
+        """
+        if len(self.param_list) == 1:
+            return self.param_list[0][Parameter.INTERVAL]
+        return [param[Parameter.INTERVAL] for param in self.param_list]
+
+    @property
+    def init_values(self):
+        """
+        Get the initial values from param_list.
+
+        Returns
+        -------
+        list of tuple
+            A list of initial values for each parameter.
+            If one parameter, returns a float.
+        """
+        if all(Parameter.INIT_VALUE in param for param in self.param_list):
+            if len(self.param_list) == 1:
+                return self.param_list[0][Parameter.INIT_VALUE]
+            return [param[Parameter.INIT_VALUE] for param in self.param_list]
+        else:
+            return None
+
     def function(self, x_dict):
         """
         Calculate the objective function for given parameter values.
@@ -804,7 +837,15 @@ class ObjectiveFunction:
         float
             The calculated value of the objective function.
         """
+        # if isinstance(x, float) and np.isnan(x):
+        #     return np.inf
+        # if isinstance(x, list) and any(np.isnan(xi) for xi in x):
+        #     return np.inf
+
         x = [x] if isinstance(x, (float, int)) else x
+        if len(x) != len(self.param_list):
+            raise ValueError("Length of x does not match length of param_list")
+
         x_dict = {
             self.param_list[i][Parameter.NAME]: x[i]
             for i in range(len(self.param_list))
