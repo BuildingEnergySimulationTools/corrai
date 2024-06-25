@@ -689,8 +689,6 @@ class ObjectiveFunction:
     reference_df : pd.DataFrame, optional
         DataFrame containing reference data for the indicators.
         Required if reference_dict is provided.
-    custom_ind_dict : dict, optional
-        Dictionary for custom indicators.
 
     Methods
     -------
@@ -710,7 +708,6 @@ class ObjectiveFunction:
         agg_methods_dict=None,
         reference_dict=None,
         reference_df=None,
-        custom_ind_dict=None,
     ):
         """
         Initialize the ObjectiveFunction class with the model,
@@ -745,7 +742,6 @@ class ObjectiveFunction:
             raise ValueError("Both reference_dict and reference_df should be provided")
         self.reference_dict = reference_dict
         self.reference_df = reference_df
-        self.custom_ind_dict = custom_ind_dict if custom_ind_dict is not None else []
 
     @property
     def bounds(self):
