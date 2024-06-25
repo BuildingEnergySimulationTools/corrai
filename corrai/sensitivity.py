@@ -20,7 +20,7 @@ class Method(enum.Enum):
     FAST = "FAST"
     MORRIS = "MORRIS"
     SOBOL = "SOBOL"
-    RDB_FAST = "RBD_FAST"
+    RBD_FAST = "RBD_FAST"
 
 
 METHOD_SAMPLER_DICT = {
@@ -33,7 +33,7 @@ METHOD_SAMPLER_DICT = {
         "method": sobol,
         "sampling": sobol_sampler,
     },
-    Method.RDB_FAST: {
+    Method.RBD_FAST: {
         "method": rbd_fast,
         "sampling": latin,
     },
@@ -175,7 +175,7 @@ class SAnalysis:
         - agg_method_kwarg (dict, optional): Additional keyword arguments for the
             aggregation method.
         - reference_df (pd.DataFrame, optional): Reference data to pass to the
-            aggregation method. Usually usefull for error function analysis.
+            aggregation method. Usually useful for error function analysis.
             (eg. mean_error(simulation, reference_measurement)
         - sensitivity_method_kwargs (dict, optional): Additional keyword arguments for
             the sensitivity analysis method.
@@ -200,13 +200,18 @@ class SAnalysis:
             raise ValueError("Specified indicator not in computed outputs")
 
         analyser = METHOD_SAMPLER_DICT[self.method]["method"]
-
         results_2d = pd.concat(
             [s_res[2][indicator] for s_res in self.sample_results], axis=1
         )
+        if reference_df is not None:
+            reference_df_duplicated = pd.concat(
+                [reference_df] * len(results_2d.columns), axis=1
+            )
+        else:
+            reference_df_duplicated = None
         y_array = np.array(
             aggregate_time_series(
-                results_2d, agg_method, agg_method_kwarg, reference_df
+                results_2d, agg_method, agg_method_kwarg, reference_df_duplicated
             )
         )
 
@@ -221,6 +226,91 @@ class SAnalysis:
                 Y=y_array,
                 **sensitivity_method_kwargs,
             )
+
+    def calculate_sensitivity_indicators(self):
+        """
+        Returns sensitivity indicators based on the method used.
+
+        Returns:
+        - dict: A dictionary containing the calculated sensitivity summary.
+
+        If the method is FAST or RBD_FAST:
+            - sum_st (float): Sum of the sensitivity indices (ST or S1).
+            - mean_conf (float): Mean confidence level of the sensitivity indices.
+
+        If the method is SOBOL:
+            - sum_st (float): Sum of the first-order sensitivity indices (ST).
+            - mean_conf (float): Mean confidence level of the first-order
+            sensitivity indices (ST_conf).
+            - sum_s1 (float): Sum of the first-order sensitivity indices (S1).
+            - mean_conf1 (float): Mean confidence level of the first-order
+            sensitivity indices (S1_conf).
+            - sum_s2 (float): Sum of the second-order sensitivity indices (S2).
+            - mean_conf2 (float): Mean confidence level of the second-order
+            sensitivity indices (S2_conf).
+
+        If the method is MORRIS:
+            - euclidian distance (array-like): Euclidian distance
+             between mu_star and sigma.
+            Mu_star represents the average elementary effects of the outputs
+            with respect to each input factor, while sigma measures the total
+            variability induced by each input factor.
+            - normalized euclidian distance (array-like): Normalized euclidian
+             distance between mu_star and sigma. The normalized euclidian distance
+             is the euclidian distance divided by its maximum value, providing a
+             relative measure of the variability induced by each input factor.
+
+        """
+        if self.method == Method.FAST:
+            sum_st = sum(self.sensitivity_results["ST"])
+            conf = self.sensitivity_results["ST_conf"]
+            mean_conf = sum(conf) / len(conf)
+
+            return {"sum_st": sum_st, "mean_conf": mean_conf}
+
+        elif self.method == Method.RBD_FAST:
+            sum_st = sum(self.sensitivity_results["S1"])
+            conf = self.sensitivity_results["S1_conf"]
+            mean_conf = sum(conf) / len(conf)
+
+            return {"sum_st": sum_st, "mean_conf": mean_conf}
+
+        elif self.method == Method.SOBOL:
+            sum_st = self.sensitivity_results.to_df()[0].sum().loc["ST"]
+            mean_conf = self.sensitivity_results.to_df()[0].mean().loc["ST_conf"]
+            sum_s1 = self.sensitivity_results.to_df()[1].sum().loc["S1"]
+            mean_conf1 = self.sensitivity_results.to_df()[1].mean().loc["S1_conf"]
+            sum_s2 = self.sensitivity_results.to_df()[2].sum().loc["S2"]
+            mean_conf2 = self.sensitivity_results.to_df()[2].mean().loc["S2_conf"]
+
+            return {
+                "sum_st": sum_st,
+                "mean_conf": mean_conf,
+                "sum_s1": sum_s1,
+                "mean_conf1": mean_conf1,
+                "sum_s2": sum_s2,
+                "mean_conf2": mean_conf2,
+            }
+
+        elif self.method == Method.MORRIS:
+            morris_res = self.sensitivity_results
+            morris_res["euclidian distance"] = np.sqrt(
+                morris_res["mu_star"] ** 2 + morris_res["sigma"] ** 2
+            )
+            morris_res["normalized euclidian distance"] = (
+                morris_res["euclidian distance"]
+                / morris_res["euclidian distance"].max()
+            )
+
+            return {
+                "euclidian distance": morris_res["euclidian distance"].data,
+                "normalized euclidian distance": morris_res[
+                    "normalized euclidian distance"
+                ].data,
+            }
+
+        else:
+            raise ValueError("Invalid method")
 
 
 def plot_sobol_st_bar(salib_res):
@@ -245,7 +335,51 @@ def plot_sobol_st_bar(salib_res):
         yaxis_title="Sobol total index value [0-1]",
     )
 
-    figure.show()
+    return figure
+
+
+def plot_morris_st_bar(salib_res, distance_metric="normalized"):
+    if distance_metric not in ["absolute", "normalized"]:
+        raise ValueError("Distance metric must be either 'absolute'" " or 'normalized'")
+
+    salib_res = salib_res.to_df()
+    if distance_metric == "absolute":
+        dist = "euclidian distance"
+    else:
+        dist = "normalized euclidian distance"
+    salib_res.sort_values(by=dist, ascending=True, inplace=True)
+
+    if distance_metric == "absolute":
+        distance_values = salib_res["euclidian distance"]
+        distance_conf = None
+        title = "Morris Sensitivity Analysis - euclidian Distance"
+    else:
+        distance_values = salib_res["normalized euclidian distance"]
+        distance_conf = None
+        title = "Morris Sensitivity Analysis - Normalized euclidian Distance"
+
+    figure = go.Figure()
+    figure.add_trace(
+        go.Bar(
+            x=salib_res.index,
+            y=distance_values,
+            name=distance_metric.capitalize(),
+            marker_color="orange",
+            error_y=dict(
+                type="data",
+                array=distance_conf.to_numpy() if distance_conf is not None else None,
+            ),
+            yaxis="y1",
+        )
+    )
+
+    figure.update_layout(
+        title=title,
+        xaxis_title="Parameters",
+        yaxis_title=f"{distance_metric.capitalize()} (d)",
+    )
+
+    return figure
 
 
 def plot_morris_scatter(
@@ -350,7 +484,7 @@ def plot_morris_scatter(
         yaxis_range=y_lim,
     )
 
-    fig.show()
+    return fig
 
 
 def plot_sample(
@@ -390,18 +524,11 @@ def plot_sample(
     for _, result in enumerate(sample_results):
         parameters, simulation_options, simulation_results = result
 
-        if ref is not None:
-            try:
-                to_plot = simulation_results[indicator].loc[ref.index]
-            except ValueError:
-                raise ValueError("Provide Pandas Series or DataFrame as ref")
-        else:
-            to_plot = simulation_results[indicator]
+        to_plot_indicator = simulation_results[indicator]
 
         if loc is not None:
-            to_plot = to_plot.loc[loc[0] : loc[1]]
+            to_plot_indicator = to_plot_indicator.loc[loc[0] : loc[1]]
 
-        # Useful for openmodelica parameters (long names)
         rounded_parameters = {key: round(value, 2) for key, value in parameters.items()}
         parameter_names = [
             param.split(".")[-1] if "." in param else param
@@ -416,12 +543,30 @@ def plot_sample(
 
         fig.add_trace(
             go.Scattergl(
-                name=legend_str if show_legends else None,
+                name=legend_str if show_legends else "Simulations",
                 mode="markers",
-                x=to_plot.index,
-                y=np.array(to_plot),
+                x=to_plot_indicator.index,
+                y=np.array(to_plot_indicator),
                 marker=dict(
                     color=f"rgba(135, 135, 135, {alpha})",
+                ),
+            )
+        )
+
+    if ref is not None:
+        if loc is not None:
+            to_plot_ref = ref.loc[loc[0] : loc[1]]
+        else:
+            to_plot_ref = ref
+
+        fig.add_trace(
+            go.Scattergl(
+                name="Reference",
+                mode="lines",
+                x=to_plot_ref.index,
+                y=np.array(to_plot_ref),
+                marker=dict(
+                    color="red",
                 ),
             )
         )
@@ -436,10 +581,10 @@ def plot_sample(
         fig.update_layout(yaxis_title=y_label)
 
     fig.update_layout(showlegend=show_legends)
-    fig.show()
 
     if html_file_path:
         pio.write_html(fig, html_file_path)
+    return fig
 
 
 def plot_pcp(
@@ -501,7 +646,10 @@ def plot_pcp(
         for param in parameters
     }
 
-    for _, indicator in enumerate(indicators):
+    if isinstance(indicators, str):
+        indicators = [indicators]
+
+    for indicator in indicators:
         data_dict[indicator] = np.array(
             [aggregation_method(res[2][indicator]) for res in sample_results]
         )
