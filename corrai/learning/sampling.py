@@ -60,6 +60,7 @@ class VariantSubSampler:
         self.save_dir = save_dir
         self.file_extension = file_extension
         self.sample = []
+        self.simulated_samples = []
         self.all_variants = set(itertools.chain(*combinations))
         self.sample_results = []
         self.not_simulated_combinations = []
@@ -210,6 +211,7 @@ class VariantSubSampler:
             )
 
             self.sample_results.extend(results)
+            self.simulated_samples.extend(self.not_simulated_combinations)
             self.not_simulated_combinations = []  # Clear the list after simulation
 
     def clear_sample(self):
@@ -227,6 +229,7 @@ class VariantSubSampler:
           return any value.
         """
         self.sample = []
+        self.simulated_samples = []
         self.sample_results = []
         self.not_simulated_combinations = []
 
