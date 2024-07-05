@@ -241,6 +241,9 @@ class VariantSubSampler:
         - None: The method resets the internal state
         related to non-simulated samples.
         """
+        self.sample = [
+            comb for comb in self.sample if comb not in self.not_simulated_combinations
+        ]
         self.not_simulated_combinations = []
 
 
