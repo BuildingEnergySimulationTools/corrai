@@ -202,7 +202,7 @@ class ModelicaFmuModel(Model):
         parameter_dict: dict[str, float | int | str] = None,
         simulation_options: dict = None,
         x: pd.DataFrame = None,
-        debug_param:bool = False,
+        debug_param: bool = False,
         debug_logging: bool = False,
         logger=None,
     ) -> pd.DataFrame:
