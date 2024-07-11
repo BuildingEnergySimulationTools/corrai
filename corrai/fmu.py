@@ -255,10 +255,10 @@ class ModelicaFmuModel(Model):
         )
 
         df = pd.DataFrame(result, columns=["time"] + self.output_list)
-        adjusted_time = df["time"] + self.simulation_options["startTime"]
+        # adjusted_time = df["time"] + self.simulation_options["startTime"]
 
         if self._begin_year is not None:
-            df.index = seconds_index_to_datetime_index(adjusted_time, self._begin_year)
+            df.index = seconds_index_to_datetime_index(df["time"], self._begin_year)
             df = df.drop(columns=["time"])
 
         # First values are often duplicates...
