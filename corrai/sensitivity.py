@@ -790,6 +790,7 @@ class ObjectiveFunction:
         pd.Series
             A series containing the calculated values for each indicator.
         """
+        args = {} if args is None else args
         temp_dict = {
             param[Parameter.NAME]: x_dict[param[Parameter.NAME]]
             for param in self.param_list
