@@ -18,6 +18,12 @@ def seconds_index_to_datetime_index(
     return pd.DatetimeIndex(pd.to_datetime(diff_seconds, unit="s"))
 
 
+def datetime_to_second(datetime_in: dt.datetime | pd.Timestamp):
+    year = datetime_in.year
+    origin = dt.datetime(year, 1, 1)
+    return (datetime_in - origin).total_seconds()
+
+
 def datetime_index_to_seconds_index(index_datetime: pd.DatetimeIndex) -> pd.Index:
     time_start = dt.datetime(index_datetime[0].year, 1, 1, tzinfo=dt.timezone.utc)
     new_index = index_datetime.to_frame().diff().squeeze()
@@ -58,6 +64,18 @@ def df_to_combitimetable(df: pd.DataFrame, filename):
             df.index = datetime_index_to_seconds_index(df.index)
 
         file.write(df.to_csv(header=False, sep="\t", lineterminator="\n"))
+
+
+def get_start_stop_year_from_x(x: pd.DataFrame = None):
+    if x is None:
+        return None, None, None
+    if isinstance(x.index, pd.DatetimeIndex):
+        idx = datetime_index_to_seconds_index(x.index)
+        year = x.index[0].year
+    else:
+        idx = x.index
+        year = None
+    return idx.min(), idx.max(), year
 
 
 class ModelicaFmuModel(Model):
@@ -136,7 +154,7 @@ class ModelicaFmuModel(Model):
             x_combitimetable_name if x_combitimetable_name is not None else "Boundaries"
         )
 
-    def _set_x(self, df: pd.DataFrame):
+    def set_x(self, df: pd.DataFrame):
         """Sets the input data for the simulation and updates the corresponding file."""
 
         if not self._x.equals(df):
@@ -147,68 +165,79 @@ class ModelicaFmuModel(Model):
             )
             self._x = df
 
+            start, stop, year = get_start_stop_year_from_x(df)
+            self.simulation_options["startTime"] = start
+            self.simulation_options["stopTime"] = stop
+            self._begin_year = year
+
     def _set_x_sim_options(
         self,
         x: pd.DataFrame = None,
-        simulation_options: dict[str, float | str | int] = None,
+        simulation_options: dict[
+            str, float | str | int | dt.datetime | pd.Timestamp
+        ] = None,
     ):
         """
         Sets the input data and simulation options, updates start and stop times if
         necessary.
-        If only x is specified, it will set simulationStart and simulationStop based
+        If x is specified, it will set simulationStart and simulationStop based
         on x.index min() and max().  Whether it is datetime or integer (seconds).
         If simulationStart and simulationStop are specified in the simulation_options,
-        it will overwrite the values set by x. If provided values are not in the
-        same format, or are outside x.index boundaries, it will raise an error
+        it will NOT BE TAKEN INTO ACCOUNT. The rest of the simulation_options WILL BE
+        written
+
+        If x is not specified, simulationStart and simulationStop will be considered
 
         :param x (pd.DataFrame): The Dataframe describing the boundary conditions
         :param simulation_options (dict): Simulation options for  the FMU. It may
         include the following keys : startTime, stopTime, stepSize, solver,
         outputInterval, tolerance, fmi_type
         """
+
         if x is not None:
-            self._set_x(x)
-            self._set_simuopt_start_stop_from_x(x)
+            self.set_x(x)
 
+        # Get simu options
         if simulation_options is not None:
-            for key, val in simulation_options.items():
-                if key not in ["startTime", "stopTime"]:
-                    self.simulation_options[key] = val
-                else:
-                    if not self._x.equals(pd.DataFrame()):
-                        try:
-                            if self._x.index.min() <= val <= self._x.index.max():
-                                self.simulation_options[key] = val
-                        except TypeError:
-                            raise TypeError(
-                                f"self._x has {type(self._x.index)} type,"
-                                f"cannot specify a {key} value of type {type(val)}"
-                            )
-                    else:
-                        self.simulation_options[key] = val
+            # Update all but time
+            to_update = {
+                key: val
+                for key, val in simulation_options.items()
+                if key not in ["startTime", "stopTime"]
+            }
+            self.simulation_options.update(to_update)
 
-    def _set_simuopt_start_stop_from_x(self, x: pd.DataFrame):
-        # Overwrite simulation options
-        if isinstance(x.index, pd.DatetimeIndex):
-            idx = datetime_index_to_seconds_index(x.index)
-            self._begin_year = x.index[0].year
-        else:
-            idx = x.index
-        self.simulation_options["startTime"] = idx.min()
-        self.simulation_options["stopTime"] = idx.max()
+            if x is None:
+                simo = {}
+                for key in ["startTime", "stopTime"]:
+                    if key in simulation_options and isinstance(
+                        simulation_options[key], (dt.datetime, pd.Timestamp)
+                    ):
+                        simo[key] = datetime_to_second(simulation_options[key])
+                        if key == "startTime":
+                            self._begin_year = simulation_options["startTime"].year
+                    else:
+                        simo[key] = simulation_options[key]
+
+                self.simulation_options["startTime"] = simo["startTime"]
+                self.simulation_options["stopTime"] = simo["stopTime"]
 
     def simulate(
         self,
         parameter_dict: dict[str, float | int | str] = None,
         simulation_options: dict = None,
         x: pd.DataFrame = None,
-        debug_param:bool = False,
+        solver_duplicated_keep: str = "last",
+        debug_param: bool = False,
         debug_logging: bool = False,
         logger=None,
     ) -> pd.DataFrame:
         """
         Run FMU simulation for the given parameters and simulation_options.
 
+        :param debug_param: if True, print parameter_dict
+        :param solver_duplicated_keep: Some solver will return duplicated index,
+        choose the one you want to keep (ex. "last", "first")
         :param x: Input boundary data. Will be passed to the model using a
         Combitimetable
         :param simulation_options: Simulation options for the FMU.
@@ -226,19 +255,6 @@ class ModelicaFmuModel(Model):
         self.parameters.update(parameter_dict or {})
         self._set_x_sim_options(x, simulation_options)
 
-        start_time = self.simulation_options.get("startTime")
-        stop_time = self.simulation_options.get("stopTime")
-
-        if isinstance(start_time, (dt.datetime, pd.Timestamp)):
-            self._begin_year = start_time.year
-            idx = datetime_index_to_seconds_index(
-                pd.DatetimeIndex([start_time, stop_time])
-            )
-            self.simulation_options["startTime"] = idx.min()
-            self.simulation_options["stopTime"] = idx.max()
-        else:
-            self._begin_year = None
-
         result = simulate_fmu(
             filename=self.model_path,
             start_time=self.simulation_options["startTime"],
@@ -255,16 +271,21 @@ class ModelicaFmuModel(Model):
         )
 
         df = pd.DataFrame(result, columns=["time"] + self.output_list)
-        # adjusted_time = df["time"] + self.simulation_options["startTime"]
 
         if self._begin_year is not None:
             df.index = seconds_index_to_datetime_index(df["time"], self._begin_year)
-            df = df.drop(columns=["time"])
+            # Weird solver behavior
+            df.index = df.index.round("s")
+        else:
+            # solver can do funny things. Round time
+            df.index = round(df["time"], 2)
+
+        df.drop(columns=["time"], inplace=True)
 
         # First values are often duplicates...
-        df = df.loc[~df.index.duplicated(keep="first")]
-
-        return df
+        # For some reason, it appears that values of first timestep is often off
+        # A bit dirty, so we let you choose
+        return df.loc[~df.index.duplicated(keep=solver_duplicated_keep)]
 
     def save(self, file_path: Path):
         """
