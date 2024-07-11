@@ -202,6 +202,7 @@ class ModelicaFmuModel(Model):
         parameter_dict: dict[str, float | int | str] = None,
         simulation_options: dict = None,
         x: pd.DataFrame = None,
+        debug_param:bool = False,
         debug_logging: bool = False,
         logger=None,
     ) -> pd.DataFrame:
@@ -218,6 +219,9 @@ class ModelicaFmuModel(Model):
         :param logger:
         :return: PandasDataFrame
         """
+
+        if debug_param:
+            print(parameter_dict)
 
         self.parameters.update(parameter_dict or {})
         self._set_x_sim_options(x, simulation_options)
