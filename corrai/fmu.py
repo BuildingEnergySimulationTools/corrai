@@ -21,7 +21,7 @@ def seconds_index_to_datetime_index(
 def datetime_index_to_seconds_index(index_datetime: pd.DatetimeIndex) -> pd.Index:
     time_start = dt.datetime(index_datetime[0].year, 1, 1, tzinfo=dt.timezone.utc)
     new_index = index_datetime.to_frame().diff().squeeze()
-    new_index[0] = dt.timedelta(
+    new_index.iloc[0] = dt.timedelta(
         seconds=index_datetime[0].timestamp() - time_start.timestamp()
     )
     sec_dt = [elmt.total_seconds() for elmt in new_index]
