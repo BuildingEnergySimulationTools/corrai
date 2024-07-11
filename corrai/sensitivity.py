@@ -776,7 +776,7 @@ class ObjectiveFunction:
         else:
             return None
 
-    def function(self, x_dict):
+    def function(self, x_dict, args: dict = None):
         """
         Calculate the objective function for given parameter values.
 
@@ -795,7 +795,9 @@ class ObjectiveFunction:
             for param in self.param_list
         }
 
-        res = self.model.simulate(temp_dict, simulation_options=self.simulation_options)
+        res = self.model.simulate(
+            temp_dict, simulation_options=self.simulation_options, **args
+        )
         function_results = {}
 
         for ind in self.indicators:
@@ -818,7 +820,7 @@ class ObjectiveFunction:
         res_series = pd.Series(function_results, dtype="float64")
         return res_series
 
-    def scipy_obj_function(self, x):
+    def scipy_obj_function(self, x, args: dict = None):
         """
         Wrapper for scipy.optimize that calculates the
         objective function for given parameter values.
@@ -846,5 +848,5 @@ class ObjectiveFunction:
             self.param_list[i][Parameter.NAME]: x[i]
             for i in range(len(self.param_list))
         }
-        result = self.function(x_dict)
+        result = self.function(x_dict, args)
         return float(result.iloc[0])
