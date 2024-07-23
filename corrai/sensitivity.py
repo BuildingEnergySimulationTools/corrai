@@ -131,7 +131,7 @@ class SAnalysis:
     def evaluate(
         self,
         model,
-        simulation_options: dict,
+        simulation_options: dict = None,
         n_cpu: int = 1,
         simulate_kwargs: dict = None,
     ):
@@ -809,6 +809,7 @@ class ObjectiveFunction:
             if ind in function_results and ind in self.agg_methods_dict:
                 if self.reference_dict and ind in self.reference_dict:
                     ref_values = self.reference_df[self.reference_dict[ind]]
+
                     function_results[ind] = self.agg_methods_dict[ind](
                         function_results[ind], ref_values
                     )
