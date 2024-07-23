@@ -76,8 +76,13 @@ class TestCustomTransformers:
         pd.testing.assert_index_equal(df.index, renamer.index)
         assert list(renamer.transform(df).columns) == new_cols
 
+        new_cols_dict = {"d": "a"}
+        renamer = PdRenameColumns(new_names=new_cols_dict)
+
+        assert list(renamer.fit_transform(df).columns) == ["c", "a"]
+
         inversed = renamer.inverse_transform(np.zeros((2, 2)))
-        assert list(inversed.columns) == new_cols
+        assert list(inversed.columns) == ["c", "a"]
 
     def test_pd_sk_transformer(self):
         df = pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]})
