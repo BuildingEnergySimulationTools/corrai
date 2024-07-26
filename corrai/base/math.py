@@ -135,7 +135,7 @@ def time_integrate(
 
     res_series = pd.Series(dtype="float64")
     for col in data:
-        res_series[col] = integrate.trapz(selected_ts[col], chrono)
+        res_series[col] = integrate.trapezoid(selected_ts[col], chrono)
 
     return res_series
 
