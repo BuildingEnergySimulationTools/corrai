@@ -102,7 +102,7 @@ def run_list_of_models_in_parallel(
                 group[0].simulate(
                     parameter_dict=None,
                     simulation_options=simulation_options,
-                    **simulate_kwargs
+                    **simulate_kwargs,
                 )
             ]
         else:

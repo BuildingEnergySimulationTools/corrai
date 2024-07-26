@@ -142,9 +142,9 @@ class ModelicaFmuModel(Model):
         if not self._x.equals(df):
             new_bounds_path = self.simulation_dir / "boundaries.txt"
             df_to_combitimetable(df, new_bounds_path)
-            self.parameters[
-                f"{self.x_combitimetable_name}.fileName"
-            ] = new_bounds_path.as_posix()
+            self.parameters[f"{self.x_combitimetable_name}.fileName"] = (
+                new_bounds_path.as_posix()
+            )
             self._x = df
 
     def _set_x_sim_options(
