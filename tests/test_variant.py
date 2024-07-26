@@ -207,7 +207,7 @@ class TestVariant:
         simulation_options = {
             "start": "2009-01-01 00:00:00",
             "end": "2009-01-01 02:00:00",
-            "timestep": "H",
+            "timestep": "h",
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
