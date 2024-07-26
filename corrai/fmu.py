@@ -211,12 +211,15 @@ class ModelicaFmuModel(Model):
             if x is None:
                 simo = {}
                 for key in ["startTime", "stopTime"]:
-                    if key in simulation_options and isinstance(
-                        simulation_options[key], (dt.datetime, pd.Timestamp)
-                    ):
-                        simo[key] = datetime_to_second(simulation_options[key])
-                        if key == "startTime":
-                            self._begin_year = simulation_options["startTime"].year
+                    if key in simulation_options:
+                        if isinstance(
+                            simulation_options[key], (dt.datetime, pd.Timestamp)
+                        ):
+                            simo[key] = datetime_to_second(simulation_options[key])
+                            if key == "startTime":
+                                self._begin_year = simulation_options["startTime"].year
+                        else:
+                            simo[key] = simulation_options[key]
                     else:
                         simo[key] = self.simulation_options[key]
 
@@ -229,7 +232,7 @@ class ModelicaFmuModel(Model):
         simulation_options: dict = None,
         x: pd.DataFrame = None,
         solver_duplicated_keep: str = "last",
-        post_process_pipeline:Pipeline = None,
+        post_process_pipeline: Pipeline = None,
         debug_param: bool = False,
         debug_logging: bool = False,
         logger=None,
