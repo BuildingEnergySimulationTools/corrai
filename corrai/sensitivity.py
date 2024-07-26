@@ -1,5 +1,7 @@
 import enum
 from typing import Any
+from collections.abc import Callable
+
 
 import numpy as np
 import pandas as pd
@@ -579,13 +581,13 @@ def plot_sample(
 
 
 def plot_pcp(
-    sample_results,
-    parameters,
-    indicators,
-    aggregation_method=np.mean,
-    bounds=False,
+    sample_results: [[dict, dict, pd.DataFrame]],
+    parameters: [dict],
+    agg_method: dict[str, [tuple[Callable, str, pd.Series] | tuple[str, Callable]]],
+    color_by: str = None,
+    bounds: bool = False,
     html_file_path=None,
-    plot_unselected=True,
+    plot_unselected: bool = True,
 ):
     """
     Plots a parallel coordinate plot for sensitivity analysis results.
@@ -638,22 +640,17 @@ def plot_pcp(
         for param in parameters
     }
 
-    if isinstance(indicators, str):
-        indicators = [indicators]
+    indicators = aggregate_sample_results(sample_results, agg_method)
+    data_dict.update({col: indicators[col].to_numpy() for col in indicators})
 
-    for indicator in indicators:
-        data_dict[indicator] = np.array(
-            [aggregation_method(res[2][indicator]) for res in sample_results]
-        )
-
-    colorby = indicators[0] if indicators else None
+    color_by = color_by if color_by is not None else list(agg_method.keys())[0]
 
     plot_parcoord(
         data_dict=data_dict,
         bounds=bounds,
         parameters=parameters,
-        colorby=colorby,
-        obj_res=np.array([res[2][indicators] for res in sample_results]),
+        colorby=color_by,
+        obj_res=data_dict[color_by],
         html_file_path=html_file_path,
         plot_unselected=plot_unselected,
     )
