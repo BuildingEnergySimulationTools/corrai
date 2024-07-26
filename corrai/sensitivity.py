@@ -10,7 +10,7 @@ from SALib.sample import fast_sampler, latin
 from SALib.sample import morris as morris_sampler
 from SALib.sample import sobol as sobol_sampler
 
-from corrai.base.math import aggregate_time_series
+from corrai.base.utils import aggregate_sample_results
 from corrai.base.parameter import Parameter
 from corrai.base.simulate import run_simulations
 from corrai.multi_optimize import plot_parcoord
@@ -161,7 +161,6 @@ class SAnalysis:
         self,
         indicator: str,
         agg_method=np.mean,
-        agg_method_kwarg: dict = None,
         reference_df: pd.DataFrame = None,
         sensitivity_method_kwargs: dict = None,
     ):
@@ -184,7 +183,6 @@ class SAnalysis:
         sensitivity_method_kwargs = (
             {} if sensitivity_method_kwargs is None else sensitivity_method_kwargs
         )
-        agg_method_kwarg = {} if agg_method_kwarg is None else agg_method_kwarg
 
         if not self.sample_results:
             raise ValueError(
@@ -196,19 +194,16 @@ class SAnalysis:
             raise ValueError("Specified indicator not in computed outputs")
 
         analyser = METHOD_SAMPLER_DICT[self.method]["method"]
-        results_2d = pd.concat(
-            [s_res[2][indicator] for s_res in self.sample_results], axis=1
-        )
-        if reference_df is not None:
-            reference_df_duplicated = pd.concat(
-                [reference_df] * len(results_2d.columns), axis=1
-            )
-        else:
-            reference_df_duplicated = None
+
         y_array = np.array(
-            aggregate_time_series(
-                results_2d, agg_method, agg_method_kwarg, reference_df_duplicated
-            )
+            aggregate_sample_results(
+                self.sample_results,
+                {
+                    f"sens_{indicator}": (agg_method, indicator, reference_df)
+                    if reference_df is not None
+                    else (agg_method, indicator)
+                },
+            ).squeeze()
         )
 
         if self.method.value in ["SOBOL", "FAST"]:
