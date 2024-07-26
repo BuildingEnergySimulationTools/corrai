@@ -6,13 +6,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 from SALib.analyze import fast, morris, sobol, rbd_fast
-from SALib.sample import sobol as sobol_sampler
 from SALib.sample import fast_sampler, latin
 from SALib.sample import morris as morris_sampler
+from SALib.sample import sobol as sobol_sampler
 
+from corrai.base.math import aggregate_time_series
 from corrai.base.parameter import Parameter
 from corrai.base.simulate import run_simulations
-from corrai.base.math import aggregate_time_series
 from corrai.multi_optimize import plot_parcoord
 
 
@@ -181,20 +181,16 @@ class SAnalysis:
             the sensitivity analysis method.
         """
 
-        if sensitivity_method_kwargs is None:
-            sensitivity_method_kwargs = {}
-
-        if agg_method_kwarg is None:
-            agg_method_kwarg = {}
+        sensitivity_method_kwargs = (
+            {} if sensitivity_method_kwargs is None else sensitivity_method_kwargs
+        )
+        agg_method_kwarg = {} if agg_method_kwarg is None else agg_method_kwarg
 
         if not self.sample_results:
             raise ValueError(
                 "No simulation results were found. Use evaluate() method to run "
                 "the model."
             )
-
-        if agg_method_kwarg is None:
-            agg_method_kwarg = {}
 
         if indicator not in self.sample_results[0][2].columns:
             raise ValueError("Specified indicator not in computed outputs")

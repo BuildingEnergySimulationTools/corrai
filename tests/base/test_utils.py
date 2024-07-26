@@ -3,12 +3,16 @@ import numpy as np
 
 import pytest
 
-from corrai.base.utils import _reshape_1d
-from corrai.base.utils import as_1_column_dataframe
-from corrai.base.utils import check_datetime_index
-from corrai.base.utils import float_to_hour
-from corrai.base.utils import hour_to_float
-from corrai.base.utils import get_reversed_dict
+from corrai.metrics import nmbe
+from corrai.base.utils import (
+    _reshape_1d,
+    as_1_column_dataframe,
+    check_datetime_index,
+    float_to_hour,
+    hour_to_float,
+    get_reversed_dict,
+    aggregate_sample_results,
+)
 
 
 class TestUtils:
@@ -89,3 +93,21 @@ class TestUtils:
 
         assert get_reversed_dict(dictionary, 2) == {2: "a"}
         assert get_reversed_dict(dictionary, [2, 3]) == {2: "a", 3: "b"}
+
+    def test_aggregate_sample(self):
+        res_1 = pd.DataFrame({"a": [1, 1, 1], "b": [2, 2, 2]})
+        res_2 = pd.DataFrame({"a": [2, 2, 2], "b": [3, 3, 3]})
+
+        sample_res = [[{}, {}, res_1], [{}, {}, res_2]]
+
+        res = aggregate_sample_results(
+            sample_res,
+            {
+                "nmbe_a": (nmbe, "a", pd.Series([1, 1, 1])),
+                "mean_b": (np.mean, "b"),
+            },
+        )
+
+        ref = pd.DataFrame({"nmbe_a": {0: 0.0, 1: 100.0}, "mean_b": {0: 2.0, 1: 3.0}})
+
+        pd.testing.assert_frame_equal(res, ref)

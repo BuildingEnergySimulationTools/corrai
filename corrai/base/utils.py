@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 from collections.abc import Iterable
+from collections.abc import Callable
 
 
 def _reshape_1d(sample):
@@ -139,3 +140,62 @@ def get_reversed_dict(dictionary, values=None):
         values = [values]
 
     return {val: key for key, val in dictionary.items() if val in values}
+
+
+def aggregate_sample_results(
+    sample_results: [[dict, dict, pd.DataFrame]],
+    agg_method: dict[str, [tuple[Callable, str, pd.Series] | tuple[str, Callable]]],
+) -> pd.DataFrame:
+    """
+    Aggregates sample results using specified aggregation methods.
+
+    Parameters:
+    -----------
+    sample_results : List[Tuple[dict, dict, pd.DataFrame]]
+        A list of lists where each list contains:
+        - A dictionary of parameter
+        - A dictionary of simulation options
+        - A pandas DataFrame containing the results.
+
+    agg_method : Dict[str, Union[
+        Tuple[Callable[[pd.Series, pd.Series], float], str, pd.Series],
+        Tuple[Callable[[pd.Series], float], str]
+    ]]
+        A dictionary specifying the aggregation methods. The keys are the names of the
+        aggregated columns. The values are either:
+        - A tuple with three elements: a callable taking two pandas Series and returning
+          a float, a string specifying the column name in the results, and a reference
+          pandas Series.
+        - A tuple with two elements: a callable taking one pandas Series and returning
+          a float, and a string specifying the column name in the DataFrame.
+
+    exemple of agg_method :
+    from corrai.metrics import cv_rmse
+
+    agg_method = {
+        "cv_rmse_tin": (cv_rmse, "Tin", tin_measure_series),
+        "mean_power": (np.mean, "Power")
+    }
+    """
+
+    agg_df = pd.DataFrame()
+
+    for ind_name, method in agg_method.items():
+        ind_list = []
+
+        for res in sample_results:
+            data_frame = res[2]
+            column_name = method[1]
+
+            if len(method) == 3:
+                func, _, reference_series = method
+                ind_list.append(func(data_frame[column_name], reference_series))
+            elif len(method) == 2:
+                func, _ = method
+                ind_list.append(func(data_frame[column_name]))
+            else:
+                raise ValueError(f"Invalid method in agg_method. Got {method}")
+
+        agg_df[ind_name] = ind_list
+
+    return agg_df
