@@ -9,7 +9,7 @@ with open("README.md", encoding="utf-8") as f:
 
 setup(
     name="corrai",
-    version="0.3.0",
+    version="0.3.1",
     description="Data correction and Machine Learning",
     long_description=long_description,
     long_description_content_type="text/markdown",
