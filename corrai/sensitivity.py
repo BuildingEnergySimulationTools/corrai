@@ -40,6 +40,14 @@ METHOD_SAMPLER_DICT = {
 }
 
 
+def add_score_metrics_to_sample(
+    sample_results, value, reference, score_function, score_name: str = None
+):
+    score_name = "score" if score_name is None else score_name
+    for res in sample_results:
+        res[2][f"{score_name}_{value}"] = score_function(res[2][value], reference)
+
+
 class SAnalysis:
     """
     This class is designed to perform sensitivity analysis on a given model using
@@ -594,6 +602,7 @@ def plot_pcp(
     aggregation_method=np.mean,
     bounds=False,
     html_file_path=None,
+    plot_unselected=True,
 ):
     """
     Plots a parallel coordinate plot for sensitivity analysis results.
@@ -663,6 +672,7 @@ def plot_pcp(
         colorby=colorby,
         obj_res=np.array([res[2][indicators] for res in sample_results]),
         html_file_path=html_file_path,
+        plot_unselected=plot_unselected,
     )
 
 
