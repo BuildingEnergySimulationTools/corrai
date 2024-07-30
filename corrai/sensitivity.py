@@ -1,8 +1,10 @@
 import enum
 from typing import Any
 
+
 import numpy as np
 import pandas as pd
+
 import plotly.graph_objects as go
 import plotly.io as pio
 from SALib.analyze import fast, morris, sobol, rbd_fast
@@ -497,6 +499,9 @@ def plot_sample(
     alpha=0.5,
     loc=None,
     show_legends=False,
+    y_scale="linear",
+    y_min=None,
+    y_max=None,
     html_file_path=None,
 ):
     """
@@ -514,6 +519,9 @@ def plot_sample(
     - loc (tuple, optional): Tuple specifying the time range to plot,
         e.g., (start_time, end_time).
     - show_legends (bool, optional): Whether to display legends with parameter values.
+    - y_scale (str, optional): Scale of the y-axis, default is 'linear'.
+    - y_min (float, optional): Minimum value for the y-axis.
+    - y_max (float, optional): Maximum value for the y-axis.
     - html_file_path (str, optional): If provided, save the plot as an HTML file.
     """
     if indicator is None:
@@ -580,7 +588,13 @@ def plot_sample(
     if y_label is not None:
         fig.update_layout(yaxis_title=y_label)
 
-    fig.update_layout(showlegend=show_legends)
+    fig.update_layout(
+        showlegend=show_legends,
+        yaxis=dict(
+            type=y_scale,
+            range=[y_min, y_max] if y_min is not None and y_max is not None else None,
+        ),
+    )
 
     if html_file_path:
         pio.write_html(fig, html_file_path)
