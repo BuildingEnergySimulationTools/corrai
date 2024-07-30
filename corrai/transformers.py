@@ -2,17 +2,26 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 from functools import partial
-from sklearn.base import TransformerMixin, BaseEstimator
-from corrai.base.math import time_gradient
-from scipy.ndimage import gaussian_filter1d
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+
+from sklearn.base import TransformerMixin, BaseEstimator
+from sklearn.utils.validation import check_is_fitted
+from scipy.ndimage import gaussian_filter1d
+
+from corrai.base.math import time_gradient
 
 
 class PdTransformerBC(TransformerMixin, BaseEstimator, ABC):
     def __init__(self):
         self.columns = None
         self.index = None
+
+    def __sklearn_is_fitted__(self):
+        """
+        Check fitted status and return a Boolean value.
+        """
+        return hasattr(self, "_is_fitted") and self._is_fitted
 
     def get_feature_names_out(self, input_features=None):
         return self.columns
@@ -193,27 +202,37 @@ class PdRenameColumns(PdTransformerBC):
         Renames columns of a DataFrame.
     """
 
-    def __init__(self, new_names):
+    def __init__(self, new_names: list[str] | dict[str, str]):
         super().__init__()
         self.new_names = new_names
+        self.columns = None
 
     def fit(self, X, y=None):
         self.columns = X.columns
         self.index = X.index
+        self._is_fitted = True
+
         return self
 
     def transform(self, X):
-        X.columns = self.new_names
-        self.columns = X.columns
+        check_is_fitted(self)
+        if isinstance(self.new_names, list):
+            if len(self.new_names) != len(X.columns):
+                raise ValueError(
+                    "Length of new_names list must match the number "
+                    "of columns in the DataFrame."
+                )
+            X.columns = self.new_names
+        elif isinstance(self.new_names, dict):
+            X.rename(columns=self.new_names, inplace=True)
         return X
 
     def inverse_transform(self, X):
+        check_is_fitted(self)
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X)
-
-        X.columns = self.new_names
-        self.columns = X.columns
-        return X
+        X.columns = self.columns
+        return self.transform(X)
 
 
 class PdSkTransformer(PdTransformerBC):

@@ -1,10 +1,8 @@
 import enum
 from typing import Any
 
-
 import numpy as np
 import pandas as pd
-
 import plotly.graph_objects as go
 import plotly.io as pio
 from SALib.analyze import fast, morris, sobol, rbd_fast
@@ -133,7 +131,7 @@ class SAnalysis:
     def evaluate(
         self,
         model,
-        simulation_options: dict,
+        simulation_options: dict = None,
         n_cpu: int = 1,
         simulate_kwargs: dict = None,
     ):
@@ -499,9 +497,6 @@ def plot_sample(
     alpha=0.5,
     loc=None,
     show_legends=False,
-    y_scale="linear",
-    y_min=None,
-    y_max=None,
     html_file_path=None,
 ):
     """
@@ -519,9 +514,6 @@ def plot_sample(
     - loc (tuple, optional): Tuple specifying the time range to plot,
         e.g., (start_time, end_time).
     - show_legends (bool, optional): Whether to display legends with parameter values.
-    - y_scale (str, optional): Scale of the y-axis, default is 'linear'.
-    - y_min (float, optional): Minimum value for the y-axis.
-    - y_max (float, optional): Maximum value for the y-axis.
     - html_file_path (str, optional): If provided, save the plot as an HTML file.
     """
     if indicator is None:
@@ -588,13 +580,7 @@ def plot_sample(
     if y_label is not None:
         fig.update_layout(yaxis_title=y_label)
 
-    fig.update_layout(
-        showlegend=show_legends,
-        yaxis=dict(
-            type=y_scale,
-            range=[y_min, y_max] if y_min is not None and y_max is not None else None,
-        ),
-    )
+    fig.update_layout(showlegend=show_legends)
 
     if html_file_path:
         pio.write_html(fig, html_file_path)
@@ -608,6 +594,7 @@ def plot_pcp(
     aggregation_method=np.mean,
     bounds=False,
     html_file_path=None,
+    plot_unselected=True,
 ):
     """
     Plots a parallel coordinate plot for sensitivity analysis results.
@@ -677,6 +664,7 @@ def plot_pcp(
         colorby=colorby,
         obj_res=np.array([res[2][indicators] for res in sample_results]),
         html_file_path=html_file_path,
+        plot_unselected=plot_unselected,
     )
 
 
@@ -790,7 +778,7 @@ class ObjectiveFunction:
         else:
             return None
 
-    def function(self, x_dict):
+    def function(self, x_dict, args: dict = None):
         """
         Calculate the objective function for given parameter values.
 
@@ -804,12 +792,15 @@ class ObjectiveFunction:
         pd.Series
             A series containing the calculated values for each indicator.
         """
+        args = {} if args is None else args
         temp_dict = {
             param[Parameter.NAME]: x_dict[param[Parameter.NAME]]
             for param in self.param_list
         }
 
-        res = self.model.simulate(temp_dict, simulation_options=self.simulation_options)
+        res = self.model.simulate(
+            temp_dict, simulation_options=self.simulation_options, **args
+        )
         function_results = {}
 
         for ind in self.indicators:
@@ -820,6 +811,7 @@ class ObjectiveFunction:
             if ind in function_results and ind in self.agg_methods_dict:
                 if self.reference_dict and ind in self.reference_dict:
                     ref_values = self.reference_df[self.reference_dict[ind]]
+
                     function_results[ind] = self.agg_methods_dict[ind](
                         function_results[ind], ref_values
                     )
@@ -832,7 +824,7 @@ class ObjectiveFunction:
         res_series = pd.Series(function_results, dtype="float64")
         return res_series
 
-    def scipy_obj_function(self, x):
+    def scipy_obj_function(self, x, args: dict = None):
         """
         Wrapper for scipy.optimize that calculates the
         objective function for given parameter values.
@@ -860,5 +852,5 @@ class ObjectiveFunction:
             self.param_list[i][Parameter.NAME]: x[i]
             for i in range(len(self.param_list))
         }
-        result = self.function(x_dict)
+        result = self.function(x_dict, args)
         return float(result.iloc[0])

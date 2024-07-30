@@ -243,7 +243,13 @@ class MyMixedProblem(ElementwiseProblem):
 
 
 def plot_parcoord(
-    data_dict, bounds, parameters, obj_res, colorby=None, html_file_path=None
+    data_dict,
+    bounds,
+    parameters,
+    obj_res,
+    colorby=None,
+    html_file_path=None,
+    plot_unselected=True,
 ):
     # Define the color palette
     color_palette = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
@@ -260,6 +266,7 @@ def plot_parcoord(
             [data_dict[par].min(), data_dict[par].max()] for par in data_dict.keys()
         ]
 
+    unselected = dict(line=dict(color="grey", opacity=0.5 if plot_unselected else 0))
     fig = go.Figure(
         data=go.Parcoords(
             line=dict(
@@ -277,6 +284,7 @@ def plot_parcoord(
                 }
                 for par, r in zip(data_dict.keys(), ranges)
             ],
+            unselected=unselected,
         )
     )
 
