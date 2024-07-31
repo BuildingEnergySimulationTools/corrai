@@ -1,5 +1,8 @@
+import webbrowser
+
 from dash import Dash, dcc, Input, Output, Patch, html
 import dash_bootstrap_components as dbc
+from collections.abc import Callable
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -118,36 +121,102 @@ def sample_ts_plot(
             )
         )
 
-    # Set title and axis labels
-    if title:
-        fig.update_layout(title=title)
-    if x_label:
-        fig.update_layout(xaxis_title=x_label)
-    if y_label:
-        fig.update_layout(yaxis_title=y_label)
-
     # Optimize layout for performance
     fig.update_layout(
+        title=title,
+        yaxis_title=y_label,
         showlegend=show_legends,
         template="plotly_white",
-        margin=dict(l=0, r=0, t=0, b=0),
+        margin=dict(l=0, r=0, b=0),
     )
 
     return fig
 
 
 def interactive_sample_pcp_lines(
-    sample_results, target, agg_method, reference, color_by, down_sample=0, debug=False
+    sample_results: [[dict, dict, pd.DataFrame]],
+    target: str = None,
+    agg_method: dict[
+        str, [tuple[Callable, str, pd.Series] | tuple[str, Callable]]
+    ] = None,
+    reference: pd.Series = None,
+    color_by=None,
+    down_sample: int = 0,
+    ts_y_label: str = None,
+    debug=False,
+    open_web_browser=True,
 ):
-    df_pcp = pd.concat(
-        [
-            pd.DataFrame([sim[0] for sim in sample_results]),
-            aggregate_sample_results(
-                sample_results=sample_results, agg_method=agg_method
-            ),
-        ],
-        axis=1,
-    )
+    """
+    Run Dash app to display interactive plot. A parallel plot is used to filter
+    sample results holding time series.
+    This app is mainly designed to help for model calibration using reference and
+    computing indicators through aggregation methods.
+
+        Parameters:
+    -----------
+    sample_results : List[Tuple[dict, dict, pd.DataFrame]]
+        A list of lists where each list contains:
+        - A dictionary of parameter
+        - A dictionary of simulation options
+        - A pandas DataFrame containing the results.
+
+    target : str Optional:
+        Name of the simulation output indicator in the results DataFrame to
+        plot in the timeseries plot. Default will be the first result
+
+    agg_method : Dict[str, Union[
+        Tuple[Callable[[pd.Series, pd.Series], float], str, pd.Series],
+        Tuple[Callable[[pd.Series], float], str]
+        ]]
+        A dictionary specifying the aggregation methods. The keys are the names of the
+        aggregated columns. The values are either:
+        - A tuple with three elements: a callable taking two pandas Series and returning
+          a float, a string specifying the column name in the results, and a reference
+          pandas Series.
+        - A tuple with two elements: a callable taking one pandas Series and returning
+          a float, and a string specifying the column name in the DataFrame.
+
+        exemple of agg_method :
+        from corrai.metrics import cv_rmse
+
+        agg_method = {
+            "cv_rmse_tin": (cv_rmse, "Tin", tin_measure_series),
+            "mean_power": (np.mean, "Power")
+        }
+
+    reference : pd.Series Optional
+        A reference time series to be plot in red color on the timeseries plot.
+        Do not interfere with agg_method calculations
+
+    color_by : str Optional
+        The parameter or the aggregated indicator to be used as a reference for
+        the parallel coordinate plot color map
+
+    down_sample : int Optional
+        Down sample the timeseries by removing values before plotting.
+        This can be essential for large sample or long timeseries.
+        Increase down sampling if lag or crashes happen.
+
+    ts_y_label str Optional
+        y label on the timeseries plot
+
+    debug bool Optional
+        Activate Dash app debug mode
+
+    open_web_browser bool Optional
+        Automatically open browser and connect to dash app
+    """
+
+    df_pcp = pd.DataFrame([sim[0] for sim in sample_results])
+    if agg_method is not None:
+        aggregated_results = aggregate_sample_results(
+            sample_results=sample_results, agg_method=agg_method
+        )
+        df_pcp = pd.concat([df_pcp, aggregated_results], axis=1)
+
+    # Default values
+    color_by = df_pcp.columns[0] if color_by is None else color_by
+    target = sample_results[0][2].columns[0] if target is None else target
 
     df_lines = pd.concat([res[2][target] for res in sample_results], axis=1)
     df_lines.columns = df_pcp.index
@@ -161,13 +230,15 @@ def interactive_sample_pcp_lines(
         selected_index=[],
         reference_ts=reference,
         down_sample=down_sample,
+        title=target,
+        y_label=ts_y_label,
     )
 
     app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
     app.layout = dbc.Container(
         [
-            html.H4("Filtering Dash AG Grid with Parallel Coordinates"),
+            html.H4("Filtering timeseries sample with Parallel Coordinates"),
             dcc.Graph(id="lines-graph", figure=fig_lines),
             dcc.Graph(id="my-graph", figure=fig_pcp),
             dcc.Store(id="activefilters", data={}),
@@ -212,12 +283,19 @@ def interactive_sample_pcp_lines(
                 selected_index=dff.index,
                 reference_ts=reference,
                 down_sample=down_sample,
+                title=target,
+                y_label=ts_y_label,
             )
         return sample_ts_plot(
             data=df_lines,
             selected_index=df_pcp.index,
             reference_ts=reference,
             down_sample=down_sample,
+            title=target,
+            y_label=ts_y_label,
         )
 
     app.run_server(debug=debug)
+
+    if open_web_browser:
+        webbrowser.open("http://127.0.0.1:8050/")
