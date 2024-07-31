@@ -288,10 +288,10 @@ def plot_parcoord(
         )
     )
 
-    fig.show()
-
     if html_file_path:
         pio.write_html(fig, html_file_path)
+
+    return fig
 
 
 def _check_duplicate_params(params):

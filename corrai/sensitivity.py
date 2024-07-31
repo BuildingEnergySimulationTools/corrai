@@ -605,19 +605,37 @@ def plot_pcp(
         A list of dictionaries, where each dictionary represents a parameter and
         contains its name, interval, and type.
 
-    indicators : list
-        A list of strings representing the indicators (columns) in the simulation
-        results DataFrame to be plotted.
+    agg_method : Dict[str, Union[
+        Tuple[Callable[[pd.Series, pd.Series], float], str, pd.Series],
+        Tuple[Callable[[pd.Series], float], str]
+        ]]
+        A dictionary specifying the aggregation methods. The keys are the names of the
+        aggregated columns. The values are either:
+        - A tuple with three elements: a callable taking two pandas Series and returning
+          a float, a string specifying the column name in the results, and a reference
+          pandas Series.
+        - A tuple with two elements: a callable taking one pandas Series and returning
+          a float, and a string specifying the column name in the DataFrame.
 
-    aggregation_method : function, optional
-        The aggregation method used to summarize indicator values across multiple
-        simulations. Default is numpy.mean.
+        exemple of agg_method :
+        from corrai.metrics import cv_rmse
+
+        agg_method = {
+            "cv_rmse_tin": (cv_rmse, "Tin", tin_measure_series),
+            "mean_power": (np.mean, "Power")
+        }
+
+    color_by: str Name of the indicator chosen to set the color scale. Can be a column
+        of the dataframe or a key of agg_method
 
     bounds : bool, optional
         If True, includes the bounds of the parameters in the plot. Default is False.
 
     html_file_path : str, optional
         If provided, save the plot as an HTML file.
+
+    plot_unselected: bool default True. Wether or not to plot in grey unselected
+        data
 
 
     Returns
@@ -645,7 +663,7 @@ def plot_pcp(
 
     color_by = color_by if color_by is not None else list(agg_method.keys())[0]
 
-    plot_parcoord(
+    return plot_parcoord(
         data_dict=data_dict,
         bounds=bounds,
         parameters=parameters,
