@@ -331,7 +331,7 @@ class TsDeepNN(KerasModelSkBC):
         model = keras.models.Sequential()
 
         # Input layer
-        model.add(keras.layers.Flatten(input_shape=[X.shape[1] * X.shape[2], 1]))
+        model.add(keras.layers.Flatten(shape=[X.shape[1] * X.shape[2], 1]))
 
         # Hidden layers
         for _ in range(self.hidden_layers_size):
@@ -411,7 +411,7 @@ class DeepRNN(KerasModelSkBC):
             keras.layers.RNN(
                 cell=self.cell_map[self.cells](self.n_units),
                 return_sequences=True,
-                input_shape=[None, X.shape[2]],
+                shape=[None, X.shape[2]],
             )
         )
 
@@ -481,7 +481,7 @@ class SimplifiedWaveNet(KerasModelSkBC):
 
         model = keras.models.Sequential()
         # Input layer
-        model.add(keras.layers.InputLayer(input_shape=[None, X.shape[2]]))
+        model.add(keras.layers.InputLayer(shape=[None, X.shape[2]]))
 
         # Staked groups of convolutional filter with dilation rate
         for rate in (
