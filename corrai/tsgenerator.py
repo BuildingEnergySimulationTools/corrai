@@ -202,7 +202,10 @@ class DomesticWaterConsumption:
     not adapted: since the method uses COSTIC water flow calculations
     for each hour and then randomly distribute showers, it does not
     work properly for small amount of water (nb of shower per hour < 1
-    results in 0 shower). Will be addressed in future work.
+    results in 0 shower). Will result in high underestimation for small
+    n_dwellings. Likewise, can result in slight under- or over-
+    estimation for high number of dwellings.
+    Will be addressed in future work.
 
     Warning2: Water consumption for showers is limited here by a
     water consumption per dwelling in liters per day, then distributed
@@ -360,7 +363,7 @@ class DomesticWaterConsumption:
         if not pd.Timestamp(start) or not pd.Timestamp(end):
             raise ValueError("Start and end values must be valid timestamps.")
 
-        date_index = pd.date_range(start=start, end=end, freq="H")
+        date_index = pd.date_range(start=start, end=end, freq="h")
         self.df_coefficient = pd.DataFrame(
             data=np.zeros(date_index.shape[0]), index=date_index, columns=["coef"]
         )
@@ -477,7 +480,7 @@ class DomesticWaterConsumption:
         else:
             rs = RandomState()
 
-        periods = pd.date_range(start=start, end=end, freq="T")
+        periods = pd.date_range(start=start, end=end, freq="min")
         df_costic = self.costic_shower_distribution(start, end)
         df_costic["nb_shower"] = df_costic["Q_ECS_COSTIC"] / self.v_used
         df_costic["t_shower_per_hour"] = df_costic["nb_shower"] * self.t_shower
@@ -499,7 +502,7 @@ class DomesticWaterConsumption:
             data=np.concatenate(distribution_list),
             index=pd.date_range(
                 df_costic["nb_shower_int"].index[0],
-                freq="T",
+                freq="min",
                 periods=df_costic.shape[0] * 60,
             ),
             columns=["shower_per_minute"],
@@ -536,7 +539,7 @@ class DomesticWaterConsumption:
             calculated hot water consumption for showers
             with timestamps as index.
         """
-        periods = pd.date_range(start=start, end=end, freq="H")
+        periods = pd.date_range(start=start, end=end, freq="h")
         self.get_coefficient_calc_from_period(start, end)
         # N_calculation
         if self.s_moy_dwelling < 10:
@@ -626,7 +629,7 @@ class DomesticWaterConsumption:
                 "At least one of washing machine or dish washer must be True"
             )
 
-        date_index = pd.date_range(start=start, end=end, freq="H")
+        date_index = pd.date_range(start=start, end=end, freq="h")
         if self.seed is not None:
             rs = RandomState(MT19937(SeedSequence(self.seed)))
         else:
@@ -793,7 +796,7 @@ class DomesticWaterConsumption:
 
         coef = self.get_coefficient_calc_from_period(start, end)
         coefficient = coef.mask(coef["coef"] < 0.5)
-        coefficient = coefficient.resample("T").ffill().fillna(float("0"))
+        coefficient = coefficient.resample("min").ffill().fillna(float("0"))
 
         list_washbasin = []
         list_sinkcook = []
@@ -956,14 +959,16 @@ class Scheduler:
         """
         day_dict = {}
         for day in self.config_dict["DAYS"].keys():
-            day_df = pd.DataFrame(index=["00:00"])
-            for hour, prog in self.config_dict["DAYS"][day].items():
-                day_df.loc[hour, prog.keys()] = prog.values()
+            day_df = pd.DataFrame.from_dict(
+                self.config_dict["DAYS"][day], orient="index"
+            )
+            if "00:00" not in day_df.index:
+                day_df.loc["00:00", :] = [np.nan] * len(day_df.columns)
             day_dict[day] = day_df
 
         return day_dict
 
-    def get_full_year_time_series(self, year=None, freq="T"):
+    def get_full_year_time_series(self, year=None, freq="min"):
         """
         Generates and returns the scheduled DataFrame based on the configuration
         settings.
@@ -1001,7 +1006,68 @@ class Scheduler:
         df = pd.concat(day_list)
         df.sort_index(inplace=True)
         df = df.bfill()
-        df = df.resample("T").bfill()
+        df = df.resample("min").bfill()
         df = df.shift(-1)
         df = df.ffill()
         return df.resample(freq).mean()
+
+
+def calculate_power(
+    df,
+    deltaT,
+    Cp=4180,
+    ro=1,
+):
+    """
+    Calculate power consumption based on given DataFrame.
+
+    Parameters:
+        df (DataFrame): DataFrame containing the data for power calculation.
+        The flow rates of water should be in L/h.
+        deltaT (float): Temperature difference (in Kelvin).
+        Cp (float): Specific heat capacity of the fluid (4180 J/(kg·Kelvin)
+            for water by default).
+        ro (float): Density of medium (1 kg/L for water by default )
+
+    Returns:
+        DataFrame: DataFrame containing the calculated power consumption
+        for each column in the input DataFrame, expressed in kW.
+    """
+    df_powers = df * Cp * ro * deltaT / 3.6e6
+    df_powers.columns = ["P_" + col for col in df.columns + "(kW)"]
+
+    return df_powers
+
+
+def resample_flow_rate(df, new_freq):
+    """
+    Resample the flow rate hour columns of DataFrame to a new frequency.
+
+    Parameters:
+        df (DataFrame): DataFrame containing the flow
+        rate data to be resampled.
+        new_freq (str): New frequency desired for resampling
+        (e.g., '30T' for every 30 minutes).
+
+    Returns:
+        DataFrame: DataFrame with flow rate columns resampled to the new frequency.
+
+    """
+    original_freq = df.index.freqstr
+    if original_freq is None:
+        raise ValueError(
+            "DataFrame index does not have a frequency. "
+            "Please set the frequency before resampling."
+        )
+
+    resampled_df = df.resample(new_freq).first()
+
+    if original_freq is not None:
+        original_minutes = pd.Timedelta(df.index[1] - df.index[0]).total_seconds() / 60
+        new_minutes = pd.Timedelta(new_freq).total_seconds() / 60
+        ratio = original_minutes / new_minutes
+
+        resampled_df = resampled_df / ratio
+    resampled_df = resampled_df.interpolate(method="linear")
+
+    return resampled_df

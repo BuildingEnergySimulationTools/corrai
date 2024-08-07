@@ -23,7 +23,7 @@ TEST_DF = pd.DataFrame(
         "dumb_column2": [-10, 50, 1000, 50, 50.1, 50.1, 60, 70, 220, 60, 50],
         "dumb_column3": [-100, 500, 10000, 500, 500.1, 500.1, 600, 700, 2200, 600, 500],
     },
-    index=pd.date_range("2021-01-01 00:00:00", freq="H", periods=11),
+    index=pd.date_range("2021-01-01 00:00:00", freq="h", periods=11),
 )
 
 
@@ -75,9 +75,8 @@ class TestMeasuredDats:
         my_measure_loc.transformers_list = ["PROCESS", "COMMON"]
         my_measure_loc.write_config_file(test_save_path / "save.json")
 
-        to_test = MeasuredDats(
-            data=TEST_DF, config_file_path=test_save_path / "save.json"
-        )
+        to_test = MeasuredDats(config_file_path=test_save_path / "save.json")
+        to_test.set_data(TEST_DF)
 
         assert to_test.category_dict == my_measure_loc.category_dict
         assert to_test.category_trans == my_measure_loc.category_trans
@@ -166,15 +165,15 @@ class TestMeasuredDats:
                 "dumb_column2": [250.10, 460.10, 50.0],
                 "dumb_column3": [2280.02000, 920.02000, 500.00000],
             },
-            index=pd.date_range("2021-01-01", freq="5H", periods=3),
+            index=pd.date_range("2021-01-01", freq="5h", periods=3),
         )
 
         pd.testing.assert_frame_equal(
-            my_measure.get_corrected_data(resampling_rule="5H"), ref
+            my_measure.get_corrected_data(resampling_rule="5h"), ref
         )
 
     def test_missing_values_dict(self):
-        time_index_df = pd.date_range("2021-01-01 00:00:00", freq="30T", periods=4)
+        time_index_df = pd.date_range("2021-01-01 00:00:00", freq="30min", periods=4)
 
         df = pd.DataFrame(
             {
@@ -195,7 +194,7 @@ class TestMeasuredDats:
         assert res["Percent_of_missing"].equals(to_test["Percent_of_missing"])
 
     def test_gaps_describe(self):
-        time_index_df = pd.date_range("2021-01-01 00:00:00", freq="H", periods=5)
+        time_index_df = pd.date_range("2021-01-01 00:00:00", freq="h", periods=5)
 
         df = pd.DataFrame(
             {
@@ -207,11 +206,11 @@ class TestMeasuredDats:
             index=time_index_df,
         )
 
-        one_hour_dt = pd.to_timedelta("2H")
-        one_n_half = pd.to_timedelta("2H30min")
-        two_hour_dt = pd.to_timedelta("3H")
-        two_n_half = pd.to_timedelta("3H30min")
-        three_hour = pd.to_timedelta("4H")
+        one_hour_dt = pd.to_timedelta("2h")
+        one_n_half = pd.to_timedelta("2h30min")
+        two_hour_dt = pd.to_timedelta("3h")
+        two_n_half = pd.to_timedelta("3h30min")
+        three_hour = pd.to_timedelta("4h")
         spec_std = pd.to_timedelta("0 days 01:24:51.168824543")
         nat = pd.NaT
 
@@ -298,7 +297,7 @@ class TestMeasuredDats:
     def test_add_time_series(self):
         data = pd.DataFrame(
             {"col": [1, 2, 3]},
-            index=pd.date_range("2009-01-01 00:00:00", freq="H", periods=3),
+            index=pd.date_range("2009-01-01 00:00:00", freq="h", periods=3),
         )
 
         mdata = MeasuredDats(
@@ -310,7 +309,7 @@ class TestMeasuredDats:
 
         new_dat = pd.DataFrame(
             {"col1": [2, 3, 4]},
-            index=pd.date_range("2009-01-01 01:00:00", freq="H", periods=3),
+            index=pd.date_range("2009-01-01 01:00:00", freq="h", periods=3),
         )
 
         mdata.add_time_series(new_dat, category="dumb_type")

@@ -14,7 +14,7 @@ from sklearn.svm import SVR
 from sklearn.utils.validation import check_is_fitted
 
 from corrai.metrics import nmbe, cv_rmse
-from corrai.utils import as_1_column_dataframe
+from corrai.base.utils import as_1_column_dataframe
 
 
 class Model(str, enum.Enum):
@@ -398,13 +398,18 @@ class MultiModelSO(BaseEstimator, RegressorMixin):
 
         pass
 
-    def predict(self, X: pd.DataFrame, model: Model = None):
+    def predict(
+        self, X: pd.DataFrame | np.ndarray | pd.Series, model: Model = None
+    ) -> pd.DataFrame:
         check_is_fitted(self)
         model_for_prediction = self.get_model(model)
         if X.ndim == 1:
             X = as_1_column_dataframe(X)
 
-        return pd.DataFrame(model_for_prediction.predict(X), index=X.index)
+        if isinstance(X, pd.DataFrame):
+            return pd.DataFrame(model_for_prediction.predict(X), index=X.index)
+        else:
+            return pd.DataFrame(model_for_prediction.predict(X))
 
     def get_model(self, model: Model = None):
         if model is None:

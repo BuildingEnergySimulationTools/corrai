@@ -8,12 +8,16 @@ from corrai.base.model import Model
 
 
 def run_model(args):
-    parameters, model, simulation_options = args
-    return model.simulate(parameters, simulation_options)
+    parameters, model, simulation_options, simulate_kwargs = args
+    return model.simulate(parameters, simulation_options, **simulate_kwargs)
 
 
 def run_simulations(
-    model, parameter_samples: pd.DataFrame, simulation_options: dict, n_cpu: int = -1
+    model,
+    parameter_samples: pd.DataFrame,
+    simulation_options: dict,
+    n_cpu: int = -1,
+    simulate_kwargs: dict = None,
 ):
     """
     Run a sample of simulation in parallel. The function will automatically divide
@@ -35,6 +39,8 @@ def run_simulations(
         - simulation_options: The options used for the simulation.
         - res: The result of running the model with the given parameters.
     """
+    simulate_kwargs = {} if simulate_kwargs is None else simulate_kwargs
+
     if n_cpu <= 0:
         n_cpu = max(1, cpu_count() + n_cpu)
 
@@ -46,11 +52,15 @@ def run_simulations(
     collect = []
     for _mb, group in zip(prog_bar, grouped_sample):
         if n_cpu == 1:
-            results = [model.simulate(group[0], simulation_options)]
+            results = [model.simulate(group[0], simulation_options, **simulate_kwargs)]
         else:
             with Pool(n_cpu) as pool:
                 results = pool.map(
-                    run_model, [(param, model, simulation_options) for param in group]
+                    run_model,
+                    [
+                        (param, model, simulation_options, simulate_kwargs)
+                        for param in group
+                    ],
                 )
 
         combined_result = [
@@ -62,7 +72,10 @@ def run_simulations(
 
 
 def run_list_of_models_in_parallel(
-    models_list: list[Model], simulation_options: dict, n_cpu: int = -1
+    models_list: list[Model],
+    simulation_options: dict,
+    n_cpu: int = -1,
+    simulate_kwargs: dict = None,
 ):
     """
     Run a list of models in parallel.
@@ -74,6 +87,7 @@ def run_list_of_models_in_parallel(
     :param simulation_options: A dictionary containing simulation options.
     :return: A list of Pandas DataFrames with simulation results for each model.
     """
+    simulate_kwargs = {} if simulate_kwargs is None else simulate_kwargs
     if n_cpu <= 0:
         n_cpu = max(1, cpu_count() + n_cpu)
 
@@ -86,13 +100,19 @@ def run_list_of_models_in_parallel(
         if n_cpu == 1:
             results = [
                 group[0].simulate(
-                    parameter_dict=None, simulation_options=simulation_options
+                    parameter_dict=None,
+                    simulation_options=simulation_options,
+                    **simulate_kwargs,
                 )
             ]
         else:
             with Pool(n_cpu) as pool:
                 results = pool.map(
-                    run_model, [(None, model, simulation_options) for model in group]
+                    run_model,
+                    [
+                        (None, model, simulation_options, simulate_kwargs)
+                        for model in group
+                    ],
                 )
         collect.append(results)
 

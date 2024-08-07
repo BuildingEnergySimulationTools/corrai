@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from corrai.tsgenerator import DomesticWaterConsumption
 from corrai.tsgenerator import Scheduler
+from corrai.tsgenerator import resample_flow_rate, calculate_power
 import datetime as dt
 from pathlib import Path
 import pytest
@@ -12,7 +13,7 @@ FILES_PATH = Path(__file__).parent / "resources"
 class TestDomesticWaterConsumption:
     def test_get_coefficient_calc_from_period(self):
         df = pd.DataFrame(
-            index=pd.date_range("2023-01-01 00:00:00", freq="H", periods=8760)
+            index=pd.date_range("2023-01-01 00:00:00", freq="h", periods=8760)
         )
         start = df.index[0]
         end = df.index[-1]
@@ -87,7 +88,7 @@ class TestDomesticWaterConsumption:
         dhw = DomesticWaterConsumption(n_dwellings=14)
 
         df = pd.DataFrame(
-            index=pd.date_range("2020-01-01 00:00:00", freq="H", periods=8760)
+            index=pd.date_range("2020-01-01 00:00:00", freq="h", periods=8760)
         )
         start = df.index[0]
         end = df.index[-1]
@@ -112,6 +113,53 @@ class TestDomesticWaterConsumption:
         assert np.isclose(sum_dish, dish_water_tot, rtol=0.05)
         assert np.isclose(sum_clo, clot_water_tot, rtol=0.05)
 
+    def test_resample_flow_rate(self):
+        data = {
+            "flow_rate": [100, 150, 200, 250, 200, 12, 28, 100],
+        }
+        df = pd.DataFrame(data, index=pd.date_range("2022-01-01", periods=8, freq="h"))
+
+        new_freq1 = "30min"
+        new_freq2 = "12min"
+        df_resampled1 = resample_flow_rate(df, new_freq1)
+        df_resampled2 = resample_flow_rate(df, new_freq2)
+
+        before_sampling_sum = df["flow_rate"].sum()
+        after_sampling_sum1 = df_resampled1["flow_rate"].sum()
+        after_sampling_sum2 = df_resampled2["flow_rate"].sum()
+
+        assert np.isclose(before_sampling_sum, after_sampling_sum1, rtol=0.1)
+        assert np.isclose(before_sampling_sum, after_sampling_sum2, rtol=0.1)
+
+    def test_calculate_power(self):
+        data = {
+            "flow_rate_1": [100, 200, 300],
+            "flow_rate_2": [150, 250, 350],
+        }
+        df_input = pd.DataFrame(data)
+
+        deltaT = 10
+        Cp = 4186
+
+        df_output = calculate_power(df_input, deltaT, Cp)
+
+        expected_output = pd.DataFrame(
+            {
+                "P_flow_rate_1(kW)": [
+                    100 * Cp * deltaT / 3.6e6,
+                    200 * Cp * deltaT / 3.6e6,
+                    300 * Cp * deltaT / 3.6e6,
+                ],
+                "P_flow_rate_2(kW)": [
+                    150 * Cp * deltaT / 3.6e6,
+                    250 * Cp * deltaT / 3.6e6,
+                    350 * Cp * deltaT / 3.6e6,
+                ],
+            }
+        )
+
+        pd.testing.assert_frame_equal(df_output, expected_output)
+
     def test_day_randomizer(self):
         gw = DomesticWaterConsumption(n_dwellings=100, method="COSTIC")
 
@@ -134,7 +182,7 @@ class TestDomesticWaterConsumption:
 
     def test_warning_errors(self):
         df = pd.DataFrame(
-            index=pd.date_range("2020-01-01 00:00:00", freq="H", periods=8760)
+            index=pd.date_range("2020-01-01 00:00:00", freq="h", periods=8760)
         )
         start = df.index[0]
         end = df.index[-1]
@@ -204,10 +252,10 @@ class TestDomesticWaterConsumption:
             index_col=0,
         )
 
-        ref.index = pd.date_range(ref.index[0], periods=ref.shape[0], freq="H")
+        ref.index = pd.date_range(ref.index[0], periods=ref.shape[0], freq="h")
         ref.index = ref.index.tz_convert("Europe/Paris")
 
         sched = Scheduler(config_dict=schedule_dict)
-        df = sched.get_full_year_time_series(freq="H", year=2009)
+        df = sched.get_full_year_time_series(freq="h", year=2009)
 
         pd.testing.assert_frame_equal(df, ref)

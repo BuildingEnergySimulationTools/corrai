@@ -54,7 +54,7 @@ class TestLearning:
         test_series = pd.Series(
             [0, 0, 1000, 1020, 0.1, 0.3],
             index=pd.date_range(
-                "2009-01-01 00:00:00", freq="H", periods=6, tz="Europe/Paris"
+                "2009-01-01 00:00:00", freq="h", periods=6, tz="Europe/Paris"
             ),
             name="flwr",
         )
@@ -105,22 +105,23 @@ class TestLearning:
         )
 
         res = set_point_identifier(
-            f_data, estimator=KdeSetPointIdentificator(bandwidth=0.1, lik_filter=0.6)
+            f_data,
+            estimator=KdeSetPointIdentificator(bandwidth=0.1, lik_filter=0.6),
         )
 
         ref = pd.DataFrame(
             {
                 "a": {
                     (
-                        pd.Period("2009-01-01 00:00", "H"),
+                        pd.Period("2009-01-01 00:00", "h"),
                         "set_point_0",
                     ): 122.65772294951199,
                     (
-                        pd.Period("2009-01-01 00:00", "H"),
+                        pd.Period("2009-01-01 00:00", "h"),
                         "set_point_1",
                     ): 241.75480686502476,
                     (
-                        pd.Period("2009-01-01 00:00", "H"),
+                        pd.Period("2009-01-01 00:00", "h"),
                         "set_point_2",
                     ): 387.6906702544559,
                 }
@@ -138,21 +139,22 @@ class TestLearning:
             f_data,
             window_size=dt.timedelta(hours=10),
             slide_size=dt.timedelta(hours=10),
+            estimator=KdeSetPointIdentificator(),
         )
 
         ref = pd.DataFrame(
             {
                 "a": {
                     (
-                        pd.Period("2009-01-01 00:00", "H"),
+                        pd.Period("2009-01-01 00:00", "h"),
                         "set_point_0",
                     ): 122.28125863629094,
                     (
-                        pd.Period("2009-01-01 00:00", "H"),
+                        pd.Period("2009-01-01 00:00", "h"),
                         "set_point_1",
                     ): 384.76032496023265,
                     (
-                        pd.Period("2009-01-01 10:00", "H"),
+                        pd.Period("2009-01-01 10:00", "h"),
                         "set_point_0",
                     ): 245.13766266266265,
                 }

@@ -12,7 +12,7 @@ from SALib.sample import morris as morris_sampler
 
 from corrai.base.parameter import Parameter
 from corrai.base.simulate import run_simulations
-from corrai.math import aggregate_time_series
+from corrai.base.math import aggregate_time_series
 from corrai.multi_optimize import plot_parcoord
 
 
@@ -20,7 +20,7 @@ class Method(enum.Enum):
     FAST = "FAST"
     MORRIS = "MORRIS"
     SOBOL = "SOBOL"
-    RDB_FAST = "RBD_FAST"
+    RBD_FAST = "RBD_FAST"
 
 
 METHOD_SAMPLER_DICT = {
@@ -33,7 +33,7 @@ METHOD_SAMPLER_DICT = {
         "method": sobol,
         "sampling": sobol_sampler,
     },
-    Method.RDB_FAST: {
+    Method.RBD_FAST: {
         "method": rbd_fast,
         "sampling": latin,
     },
@@ -128,7 +128,13 @@ class SAnalysis:
 
         self.sample = pd.DataFrame(sample_temp, columns=self._salib_problem["names"])
 
-    def evaluate(self, model, simulation_options: dict, n_cpu: int = 1):
+    def evaluate(
+        self,
+        model,
+        simulation_options: dict = None,
+        n_cpu: int = 1,
+        simulate_kwargs: dict = None,
+    ):
         """
         Evaluate the model for the generated samples.
 
@@ -148,6 +154,7 @@ class SAnalysis:
             parameter_samples=self.sample,
             simulation_options=simulation_options,
             n_cpu=n_cpu,
+            simulate_kwargs=simulate_kwargs,
         )
 
     def analyze(
@@ -168,7 +175,7 @@ class SAnalysis:
         - agg_method_kwarg (dict, optional): Additional keyword arguments for the
             aggregation method.
         - reference_df (pd.DataFrame, optional): Reference data to pass to the
-            aggregation method. Usually usefull for error function analysis.
+            aggregation method. Usually useful for error function analysis.
             (eg. mean_error(simulation, reference_measurement)
         - sensitivity_method_kwargs (dict, optional): Additional keyword arguments for
             the sensitivity analysis method.
@@ -193,13 +200,18 @@ class SAnalysis:
             raise ValueError("Specified indicator not in computed outputs")
 
         analyser = METHOD_SAMPLER_DICT[self.method]["method"]
-
         results_2d = pd.concat(
             [s_res[2][indicator] for s_res in self.sample_results], axis=1
         )
+        if reference_df is not None:
+            reference_df_duplicated = pd.concat(
+                [reference_df] * len(results_2d.columns), axis=1
+            )
+        else:
+            reference_df_duplicated = None
         y_array = np.array(
             aggregate_time_series(
-                results_2d, agg_method, agg_method_kwarg, reference_df
+                results_2d, agg_method, agg_method_kwarg, reference_df_duplicated
             )
         )
 
@@ -214,6 +226,91 @@ class SAnalysis:
                 Y=y_array,
                 **sensitivity_method_kwargs,
             )
+
+    def calculate_sensitivity_indicators(self):
+        """
+        Returns sensitivity indicators based on the method used.
+
+        Returns:
+        - dict: A dictionary containing the calculated sensitivity summary.
+
+        If the method is FAST or RBD_FAST:
+            - sum_st (float): Sum of the sensitivity indices (ST or S1).
+            - mean_conf (float): Mean confidence level of the sensitivity indices.
+
+        If the method is SOBOL:
+            - sum_st (float): Sum of the first-order sensitivity indices (ST).
+            - mean_conf (float): Mean confidence level of the first-order
+            sensitivity indices (ST_conf).
+            - sum_s1 (float): Sum of the first-order sensitivity indices (S1).
+            - mean_conf1 (float): Mean confidence level of the first-order
+            sensitivity indices (S1_conf).
+            - sum_s2 (float): Sum of the second-order sensitivity indices (S2).
+            - mean_conf2 (float): Mean confidence level of the second-order
+            sensitivity indices (S2_conf).
+
+        If the method is MORRIS:
+            - euclidian distance (array-like): Euclidian distance
+             between mu_star and sigma.
+            Mu_star represents the average elementary effects of the outputs
+            with respect to each input factor, while sigma measures the total
+            variability induced by each input factor.
+            - normalized euclidian distance (array-like): Normalized euclidian
+             distance between mu_star and sigma. The normalized euclidian distance
+             is the euclidian distance divided by its maximum value, providing a
+             relative measure of the variability induced by each input factor.
+
+        """
+        if self.method == Method.FAST:
+            sum_st = sum(self.sensitivity_results["ST"])
+            conf = self.sensitivity_results["ST_conf"]
+            mean_conf = sum(conf) / len(conf)
+
+            return {"sum_st": sum_st, "mean_conf": mean_conf}
+
+        elif self.method == Method.RBD_FAST:
+            sum_st = sum(self.sensitivity_results["S1"])
+            conf = self.sensitivity_results["S1_conf"]
+            mean_conf = sum(conf) / len(conf)
+
+            return {"sum_st": sum_st, "mean_conf": mean_conf}
+
+        elif self.method == Method.SOBOL:
+            sum_st = self.sensitivity_results.to_df()[0].sum().loc["ST"]
+            mean_conf = self.sensitivity_results.to_df()[0].mean().loc["ST_conf"]
+            sum_s1 = self.sensitivity_results.to_df()[1].sum().loc["S1"]
+            mean_conf1 = self.sensitivity_results.to_df()[1].mean().loc["S1_conf"]
+            sum_s2 = self.sensitivity_results.to_df()[2].sum().loc["S2"]
+            mean_conf2 = self.sensitivity_results.to_df()[2].mean().loc["S2_conf"]
+
+            return {
+                "sum_st": sum_st,
+                "mean_conf": mean_conf,
+                "sum_s1": sum_s1,
+                "mean_conf1": mean_conf1,
+                "sum_s2": sum_s2,
+                "mean_conf2": mean_conf2,
+            }
+
+        elif self.method == Method.MORRIS:
+            morris_res = self.sensitivity_results
+            morris_res["euclidian distance"] = np.sqrt(
+                morris_res["mu_star"] ** 2 + morris_res["sigma"] ** 2
+            )
+            morris_res["normalized euclidian distance"] = (
+                morris_res["euclidian distance"]
+                / morris_res["euclidian distance"].max()
+            )
+
+            return {
+                "euclidian distance": morris_res["euclidian distance"].data,
+                "normalized euclidian distance": morris_res[
+                    "normalized euclidian distance"
+                ].data,
+            }
+
+        else:
+            raise ValueError("Invalid method")
 
 
 def plot_sobol_st_bar(salib_res):
@@ -238,7 +335,51 @@ def plot_sobol_st_bar(salib_res):
         yaxis_title="Sobol total index value [0-1]",
     )
 
-    figure.show()
+    return figure
+
+
+def plot_morris_st_bar(salib_res, distance_metric="normalized"):
+    if distance_metric not in ["absolute", "normalized"]:
+        raise ValueError("Distance metric must be either 'absolute'" " or 'normalized'")
+
+    salib_res = salib_res.to_df()
+    if distance_metric == "absolute":
+        dist = "euclidian distance"
+    else:
+        dist = "normalized euclidian distance"
+    salib_res.sort_values(by=dist, ascending=True, inplace=True)
+
+    if distance_metric == "absolute":
+        distance_values = salib_res["euclidian distance"]
+        distance_conf = None
+        title = "Morris Sensitivity Analysis - euclidian Distance"
+    else:
+        distance_values = salib_res["normalized euclidian distance"]
+        distance_conf = None
+        title = "Morris Sensitivity Analysis - Normalized euclidian Distance"
+
+    figure = go.Figure()
+    figure.add_trace(
+        go.Bar(
+            x=salib_res.index,
+            y=distance_values,
+            name=distance_metric.capitalize(),
+            marker_color="orange",
+            error_y=dict(
+                type="data",
+                array=distance_conf.to_numpy() if distance_conf is not None else None,
+            ),
+            yaxis="y1",
+        )
+    )
+
+    figure.update_layout(
+        title=title,
+        xaxis_title="Parameters",
+        yaxis_title=f"{distance_metric.capitalize()} (d)",
+    )
+
+    return figure
 
 
 def plot_morris_scatter(
@@ -343,7 +484,7 @@ def plot_morris_scatter(
         yaxis_range=y_lim,
     )
 
-    fig.show()
+    return fig
 
 
 def plot_sample(
@@ -383,18 +524,11 @@ def plot_sample(
     for _, result in enumerate(sample_results):
         parameters, simulation_options, simulation_results = result
 
-        if ref is not None:
-            try:
-                to_plot = simulation_results[indicator].loc[ref.index]
-            except ValueError:
-                raise ValueError("Provide Pandas Series or DataFrame as ref")
-        else:
-            to_plot = simulation_results[indicator]
+        to_plot_indicator = simulation_results[indicator]
 
         if loc is not None:
-            to_plot = to_plot.loc[loc[0] : loc[1]]
+            to_plot_indicator = to_plot_indicator.loc[loc[0] : loc[1]]
 
-        # Useful for openmodelica parameters (long names)
         rounded_parameters = {key: round(value, 2) for key, value in parameters.items()}
         parameter_names = [
             param.split(".")[-1] if "." in param else param
@@ -409,12 +543,30 @@ def plot_sample(
 
         fig.add_trace(
             go.Scattergl(
-                name=legend_str if show_legends else None,
+                name=legend_str if show_legends else "Simulations",
                 mode="markers",
-                x=to_plot.index,
-                y=np.array(to_plot),
+                x=to_plot_indicator.index,
+                y=np.array(to_plot_indicator),
                 marker=dict(
                     color=f"rgba(135, 135, 135, {alpha})",
+                ),
+            )
+        )
+
+    if ref is not None:
+        if loc is not None:
+            to_plot_ref = ref.loc[loc[0] : loc[1]]
+        else:
+            to_plot_ref = ref
+
+        fig.add_trace(
+            go.Scattergl(
+                name="Reference",
+                mode="lines",
+                x=to_plot_ref.index,
+                y=np.array(to_plot_ref),
+                marker=dict(
+                    color="red",
                 ),
             )
         )
@@ -429,10 +581,10 @@ def plot_sample(
         fig.update_layout(yaxis_title=y_label)
 
     fig.update_layout(showlegend=show_legends)
-    fig.show()
 
     if html_file_path:
         pio.write_html(fig, html_file_path)
+    return fig
 
 
 def plot_pcp(
@@ -442,6 +594,7 @@ def plot_pcp(
     aggregation_method=np.mean,
     bounds=False,
     html_file_path=None,
+    plot_unselected=True,
 ):
     """
     Plots a parallel coordinate plot for sensitivity analysis results.
@@ -494,7 +647,10 @@ def plot_pcp(
         for param in parameters
     }
 
-    for _, indicator in enumerate(indicators):
+    if isinstance(indicators, str):
+        indicators = [indicators]
+
+    for indicator in indicators:
         data_dict[indicator] = np.array(
             [aggregation_method(res[2][indicator]) for res in sample_results]
         )
@@ -508,4 +664,193 @@ def plot_pcp(
         colorby=colorby,
         obj_res=np.array([res[2][indicators] for res in sample_results]),
         html_file_path=html_file_path,
+        plot_unselected=plot_unselected,
     )
+
+
+class ObjectiveFunction:
+    """
+    A class to represent the objective function for model
+    calibration and optimization using scipy.
+
+    Attributes
+    ----------
+    model : Model
+        The model to be calibrated
+    simulation_options : dict
+        Dictionary containing simulation options, including input data.
+    param_list : list of dict
+        List of dictionaries specifying the parameters to be calibrated.
+    indicators : list of str
+        List of indicators to be used in the objective function.
+    agg_methods_dict : dict, optional
+        Dictionary specifying aggregation methods for each indicator. Defaults to mean.
+    reference_dict : dict, optional
+        Dictionary mapping indicators to reference columns in
+        reference dataframe. Required if reference is provided.
+    reference_df : pd.DataFrame, optional
+        DataFrame containing reference data for the indicators.
+        Required if reference_dict is provided.
+
+    Methods
+    -------
+    function(x_dict)
+        Calculate the objective function for given parameter values.
+    scipy_obj_function(x)
+        Wrapper for scipy.optimize that calculates the objective
+        function for given parameter values.
+    """
+
+    def __init__(
+        self,
+        model,
+        simulation_options,
+        param_list,
+        indicators,
+        agg_methods_dict=None,
+        reference_dict=None,
+        reference_df=None,
+    ):
+        """
+        Initialize the ObjectiveFunction class with the model,
+        simulation options, parameters, and indicators.
+
+        Parameters
+        ----------
+        model : Model
+            The model to be calibrated.
+        simulation_options : dict
+            Dictionary containing simulation options, including input data.
+        param_list : list of dict
+            List of dictionaries specifying the parameters to be calibrated.
+        indicators : list of str
+            List of indicators to be used in the objective function.
+        agg_methods_dict : dict, optional
+            Dictionary specifying aggregation methods for each indicator.
+            Defaults to mean.
+        """
+        self.model = model
+        self.param_list = param_list
+        self.indicators = indicators
+        self.simulation_options = simulation_options
+
+        if agg_methods_dict is None:
+            self.agg_methods_dict = {ind: np.mean for ind in self.indicators}
+        else:
+            self.agg_methods_dict = agg_methods_dict
+        if (reference_dict is not None and reference_df is None) or (
+            reference_dict is None and reference_df is not None
+        ):
+            raise ValueError("Both reference_dict and reference_df should be provided")
+        self.reference_dict = reference_dict
+        self.reference_df = reference_df
+
+    @property
+    def bounds(self):
+        """
+        Get the bounds from param_list.
+
+        Returns
+        -------
+        list of tuple
+            A list of tuples containing the bounds for each parameter.
+            If one parameter, returns a tuple.
+        """
+        if len(self.param_list) == 1:
+            return self.param_list[0][Parameter.INTERVAL]
+        return [param[Parameter.INTERVAL] for param in self.param_list]
+
+    @property
+    def init_values(self):
+        """
+        Get the initial values from param_list.
+
+        Returns
+        -------
+        list of tuple
+            A list of initial values for each parameter.
+            If one parameter, returns a float.
+        """
+        if all(Parameter.INIT_VALUE in param for param in self.param_list):
+            if len(self.param_list) == 1:
+                return self.param_list[0][Parameter.INIT_VALUE]
+            return [param[Parameter.INIT_VALUE] for param in self.param_list]
+        else:
+            return None
+
+    def function(self, x_dict, args: dict = None):
+        """
+        Calculate the objective function for given parameter values.
+
+        Parameters
+        ----------
+        x_dict : dict
+            Dictionary containing parameter names and their values.
+
+        Returns
+        -------
+        pd.Series
+            A series containing the calculated values for each indicator.
+        """
+        args = {} if args is None else args
+        temp_dict = {
+            param[Parameter.NAME]: x_dict[param[Parameter.NAME]]
+            for param in self.param_list
+        }
+
+        res = self.model.simulate(
+            temp_dict, simulation_options=self.simulation_options, **args
+        )
+        function_results = {}
+
+        for ind in self.indicators:
+            if ind in res:
+                function_results[ind] = res[ind]
+
+        for ind in self.indicators:
+            if ind in function_results and ind in self.agg_methods_dict:
+                if self.reference_dict and ind in self.reference_dict:
+                    ref_values = self.reference_df[self.reference_dict[ind]]
+
+                    function_results[ind] = self.agg_methods_dict[ind](
+                        function_results[ind], ref_values
+                    )
+
+                else:
+                    function_results[ind] = self.agg_methods_dict[ind](
+                        function_results[ind]
+                    )
+
+        res_series = pd.Series(function_results, dtype="float64")
+        return res_series
+
+    def scipy_obj_function(self, x, args: dict = None):
+        """
+        Wrapper for scipy.optimize that calculates the
+        objective function for given parameter values.
+
+        Parameters
+        ----------
+        x : float or list of float
+            List of parameter values or a single parameter value.
+
+        Returns
+        -------
+        float
+            The calculated value of the objective function.
+        """
+        # if isinstance(x, float) and np.isnan(x):
+        #     return np.inf
+        # if isinstance(x, list) and any(np.isnan(xi) for xi in x):
+        #     return np.inf
+
+        x = [x] if isinstance(x, (float, int)) else x
+        if len(x) != len(self.param_list):
+            raise ValueError("Length of x does not match length of param_list")
+
+        x_dict = {
+            self.param_list[i][Parameter.NAME]: x[i]
+            for i in range(len(self.param_list))
+        }
+        result = self.function(x_dict, args)
+        return float(result.iloc[0])

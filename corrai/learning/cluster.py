@@ -10,8 +10,8 @@ from sklearn.neighbors import KernelDensity
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from corrai import transformers as ct
-from corrai.utils import (
+from corrai.transformers import PdSkTransformer
+from corrai.base.utils import (
     as_1_column_dataframe,
     check_datetime_index,
     float_to_hour,
@@ -48,6 +48,11 @@ def get_hours_switch(X, diff_filter_threshold=0, switch="positive"):
     else:
         raise ValueError(f"Unknown value {switch} as switch argument")
 
+    # Add second diff, because in some case (system), measured decrease
+    # has a maximum. eg for some reason AHU measured flowrate
+    # cannot decrease by more than Xm3/h per minutes
+    df = df.diff().fillna(0)
+    df.loc[df[data_col_name] < 0] = 0
     df["start_day"] = pd.DatetimeIndex(list(map(lambda x: x.date(), df.index)))
     if df.index.tz:
         df["start_day"] = pd.DatetimeIndex(list(df["start_day"])).tz_localize(
@@ -178,7 +183,9 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
         return np.nan_to_num(x_cluster, nan=-1)
 
 
-def set_point_identifier(X, estimator=None, sk_scaler=None, cols=None):
+def set_point_identifier(
+    X: pd.DataFrame | pd.Series, estimator: KdeSetPointIdentificator
+):
     """
     Identifies set points in a time series data using kernel density estimation.
     Uses CorrAI KdeSetPointIdentificator combined with a transformer to scale the data.
@@ -218,23 +225,12 @@ def set_point_identifier(X, estimator=None, sk_scaler=None, cols=None):
     to each column of the input data, and then finding the peaks of the density
     estimate, which shall correspond to the set points.
     """
+    if isinstance(X, pd.Series):
+        X = as_1_column_dataframe(X)
     check_datetime_index(X)
 
-    if isinstance(X, pd.Series):
-        X = X.to_frame()
+    model = make_pipeline(PdSkTransformer(StandardScaler()), estimator)
 
-    if cols is None:
-        cols = X.columns
-
-    if sk_scaler is None:
-        pd_scaler = ct.PdSkTransformer(StandardScaler())
-    else:
-        pd_scaler = ct.PdSkTransformer(sk_scaler)
-
-    if estimator is None:
-        estimator = KdeSetPointIdentificator()
-
-    model = make_pipeline(pd_scaler, estimator)
     pd_scaler = model.named_steps["pdsktransformer"]
     kde = model.named_steps["kdesetpointidentificator"]
 
@@ -247,7 +243,7 @@ def set_point_identifier(X, estimator=None, sk_scaler=None, cols=None):
     )
 
     multi_series_list = []
-    for col in cols:
+    for col in X.columns:
         model.fit(X[[col]])
         try:
             set_points = pd_scaler.inverse_transform(kde.set_points)
@@ -271,38 +267,60 @@ def set_point_identifier(X, estimator=None, sk_scaler=None, cols=None):
 
 
 def moving_window_set_point_identifier(
-    X, window_size, slide_size, estimator=None, sk_scaler=None, cols=None
+    X: pd.DataFrame | pd.Series,
+    window_size: dt.timedelta,
+    slide_size: dt.timedelta,
+    estimator: KdeSetPointIdentificator,
 ):
-    if estimator is None:
-        estimator = KdeSetPointIdentificator()
-    if not isinstance(estimator, KdeSetPointIdentificator):
-        raise ValueError(
-            f"estimator must be a corrai KdeSetPointIdentificator object "
-            f"got {type(estimator)}"
-        )
-    if not isinstance(window_size, dt.timedelta):
-        raise ValueError("window_size must be a datetime.timedelta object")
-    if not isinstance(slide_size, dt.timedelta):
-        raise ValueError("window_size must be a datetime.timedelta object")
-    if not isinstance(X, pd.DataFrame):
-        raise ValueError("data must be a Pandas DataFrame")
-    if not isinstance(X.index, pd.DatetimeIndex):
-        raise ValueError("data index be a Pandas DateTimeIndex")
+    """
+    Identify set points in a time series dataset using a moving window approach
+    with kernel density estimation.
 
-    if cols is None:
-        cols = X.columns
+    Parameters
+    ----------
+    X : pandas.DataFrame or pandas.Series
+        Input data containing time series data for set point identification.
+        Must have a DateTimeIndex.
 
+    window_size : datetime.timedelta
+        Size of the moving window for set point identification.
+
+    slide_size : datetime.timedelta
+        Size of the sliding step between consecutive windows.
+
+    estimator : KdeSetPointIdentificator
+        An instance of the CorrAI KdeSetPointIdentificator class used for set point
+        identification.
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        A DataFrame with identified set points for each specified column within the m
+        oving windows. MultiIndex row labels indicate the period and set point number.
+        Returns None if no set points are identified in any window.
+
+    Raises
+    ------
+    ValueError
+        If the input data is not a DataFrame, a Series or lacks a DateTimeIndex.
+
+    Notes
+    -----
+    Set point identification is performed using the provided kernel density estimator
+    within a moving window approach. The function iterates through the time series
+    data with windows of a specified size and identifies set points in each window.
+    """
+    if isinstance(X, pd.Series):
+        X = as_1_column_dataframe(X)
+    check_datetime_index(X)
     start_date = X.index[0]
     end_date = X.index[-1]
 
     groups_res_list = []
-
     while start_date <= end_date - window_size:
-        selected_data = X.loc[start_date : start_date + window_size, cols]
+        selected_data = X.loc[start_date : start_date + window_size, :]
         groups_res_list.append(
-            set_point_identifier(
-                X=selected_data, estimator=estimator, sk_scaler=sk_scaler
-            )
+            set_point_identifier(X=selected_data, estimator=estimator)
         )
 
         start_date += slide_size
@@ -314,7 +332,11 @@ def moving_window_set_point_identifier(
 
 
 def plot_kde_set_point(
-    X, estimator=None, sk_scaler=None, title="Clustered Timeseries", y_label="[-]"
+    X: pd.DataFrame | pd.Series,
+    estimator: KdeSetPointIdentificator = None,
+    sk_scaler: bool = None,
+    title="Clustered Timeseries",
+    y_label="[-]",
 ):
     """
     Plots a scatter plot of the input data with different colors representing the
@@ -322,7 +344,7 @@ def plot_kde_set_point(
 
     Parameters
     ----------
-        X : pandas.DataFrame
+        X : pandas.DataFrame | pandas.Series
             The input data with shape (n_samples, 1).
         estimator : corrai.learning.KdeSetPointIdentificator, optional
             An instance of KdeSetPointIdentificator to use for clustering the data.
@@ -338,9 +360,9 @@ def plot_kde_set_point(
     X = as_1_column_dataframe(X)
 
     if sk_scaler is None:
-        pd_scaler = ct.PdSkTransformer(StandardScaler())
+        pd_scaler = PdSkTransformer(StandardScaler())
     else:
-        pd_scaler = ct.PdSkTransformer(sk_scaler)
+        pd_scaler = PdSkTransformer(sk_scaler)
 
     if estimator is None:
         estimator = KdeSetPointIdentificator()
@@ -398,7 +420,12 @@ def plot_kde_set_point(
 
 
 def plot_time_series_kde(
-    X, title="Likelihood and data", x_label="", scaled=True, bandwidth=0.1, xbins=100
+    X: pd.DataFrame | pd.Series,
+    title: str = "Likelihood and data",
+    x_label: str = "",
+    scaled: bool = True,
+    bandwidth: float = 0.1,
+    xbins: int = 100,
 ):
     """
     Plots the likelihood function and histogram of the input data as estimated by

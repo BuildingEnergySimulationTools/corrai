@@ -4,8 +4,8 @@ import numpy as np
 from scipy import integrate
 from collections.abc import Callable
 
-from corrai.utils import as_1_column_dataframe
-from corrai.utils import check_datetime_index
+from corrai.base.utils import as_1_column_dataframe
+from corrai.base.utils import check_datetime_index
 
 
 def time_gradient(data):
@@ -135,7 +135,7 @@ def time_integrate(
 
     res_series = pd.Series(dtype="float64")
     for col in data:
-        res_series[col] = integrate.trapz(selected_ts[col], chrono)
+        res_series[col] = integrate.trapezoid(selected_ts[col], chrono)
 
     return res_series
 
@@ -208,3 +208,20 @@ def aggregate_time_series(
             ],
             index=result_df.columns,
         )
+
+
+def cosd(angle):
+    """
+    Cosine with angle input in degrees
+    """
+    res = np.cos(np.radians(angle))
+    return res
+
+
+def sind(angle):
+    """
+    Sine with angle input in degrees
+    """
+
+    res = np.sin(np.radians(angle))
+    return res

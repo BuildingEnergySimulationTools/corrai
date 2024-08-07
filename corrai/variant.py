@@ -1,11 +1,12 @@
 import enum
+import itertools
+from collections.abc import Callable
+from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
-from collections.abc import Callable
 from corrai.base.model import Model
 from corrai.base.simulate import run_list_of_models_in_parallel
-from copy import deepcopy
-import itertools
 
 
 class VariantKeys(enum.Enum):
@@ -79,7 +80,7 @@ def get_combined_variants(
              variant dictionary.
     """
     modifier_dict = get_modifier_dict(variant_dict, add_existing)
-    return list(set(itertools.product(*list(modifier_dict.values()))))
+    return list(itertools.product(*list(modifier_dict.values())))
 
 
 def simulate_variants(
@@ -89,9 +90,13 @@ def simulate_variants(
     simulation_options: dict[str, Any],
     n_cpu: int = -1,
     add_existing: bool = False,
+    custom_combinations=None,
+    save_dir: Path = None,
+    file_extension: str = ".txt",
+    simulate_kwargs: dict = None,
 ):
     """
-    Simulate a list of mppodel variants combination in parallel with customizable
+    Simulate a list of model variants combination in parallel with customizable
     modifiers.
 
     This function takes a base model, a dictionary of variant information, a modifier
@@ -111,6 +116,10 @@ def simulate_variants(
                     If True, existing modifiers will be included;
                     if False, only non-existing modifiers will be considered.
                     Set to False by default.
+    :param custom_combinations: Optional. If provided, a custom combination
+            of variants to simulate.
+    :param save_dir: Optional. Path to save the simulation files.
+            EnergyPlus building IDF files supported.
     :param modifier_map: A dictionary that maps variant modifiers to modifier functions
                         for customizing model variants.
 
@@ -119,15 +128,23 @@ def simulate_variants(
     :param n_cpu: The number of CPU cores to use for parallel execution. Default is -1
         meaning all CPUs but one, 0 is all CPU, 1 is sequential, >1 is the number
         of cpus
+    :param file_extension: Optional. The extension to use for saving the model files.
+                   Defaults to ".txt".
 
     :return: A list of simulation results for each model variant.
     """
+    simulate_kwargs = {} if simulate_kwargs is None else simulate_kwargs
     model_list = []
-    for simulation in get_combined_variants(variant_dict, add_existing):
+    if custom_combinations is not None:
+        combined_variants = custom_combinations
+    else:
+        combined_variants = get_combined_variants(variant_dict, add_existing)
+
+    for idx, simulation in enumerate(combined_variants, start=1):
         working_model = deepcopy(model)
         for variant in simulation:
             split_var = variant.split("_")
-            if not split_var[0] == "EXISTING":
+            if (add_existing and (not split_var[0] == "EXISTING")) or not add_existing:
                 modifier = modifier_map[variant_dict[variant][VariantKeys.MODIFIER]]
                 modifier(
                     model=working_model,
@@ -136,4 +153,9 @@ def simulate_variants(
                 )
         model_list.append(working_model)
 
-    return run_list_of_models_in_parallel(model_list, simulation_options, n_cpu)
+        if save_dir:
+            working_model.save((save_dir / f"Model_{idx}").with_suffix(file_extension))
+
+    return run_list_of_models_in_parallel(
+        model_list, simulation_options, n_cpu, simulate_kwargs
+    )

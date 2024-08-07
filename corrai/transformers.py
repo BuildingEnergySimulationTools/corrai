@@ -1,21 +1,29 @@
-from typing import List
-
 import pandas as pd
 import numpy as np
 import datetime as dt
 from functools import partial
-from sklearn.base import TransformerMixin, BaseEstimator
 
 from corrai.math import time_gradient
-from scipy.ndimage import gaussian_filter1d
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+
+from sklearn.base import TransformerMixin, BaseEstimator
+from sklearn.utils.validation import check_is_fitted
+from scipy.ndimage import gaussian_filter1d
+
+from corrai.base.math import time_gradient
 
 
 class PdTransformerBC(TransformerMixin, BaseEstimator, ABC):
     def __init__(self):
         self.columns = None
         self.index = None
+
+    def __sklearn_is_fitted__(self):
+        """
+        Check fitted status and return a Boolean value.
+        """
+        return hasattr(self, "_is_fitted") and self._is_fitted
 
     def get_feature_names_out(self, input_features=None):
         return self.columns
@@ -83,6 +91,47 @@ class PdIdentity(PdTransformerBC):
         return self
 
     def transform(self, X):
+        return X
+
+
+class PdReplaceDuplicated(PdTransformerBC):
+    """This transformer replaces duplicated values in each column by
+    specified new value.
+
+    Parameters
+    ----------
+    keep : str, default 'first'
+        Specify which of the duplicated (if any) value to keep.
+        Allowed arguments : ‘first’, ‘last’, False.
+
+    Attributes
+    ----------
+    value : str, default np.nan
+        value used to replace not kept duplicated.
+
+    Methods
+    -------
+    fit(X, y=None)
+        Returns self.
+
+    transform(X)
+        Drops the duplicated values in the Pandas DataFrame `X`
+        Returns the DataFrame with the duplicated filled with 'value'
+    """
+
+    def __init__(self, keep="first", value=np.nan):
+        super().__init__()
+        self.keep = keep
+        self.value = value
+
+    def fit(self, X, y=None):
+        self.columns = X.columns
+        self.index = X.index
+        return self
+
+    def transform(self, X):
+        for col in X.columns:
+            X.loc[X[col].duplicated(keep=self.keep), col] = self.value
         return X
 
 
@@ -155,27 +204,37 @@ class PdRenameColumns(PdTransformerBC):
         Renames columns of a DataFrame.
     """
 
-    def __init__(self, new_names):
+    def __init__(self, new_names: list[str] | dict[str, str]):
         super().__init__()
         self.new_names = new_names
+        self.columns = None
 
     def fit(self, X, y=None):
         self.columns = X.columns
         self.index = X.index
+        self._is_fitted = True
+
         return self
 
     def transform(self, X):
-        X.columns = self.new_names
-        self.columns = X.columns
+        check_is_fitted(self)
+        if isinstance(self.new_names, list):
+            if len(self.new_names) != len(X.columns):
+                raise ValueError(
+                    "Length of new_names list must match the number "
+                    "of columns in the DataFrame."
+                )
+            X.columns = self.new_names
+        elif isinstance(self.new_names, dict):
+            X.rename(columns=self.new_names, inplace=True)
         return X
 
     def inverse_transform(self, X):
+        check_is_fitted(self)
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X)
-
-        X.columns = self.new_names
-        self.columns = X.columns
-        return X
+        X.columns = self.columns
+        return self.transform(X)
 
 
 class PdSkTransformer(PdTransformerBC):
