@@ -48,52 +48,54 @@ def reshape_target_sequence_to_sequence(X, y, X_idx_target=0):
 
 def sequence_prediction_to_frame(
     model,
-    data: pd.DataFrame | np.ndarray,
-    target_index: int,
+    x_df: pd.DataFrame,
     n_step_history: int,
-    n_step_future: int,
-    sequence_stride: int = 1,
+    sampling_rate: int,
+    sequence_stride: int,
 ):
     """
         Uses model to predict the values of Data.
         Return DataFrame. the original time series is the first columns, the other
         columns are the n_step_future timestep.
 
-    :param model: Machine learning model with predict methon
-    :param data: Pd DataFrame or 2D nd Array
-    :param target_index: int the index of the
+    :param model: Machine learning model with predict method
+    :param x_df: Pd DataFrame or 2D nd Array
+    :param target_index: int the index of the target
     :param sequence_stride: integer
     :param n_step_history:
-    :param n_step_future:
+    :param sampling_rate:
     :return:
     """
-    sequences = time_series_sampling(
-        data,
-        sequence_length=n_step_history + n_step_future,
-        sampling_rate=1,
+    x_np = time_series_sampling(
+        x_df,
+        sequence_length=n_step_history,
+        sampling_rate=sampling_rate,
         sequence_stride=sequence_stride,
         shuffle=False,
     )
 
-    x, y = (
-        sequences[:, :n_step_history, :],
-        sequences[:, -n_step_future:, target_index],
-    )
-
-    predictions = pd.DataFrame(model.predict(x))
+    predictions = pd.DataFrame(model.predict(x_np))
+    predictions.columns = [
+        x_df.index.freq * (i + 1) for i in range(len(predictions.columns))
+    ]
     predictions.index = pd.date_range(
-        data.index.to_series().iloc[n_step_history + 1],
-        freq=data.index.freq,
+        x_df.index.to_series().iloc[n_step_history - 1]
+        + pd.to_timedelta(x_df.index.freq),
+        freq=x_df.index.freq * sequence_stride,
         periods=predictions.shape[0],
     )
 
     concat = pd.concat(
-        [data[data.columns[target_index]]]
-        + [predictions[col].shift(col - sequence_stride) for col in predictions],
+        [
+            predictions.iloc[:, col].shift(col, freq=x_df.index.freq * sequence_stride)
+            for col in range(len(predictions.columns))
+        ],
         axis=1,
     )
 
-    return concat
+    return concat.reindex(
+        pd.date_range(concat.index[0], concat.index[-1], freq=x_df.index.freq)
+    )
 
 
 def plot_periodogram(ts: pd.Series, detrend="linear"):
