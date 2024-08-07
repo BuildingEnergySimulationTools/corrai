@@ -331,7 +331,7 @@ class TsDeepNN(KerasModelSkBC):
         model = keras.models.Sequential()
 
         # Input layer
-        model.add(keras.layers.Flatten(shape=[X.shape[1] * X.shape[2], 1]))
+        model.add(keras.layers.Flatten(input_shape=[X.shape[1] * X.shape[2], 1]))
 
         # Hidden layers
         for _ in range(self.hidden_layers_size):

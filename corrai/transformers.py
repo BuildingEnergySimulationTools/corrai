@@ -3,7 +3,6 @@ import numpy as np
 import datetime as dt
 from functools import partial
 
-from corrai.math import time_gradient
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 

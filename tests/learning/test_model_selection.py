@@ -6,8 +6,6 @@ import numpy as np
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import make_pipeline
 
-import pandas as pd
-
 from corrai.learning.model_selection import (
     ModelTrainer,
     MultiModelSO,

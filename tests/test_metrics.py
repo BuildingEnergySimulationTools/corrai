@@ -25,7 +25,7 @@ class TestMetrics:
         )
 
     def test_smape(self):
-        y_true = np.array([[1, 2, 3, 4], [2, 3, 4, 5]])
+        y_true = np.array([[1., 2., 3., 4.], [2., 3., 4., 5.]])
         y_pred = np.array([[1.5, 2, 2.2, 3], [2.5, 3.0, 3.2, 4.0]])
 
         expected = 20.75
