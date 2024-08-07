@@ -331,7 +331,8 @@ class TsDeepNN(KerasModelSkBC):
         model = keras.models.Sequential()
 
         # Input layer
-        model.add(keras.layers.Flatten(input_shape=[X.shape[1] * X.shape[2], 1]))
+        model.add(keras.layers.Input(shape=(X.shape[1] * X.shape[2], 1)))
+        model.add(keras.layers.Flatten())
 
         # Hidden layers
         for _ in range(self.hidden_layers_size):
@@ -406,12 +407,13 @@ class DeepRNN(KerasModelSkBC):
                 y_val = reshape_target_sequence_to_sequence(x_val, y_val, idx_target)
 
         model = keras.models.Sequential()
-        # Input layer
+
+        # Input layer with RNN
+        model.add(keras.layers.Input(shape=(X.shape[1], X.shape[2])))
         model.add(
             keras.layers.RNN(
                 cell=self.cell_map[self.cells](self.n_units),
-                return_sequences=True,
-                shape=[None, X.shape[2]],
+                return_sequences=True
             )
         )
 
