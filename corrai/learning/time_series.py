@@ -412,8 +412,7 @@ class DeepRNN(KerasModelSkBC):
         model.add(keras.layers.Input(shape=(X.shape[1], X.shape[2])))
         model.add(
             keras.layers.RNN(
-                cell=self.cell_map[self.cells](self.n_units),
-                return_sequences=True
+                cell=self.cell_map[self.cells](self.n_units), return_sequences=True
             )
         )
 
