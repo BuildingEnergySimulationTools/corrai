@@ -93,6 +93,59 @@ class PdIdentity(PdTransformerBC):
         return X
 
 
+class PdDropColumns(PdTransformerBC):
+    """
+    A transformer that returns a DataFrame without the specified columns
+
+    Parameters:
+    -----------
+    None
+
+    Methods:
+    --------
+    fit(X, y=None):
+        This method does nothing and simply returns the transformer instance.
+
+        Parameters:
+        -----------
+        X : array-like, shape (n_samples, n_features)
+            The input data.
+
+        y : array-like, shape (n_samples,), optional (default=None)
+            The target values.
+
+        Returns:
+        --------
+        self : object
+            The transformer instance itself.
+
+    transform(X):
+        This method returns the input data without specified columns.
+
+        Parameters:
+        -----------
+        X : array-like, shape (n_samples, n_features)
+            The input data.
+
+        Returns:
+        --------
+        transformed_X : array-like, shape (n_samples, n_features)
+            The input data without any modifications.
+    """
+
+    def __init__(self, to_drop: list[str] | str):
+        super().__init__()
+        self.to_drop = to_drop
+
+    def fit(self, X, y=None):
+        self.columns = X.columns
+        self.index = X.index
+        return self
+
+    def transform(self, X):
+        return X.drop(self.to_drop, axis=1)
+
+
 class PdReplaceDuplicated(PdTransformerBC):
     """This transformer replaces duplicated values in each column by
     specified new value.
