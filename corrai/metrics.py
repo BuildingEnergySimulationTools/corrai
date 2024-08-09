@@ -64,9 +64,9 @@ def smape(y_true, y_pred):
 
     From Wikipedia, the free encyclopedia
 
-    :param y_pred: array-like of shape (n_samples,) or (n_samples, n_outputs)
+    :param y_pred: Array-like of shape (n_samples,) or (n_samples, n_outputs)
         Ground truth (correct) target values.
-    :param y_true: array-like of shape (n_samples,) or (n_samples, n_outputs)
+    :param y_true: Array-like of shape (n_samples,) or (n_samples, n_outputs)
         Estimated target values.
     """
     result = tf.norm(y_pred - y_true, axis=1)
@@ -82,7 +82,7 @@ def smape(y_true, y_pred):
 
 def last_time_step_mse(y_true, y_pred):
     """
-    For sequence to sequence time forcasting models,
+    For sequence-to-sequence time forcasting models,
     returns the error on the last sequence.
 
     :param y_true: nd.array, with dimension []
@@ -94,10 +94,10 @@ def last_time_step_mse(y_true, y_pred):
 
 def last_time_step_smape(y_true, y_pred):
     """
-    For sequence to sequence time forcasting models,
+    For sequence-to-sequence time forcasting models,
     returns the error on the last sequence.
 
-    :param y_true: nd.array, with dimension []
+    :param y_true: Nd.array, with dimension []
     :param y_pred:
     :return:
     """

@@ -1,15 +1,11 @@
 # %%
 from pathlib import Path
-from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import FunctionTransformer
-import keras
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from scipy.signal import periodogram
-from statsmodels.graphics.tsaplots import plot_pacf
-from statsmodels.tsa.seasonal import seasonal_decompose
 import seaborn as sns
 import plotly.graph_objects as go
 from sklearn.pipeline import make_pipeline
@@ -18,7 +14,6 @@ from corrai.transformers import PdSkTransformer, PdInterpolate
 
 from corrai.learning.model_selection import (
     time_series_sampling,
-    sequences_train_test_split,
 )
 
 from corrai.transformers import PdAddFourierPairs
@@ -189,8 +184,6 @@ if __name__ == "__main__":
     # %% SET POINTS !!!!
     from corrai.learning.cluster import (
         KdeSetPointIdentificator,
-        plot_time_series_kde,
-        plot_kde_set_point,
     )
     from corrai.transformers import PdGaussianFilter1D
     import plotly.io as pio
@@ -259,7 +252,7 @@ if __name__ == "__main__":
         PdAddFourierPairs(frequency=1 / (3.5 * 24 * 3600), feature_prefix="1/2week"),
         PdAddFourierPairs(frequency=1 / (1 * 24 * 3600), feature_prefix="day"),
         PdAddFourierPairs(frequency=1 / (6 * 3600), feature_prefix="6h"),
-        PdAddFourierPairs(frequency=1 / (3 * 3600), feature_prefix="3h")
+        PdAddFourierPairs(frequency=1 / (3 * 3600), feature_prefix="3h"),
         # PdAddFourierPairs(frequency=1 / (2 * 3600)),
         # PdAddFourierPairs(frequency=1 / (1 * 3600)),
     )
