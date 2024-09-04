@@ -201,3 +201,32 @@ corr = abs(data.corr())
 
 plot_sequence_forcast(x_valid, y_valid, model=simple_rn, batch_nb=20)
 
+# %%
+test_df = process_results_pipe.transform(test_df)
+
+# %%
+pred_test = sequence_prediction_to_frame(
+    model=simple_rn,
+    x_df=test_df,
+    n_step_history=N_STEP_HISTORY,
+    sampling_rate=SAMPLING_RATE,
+    sequence_stride=SEQUENCE_STRIDE,
+)
+
+# %%
+column_transformer = process_results_pipe.named_steps["label_features_wise_scaler"]
+label_scaler = column_transformer.named_transformers_["label_scaler"]
+
+unscaled = pd.concat(
+    [label_scaler.inverse_transform(pred_test[col].to_frame()) for col in pred_test],
+    axis=1,
+)
+
+# %%
+fig = px.line(
+    pd.concat([label_scaler.inverse_transform(test_df[[LABEL]]), unscaled], axis=1)
+)
+fig.show()
+
+
+# %%
