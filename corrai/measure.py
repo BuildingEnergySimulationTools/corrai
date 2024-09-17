@@ -495,6 +495,19 @@ class MeasuredDats:
         lst = list(self.common_trans.keys())
         return list(dict.fromkeys(lst))
 
+    def _select_columns(self, cols, category):
+        if cols is None:
+            cols = self.columns
+        elif isinstance(cols, str):
+            cols = [cols]
+
+        if category is not None:
+            try:
+                cols = self.category_dict[category]
+            except:
+                raise KeyError(f"{category} not found in category_dict")
+        return cols
+
     def set_data(self, data: pd.DataFrame):
         check_datetime_index(data)
         self.data = data
@@ -671,6 +684,7 @@ class MeasuredDats:
     def plot_gaps(
         self,
         cols=None,
+        category:str=None,
         begin=None,
         end=None,
         gaps_timestep=None,
@@ -747,6 +761,7 @@ class MeasuredDats:
     def plot(
         self,
         cols=None,
+        category=None,
         title="Correction plot",
         begin=None,
         end=None,
@@ -760,10 +775,7 @@ class MeasuredDats:
         transformers_list=None,
         axis_space=0.03,
     ):
-        if cols is None:
-            cols = self.columns
-        elif isinstance(cols, str):
-            cols = [cols]
+        cols = self._select_columns(cols, category)
 
         to_plot_raw = select_data(self.data, cols, begin, end)
         to_plot_corr = select_data(

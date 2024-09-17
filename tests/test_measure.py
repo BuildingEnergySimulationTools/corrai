@@ -1,6 +1,7 @@
 import json
 from copy import deepcopy
 from pathlib import Path
+import datetime as dt
 
 import numpy as np
 import pandas as pd
@@ -345,14 +346,19 @@ class TestMeasuredDats:
         }
 
     def test_plot_gap(self, my_measure):
-        import datetime as dt
-
         my_measure.plot_gaps(
             gaps_timestep=dt.timedelta(hours=1), transformers_list=["ANOMALIES"]
         )
+        my_measure.plot_gaps(
+            category="col_1",
+            gaps_timestep=dt.timedelta(hours=1),
+            transformers_list=["ANOMALIES"],
+        )
+
 
     def test_plot(self, my_measure):
         my_measure.plot(
+            cols="dumb_column",
             begin="2021-01-01 02:00:00",
             plot_raw=True,
             resampling_rule="2H",
