@@ -108,14 +108,9 @@ def darken_color(color, factor):
 
 
 def select_data(df, cols=None, begin=None, end=None):
-    if cols is None:
-        cols = df.columns
-
-    if begin is None:
-        begin = df.index[0]
-
-    if end is None:
-        end = df.index[-1]
+    cols = df.columns if cols is None else cols
+    begin = df.index[0] if begin is None else begin
+    end = df.index[-1] if end is None else end
 
     return df.loc[begin:end, cols]
 
@@ -151,11 +146,8 @@ def find_gaps(data, cols=None, timestep=None):
     """
 
     check_datetime_index(data)
-    if not cols:
-        cols = data.columns
-
-    if not timestep:
-        timestep = get_mean_timestep(data)
+    cols = data.columns if cols is None else cols
+    timestep = get_mean_timestep(data) if timestep is None else timestep
 
     # Aggregate in a single columns to know overall quality
     df = data.copy()
@@ -900,4 +892,5 @@ class MeasuredDats:
             ),
         )
         set_multi_yaxis_layout(figure=fig, ax_dict=ax_dict, axis_space=axis_space)
+
         fig.show()
