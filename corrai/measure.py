@@ -745,7 +745,8 @@ class MeasuredDats:
             ),
         )
         set_multi_yaxis_layout(figure=fig, ax_dict=ax_dict, axis_space=axis_space)
-        fig.show()
+
+        return fig
 
     def plot(
         self,
@@ -893,4 +894,4 @@ class MeasuredDats:
         )
         set_multi_yaxis_layout(figure=fig, ax_dict=ax_dict, axis_space=axis_space)
 
-        fig.show()
+        return fig
