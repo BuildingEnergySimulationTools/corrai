@@ -2,6 +2,7 @@ import datetime as dt
 import json
 from collections import defaultdict
 from enum import Enum
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -240,15 +241,19 @@ class MeasuredDats:
         self,
         data: pd.DataFrame = None,
         category_dict: dict[str, list[str]] = None,
-        category_transformations=None,
-        common_transformations=None,
-        resampler_agg_methods=None,
-        transformers_list=None,
-        config_file_path=None,
+        category_transformations: dict[
+            str, dict[str, dict[str, [[Transformer, dict]]]]
+        ] = None,
+        common_transformations: dict[str, [[[Transformer, dict]]]] = None,
+        resampler_agg_methods: dict[str, AggMethod] = None,
+        transformers_list: list[str] = None,
+        config_file_path: str | Path = None,
     ):
         """
         A class for handling time-series data with missing values.
-        Use scikit learn Pipelines to perform operations
+        Use scikit learn Pipelines to perform operations.
+        Plot methods to check the effects of pipelines et plot data on multiple
+        y axis.
 
         Parameters:
         -----------
@@ -279,131 +284,24 @@ class MeasuredDats:
 
         transformers_list (list, optional): A list of transformer names.
             Defaults to None. A list of transformer name. The order determines the
-            order of the transformers in the pipeline. Note tha resample will always
+            order of the transformers in the pipeline. Note that RESAMPLE will always
             be added at the end of the pipeline. If None, a default order will be
             specified as follows: ["CATEGORY_TRANSFORMER_1", ...,
             "CATEGORY_TRANSFORMER_n", "COMMON_TRANSFORMER_1", ...,
             "CATEGORY_TRANSFORMER_n", "RESAMPLE"]
 
-
         config_file_path (str, optional): The file path for reading a json
         configuration file. Defaults to None.
 
-
         Properties:
         -----------
-            columns (list): Returns the column names of the data.
+            columns: Returns the column names of the data.
 
-            category_trans_names (list): Returns the names of category-specific
+            category_trans_names: Returns the names of category-specific
                 transformations.
 
-            common_trans_names (list): Returns the names of common
+            common_trans_names: Returns the names of common
                 transformations.
-
-        Methods:
-        --------
-        set_data(data:DataFrame): The proper way or reset DataFrame. Check index
-            is valid, before assigning data to self.data.
-
-        get_pipeline(transformers_list=None, resampling_rule=False): Creates
-            and returns a data processing pipeline. Custom transformer list
-            may be specified. resampling_rule add a resampler to the pipeline.
-
-        get_corrected_data(transformers_list=None, resampling_rule=False):
-            Applies the pipeline to the data and returns the corrected data.
-            Custom transformer list may be specified. resampling_rule add a
-            resampler to the pipeline.
-
-        get_common_transformer(transformation): Returns a pipeline for a
-            common transformation.
-
-        get_category_transformer(transformation): Returns a pipeline for a
-            category-specific transformation.
-
-        get_resampler(rule, remainder_rule="mean"): Returns a resampler for
-            data resampling.
-
-        write_config_file(file_path): Writes the current configuration to a
-            file.
-        read_config_file(file_path): Reads the configuration from a file.
-
-        add_time_series(time_series, category, category_transformations=None):
-            Adds a time series to the data.
-
-        get_missing_value_stats(self, transformers_list=None,
-        resampling_rule=False):
-            Returns statistics on missing values for the corresponding
-            transformers_list pipeline. Number of missing values for all columns
-            and corresponding % of missing values
-
-        get_gaps_description(self, cols=None, transformers_list=None,
-            resampling_rule=False, gaps_timedelta=None)
-            returns statistics on gaps duration for specified columns for the
-            specified transformation. The column "combination" returns "aggregated"
-            gaps statistics
-
-        plot_gaps(cols=None, begin=None, end=None,
-            gaps_timestep=dt.timedelta(hours=5), title="Gaps plot",
-            raw_data=False, color_rgb=(243, 132, 48),  alpha=0.5, resampling_rule=False,
-            transformers_list=None):
-            cols (list, optional): List of column names to plot. If not
-                provided, all columns will be plotted. Default is None.
-            begin (str, optional): String specifying the start date for the
-                data selection. If not provided, the entire dataset will be
-                used. Default is None.
-            end (str, optional): String specifying the end date for the data
-                selection. If not provided, the entire dataset will be used.
-                Default is None.
-            gaps_timestep (timedelta, optional): Minimum duration between data
-                points to consider a gap. Default is 5 hours.
-            title (str, optional): Title of the plot. Default is "Gaps plot".
-            raw_data (bool, optional): If True, plot the raw data without gap
-                correction. If False, plot the gap-corrected data.
-                Default is False.
-            color_rgb (tuple of int, optional): RGB color of the gaps.
-                Default is (243, 132, 48).
-            alpha (float, optional): Opacity of the gaps. Default is 0.5.
-                resampling_rule: data resampling rule
-            transformers_list: transformations order list. If None it uses default
-                transformers_list
-
-        plot(cols=None, title="Correction plot", begin=None, end=None, plot_raw=False,
-            plot_corrected=True, line_corrected=True, marker_corrected=True,
-            line_raw=True, marker_raw=True, resampling_rule=False,
-            transformers_list=None)
-
-            Generate a plot comparing the original and corrected values of the given
-            columns over the specified time range.
-            cols : list of str, optional
-                The names of the columns to plot. If None (default), all
-                columns are plotted.
-            title : str, optional
-                The title of the plot. Defaults to "Correction plot".
-            begin : str or datetime-like, optional
-                A string or datetime-like object specifying the start of the
-                time range to plot. If None (default), plot all data.
-            end : str or datetime-like, optional
-                A string or datetime-like object specifying the end of the
-                time range to plot. If None (default), plot all data.
-            plot_raw : bool, optional
-                If True, plot the raw values
-            plot_corrected : bool, optional
-                If True, plot the corrected values .
-            line_corrected: bool, optional
-                If True, plot corrected values using lines
-            line_raw: bool, optional
-                If True, plot raw values using lines
-            marker_corrected: bool, optional
-                If True, plot corrected values using markers
-            marker_raw: bool, optional
-                If True, plot raw values using markers
-            resampling_rule: False
-                If resampling rule is specified, resample corrected data using
-                resampler and aggregation methods specified in category_transformers.
-                It will not affect raw data
-            transformers_list: list, Optional
-                transformations order list. Default None uses default
-                transformers_list
 
         Example:
         --------
@@ -509,26 +407,56 @@ class MeasuredDats:
         return cols
 
     def set_data(self, data: pd.DataFrame):
+        """
+        The proper way or reset DataFrame. Check index is valid, before assigning data
+        to self.data.
+        """
         check_datetime_index(data)
         self.data = data
 
-    def get_missing_value_stats(self, transformers_list=None, resampling_rule=False):
+    def get_missing_value_stats(
+        self,
+        transformers_list: [str] = None,
+        resampling_rule: str | dt.timedelta = None,
+    ):
+        """
+        Returns statistics on missing values for the corresponding
+        transformers_list pipeline. Number of missing values for all columns
+        and corresponding % of missing values
+        """
         data = self.get_corrected_data(transformers_list, resampling_rule)
         return missing_values_dict(data)
 
     def get_gaps_description(
         self,
-        cols=None,
-        transformers_list=None,
-        resampling_rule=False,
-        gaps_timedelta=None,
+        cols: str | list[str] = None,
+        transformers_list: list[str] = None,
+        resampling_rule: str | dt.timedelta = False,
+        gaps_timedelta: dt.timedelta = None,
     ):
+        """
+        Returns statistics on gaps duration for specified columns for the
+        specified transformation. The column "combination" returns "aggregated"
+        gaps statistics
+        """
+
         if gaps_timedelta is None:
             gaps_timedelta = get_mean_timestep(self.data)
         data = self.get_corrected_data(transformers_list, resampling_rule)
         return gaps_describe(df_in=data, cols=cols, timestep=gaps_timedelta)
 
-    def get_pipeline(self, transformers_list=None, resampling_rule=False):
+    def get_pipeline(
+        self,
+        transformers_list: list[str] = None,
+        resampling_rule: str | dt.timedelta = False,
+    ):
+        """
+        Creates and returns a data processing pipeline. Custom transformer list may be
+         specified. resampling_rule add a resampler to the pipeline.
+        - transformers_list: custom transformers list. If None, MeasuredDat
+        transformers_list is used
+        - rule: Timedelta for resampling if used,
+        """
         if transformers_list is None:
             transformers_list = self.transformers_list.copy()
 
@@ -555,19 +483,35 @@ class MeasuredDats:
 
         return make_pipeline(*obj_list)
 
-    def get_corrected_data(self, transformers_list=None, resampling_rule=False):
+    def get_corrected_data(
+        self,
+        transformers_list: list[str] = None,
+        resampling_rule: str | dt.timedelta = False,
+    ):
+        """
+        Applies the pipeline to the data and returns the corrected data.
+        Custom transformer list may be specified. resampling_rule add a
+        resampler to the pipeline or configures it if RESAMPLE is set in
+        transformers_list.
+        """
         pipe = self.get_pipeline(
             transformers_list=transformers_list, resampling_rule=resampling_rule
         )
         return pipe.fit_transform(self.data)
 
-    def get_common_transformer(self, transformation):
+    def get_common_transformer(self, transformation: str):
+        """
+        Returns a pipeline for a common transformation.
+        """
         common_trans = self.common_trans[transformation]
         return make_pipeline(
             *[TRANSFORMER_MAP[trans[0].value](**trans[1]) for trans in common_trans]
         )
 
-    def get_category_transformer(self, transformation):
+    def get_category_transformer(self, transformation: str):
+        """
+        Returns a pipeline for a category-specific transformation.
+        """
         column_config_list = []
         for data_cat, cols in self.category_dict.items():
             if data_cat in self.category_trans.keys():
@@ -593,7 +537,10 @@ class MeasuredDats:
             column_config_list, verbose_feature_names_out=False, remainder="passthrough"
         ).set_output(transform="pandas")
 
-    def get_resampler(self, rule, remainder_rule=AggMethod.MEAN):
+    def get_resampler(self, rule: str | dt.timedelta, remainder_method=AggMethod.MEAN):
+        """
+        Returns a resampler for data resampling
+        """
         column_config_list = []
         for data_cat, cols in self.category_dict.items():
             try:
@@ -608,10 +555,13 @@ class MeasuredDats:
             return ct.PdColumnResampler(
                 rule=rule,
                 columns_method=column_config_list,
-                remainder=AGG_METHOD_MAP[remainder_rule.value],
+                remainder=AGG_METHOD_MAP[remainder_method.value],
             )
 
-    def write_config_file(self, file_path):
+    def write_config_file(self, file_path: str | Path):
+        """
+        Writes the current configuration to a json file.
+        """
         with open(file_path, "w", encoding="utf-8") as f:
             to_dump = {
                 "category_dict": self.category_dict,
@@ -622,7 +572,10 @@ class MeasuredDats:
             }
             json.dump(to_dump, f, indent=4, cls=CustomEncoder)
 
-    def read_config_file(self, file_path):
+    def read_config_file(self, file_path: str | Path):
+        """
+        Reads the configuration from a file
+        """
         with open(file_path, encoding="utf-8") as f:
             config_dict = json.load(f, cls=CustomDecoder)
 
@@ -639,7 +592,18 @@ class MeasuredDats:
             except KeyError:
                 setattr(self, attr[1], None)
 
-    def add_time_series(self, time_series, category, category_transformations=None):
+    def add_time_series(
+        self,
+        time_series: pd.Series | pd.DataFrame,
+        category: str,
+        category_transformations=None,
+    ):
+        """
+        Adds a time series to the data.
+        """
+        if isinstance(time_series, pd.Series):
+            time_series = time_series.to_frame()
+
         check_datetime_index(time_series)
         if category_transformations is None:
             category_transformations = {}
@@ -683,23 +647,56 @@ class MeasuredDats:
 
     def plot_gaps(
         self,
-        cols=None,
-        category:str=None,
-        begin=None,
-        end=None,
-        gaps_timestep=None,
-        title="Gaps plot",
-        plot_raw=False,
-        color_rgb=(100, 100, 100),
-        alpha=0.5,
-        resampling_rule=False,
-        transformers_list=None,
-        axis_space=0.03,
+        cols: str | list[str] = None,
+        category: str = None,
+        begin: str | dt.datetime = None,
+        end: str | dt.datetime = None,
+        gaps_timestep: dt.timedelta = None,
+        title: str = "Gaps plot",
+        plot_raw: bool = False,
+        color_rgb: set[int, int, int] = (100, 100, 100),
+        alpha: float = 0.5,
+        resampling_rule: str | dt.timedelta = None,
+        transformers_list: list[str] = None,
+        axis_space: float = 0.03,
     ):
-        if cols is None:
-            cols = self.columns
-        elif isinstance(cols, str):
-            cols = [cols]
+        """
+        Plot data (raw or corrected, default is corrected), plots grey boxes
+        when values are missing beyond a given gaps_timestep
+
+        cols (str,  list, optional): a column name or a List of column names
+            to plot. If not provided, all columns will be plotted. Default is None.
+
+        category (str): A category name. It will plot all the columns in the given
+            category. Based on category dict. It overwrites cols argument
+
+        begin (str, optional): String specifying the start date for the
+            data selection. If not provided, the entire dataset will be
+            used. Default is None.
+
+        end (str, optional): String specifying the end date for the data
+            selection. If not provided, the entire dataset will be used.
+            Default is None.
+
+        gaps_timestep (timedelta, optional): Minimum duration between data
+            points to consider a gap. Default is 5 hours.
+
+        title (str, optional): Title of the plot. Default is "Gaps plot".
+
+        raw_data (bool, optional): If True, plot the raw data without gap
+            correction. If False, plot the gap-corrected data.
+            Default is False.
+
+        color_rgb (tuple of int, optional): RGB color of the gaps.
+            Default is (243, 132, 48).
+
+        alpha (float, optional): Opacity of the gaps. Default is 0.5.
+            resampling_rule: data resampling rule
+
+        transformers_list: transformations order list. If None it uses default
+            transformers_list
+        """
+        cols = self._select_columns(cols, category)
 
         gaps_timestep = (
             dt.timedelta(hours=5) if gaps_timestep is None else gaps_timestep
@@ -760,21 +757,71 @@ class MeasuredDats:
 
     def plot(
         self,
-        cols=None,
-        category=None,
-        title="Correction plot",
-        begin=None,
-        end=None,
-        plot_raw=False,
-        plot_corrected=True,
-        line_corrected=True,
-        marker_corrected=True,
-        line_raw=True,
-        marker_raw=True,
-        resampling_rule=False,
-        transformers_list=None,
-        axis_space=0.03,
+        cols: str | list[str] = None,
+        category: str = None,
+        begin: str | dt.datetime = None,
+        end: str | dt.datetime = None,
+        title: str = "Gaps plot",
+        plot_raw: bool = False,
+        plot_corrected: bool = True,
+        line_corrected: bool = True,
+        marker_corrected: bool = True,
+        line_raw: bool = True,
+        marker_raw: bool = True,
+        resampling_rule: str | dt.timedelta = None,
+        transformers_list: list[str] = None,
+        axis_space: float = 0.03,
     ):
+        """
+        Generate a plot of specified columns or category.
+        Can be used to compare the original and corrected values of the given
+        columns over the specified time range.
+
+        cols : str, list of str, optional
+            The names of the column, or a list of columns names to plot.
+            If None (default), all columns are plotted.
+
+        category (str): A category name. It will plot all the columns in the given
+            category. Based on category dict. It overwrites cols argument
+
+        title : str, optional
+            The title of the plot. Defaults to "Correction plot".
+
+        begin : str or datetime-like, optional
+            A string or datetime-like object specifying the start of the
+            time range to plot. If None (default), plot all data.
+
+        end : str or datetime-like, optional
+            A string or datetime-like object specifying the end of the
+            time range to plot. If None (default), plot all data.
+
+        plot_raw : bool, optional
+            If True, plot the raw values
+
+        plot_corrected : bool, optional
+            If True, plot the corrected values.
+
+        line_corrected: bool, optional
+            If True, plot corrected values using lines
+
+        line_raw: bool, optional
+            If True, plot raw values using lines
+
+        marker_corrected: bool, optional
+            If True, plot corrected values using markers
+
+        marker_raw: bool, optional
+            If True, plot raw values using markers
+
+        resampling_rule: False
+            If resampling rule is specified, resample corrected data using
+            resampler and aggregation methods specified in category_transformers.
+            It will not affect raw data
+
+        transformers_list: list, Optional
+            transformations order list. Default None uses default
+            transformers_list
+        """
         cols = self._select_columns(cols, category)
 
         to_plot_raw = select_data(self.data, cols, begin, end)

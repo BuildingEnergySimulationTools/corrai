@@ -355,7 +355,6 @@ class TestMeasuredDats:
             transformers_list=["ANOMALIES"],
         )
 
-
     def test_plot(self, my_measure):
         my_measure.plot(
             cols="dumb_column",
