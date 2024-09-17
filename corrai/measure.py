@@ -684,9 +684,12 @@ class MeasuredDats:
     ):
         if cols is None:
             cols = self.columns
+        elif isinstance(cols, str):
+            cols = [cols]
 
-        if gaps_timestep is None:
-            gaps_timestep = dt.timedelta(hours=5)
+        gaps_timestep = (
+            dt.timedelta(hours=5) if gaps_timestep is None else gaps_timestep
+        )
 
         if plot_raw:
             to_plot = select_data(self.data, cols, begin, end)
@@ -759,6 +762,8 @@ class MeasuredDats:
     ):
         if cols is None:
             cols = self.columns
+        elif isinstance(cols, str):
+            cols = [cols]
 
         to_plot_raw = select_data(self.data, cols, begin, end)
         to_plot_corr = select_data(
