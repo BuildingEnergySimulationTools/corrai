@@ -82,7 +82,7 @@ class TestFmu:
                     "Boundaries.y[1]": [1, 2, 3, 4, 5],
                     "Boundaries.y[2]": [3, 4, 5, 6, 7],
                 },
-                index=pd.date_range("2009-07-13 00:00:00", periods=5, freq="H"),
+                index=pd.date_range("2009-07-13 00:00:00", periods=5, freq="h"),
             )
             x_datetime.index.name = "time"
             x_datetime.index.freq = None

@@ -360,5 +360,5 @@ class TestMeasuredDats:
             cols="dumb_column",
             begin="2021-01-01 02:00:00",
             plot_raw=True,
-            resampling_rule="2H",
+            resampling_rule="2h",
         )
