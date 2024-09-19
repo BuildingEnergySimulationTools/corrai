@@ -233,9 +233,7 @@ class MeasuredDats:
         self,
         data: pd.DataFrame = None,
         category_dict: dict[str, list[str]] = None,
-        category_transformations: dict[
-            str, dict[str, dict[str, [[Transformer, dict]]]]
-        ] = None,
+        category_transformations: dict[str, dict[str, [[Transformer, dict]]]] = None,
         common_transformations: dict[str, [[[Transformer, dict]]]] = None,
         resampler_agg_methods: dict[str, AggMethod] = None,
         transformers_list: list[str] = None,
@@ -394,8 +392,8 @@ class MeasuredDats:
         if category is not None:
             try:
                 cols = self.category_dict[category]
-            except:
-                raise KeyError(f"{category} not found in category_dict")
+            except KeyError:
+                raise ValueError(f"{category} not found in category_dict")
         return cols
 
     def set_data(self, data: pd.DataFrame):
@@ -412,7 +410,7 @@ class MeasuredDats:
         resampling_rule: str | dt.timedelta = None,
     ):
         """
-        Returns statistics on missing values for the corresponding
+        Returns statistics on missing values NaN for the corresponding
         transformers_list pipeline. Number of missing values for all columns
         and corresponding % of missing values
         """
