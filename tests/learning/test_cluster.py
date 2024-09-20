@@ -15,7 +15,7 @@ import corrai.transformers as ct
 import datetime as dt
 from pathlib import Path
 
-FILES_PATH = Path(__file__).parent.parent / "resources"
+FILES_PATH = Path(__file__).parent / "resources"
 
 
 class TestLearning:

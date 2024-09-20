@@ -10,7 +10,6 @@ from corrai.variant import VariantKeys, get_combined_variants
 from tests.resources.pymodels import VariantModel
 import pytest
 
-FILES_PATH = Path(__file__).parent / "resources"
 
 parameters = [
     {Parameter.NAME: "Parameter1", Parameter.INTERVAL: (0, 6), Parameter.TYPE: "Real"},
