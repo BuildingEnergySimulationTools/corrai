@@ -1108,9 +1108,11 @@ class PdSTLFilter(PdTransformerBC):
         stl_additional_kwargs: dict[str, float] = None,
     ):
         super().__init__()
-        self.stl = STLEDetector(
-            period, absolute_threshold, seasonal, stl_additional_kwargs
-        )
+        self.period = period
+        self.absolute_threshold = absolute_threshold
+        self.seasonal = seasonal
+        self.stl_additional_kwargs = stl_additional_kwargs
+        self.stl = None
 
     def fit(self, X, y=None):
         self.columns = X.columns
@@ -1118,6 +1120,12 @@ class PdSTLFilter(PdTransformerBC):
         return self
 
     def transform(self, X):
+        self.stl = STLEDetector(
+            self.period,
+            self.absolute_threshold,
+            self.seasonal,
+            self.stl_additional_kwargs,
+        )
         errors = self.stl.predict(X)
         errors = errors.astype(bool)
         for col in errors:
