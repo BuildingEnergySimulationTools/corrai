@@ -10,6 +10,7 @@ from sklearn.utils.validation import check_is_fitted
 from scipy.ndimage import gaussian_filter1d
 
 from corrai.base.math import time_gradient
+from corrai.learning.error_detection import STLEDetector
 
 
 class PdTransformerBC(TransformerMixin, BaseEstimator, ABC):
@@ -27,7 +28,7 @@ class PdTransformerBC(TransformerMixin, BaseEstimator, ABC):
         return self.columns
 
     @abstractmethod
-    def fit(self, X, y=None):
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
         """Operations happening during fitting process"""
         pass
 
@@ -1049,3 +1050,77 @@ class PdCombineColumns(PdTransformerBC):
         col_to_return.append(self.label_name)
 
         return X_transformed[col_to_return]
+
+
+class PdSTLFilter(PdTransformerBC):
+    """
+    A transformer that applies Seasonal-Trend decomposition using LOESS (STL)
+    to a pandas DataFrame, and filters outliers based on an absolute threshold
+    from the residual (error) component of the decomposition.
+    Detected outliers are replaced with NaN values.
+
+    Parameters
+    ----------
+    period : int | str | timedelta
+        The periodicity of the seasonal component. Can be specified as:
+        - an integer for the number of observations in one seasonal cycle,
+        - a string representing the time frequency (e.g., '15T' for 15 minutes),
+        - a timedelta object representing the duration of the seasonal cycle.
+
+    absolute_threshold : int | float
+        The threshold for detecting anomalies in the residual component.
+        Any value in the residual that exceeds this threshold (absolute value)
+         is considered an anomaly and replaced by NaN.
+
+    seasonal : int | str | timedelta, optional
+        The length of the smoothing window for the seasonal component.
+        If not provided, it is inferred based on the period.
+        Must be an odd integer if specified as an int.
+        Can also be specified as a string representing a time frequency or a
+        timedelta object.
+
+    stl_additional_kwargs : dict[str, float], optional
+        Additional keyword arguments to pass to the STL decomposition.
+
+    Methods
+    -------
+    fit(X, y=None)
+        Stores the columns and index of the input DataFrame but does not change
+        the data. The method is provided for compatibility with the
+        scikit-learn pipeline.
+
+    transform(X)
+        Applies the STL decomposition to each column of the input DataFrame `X`
+        and replaces outliers detected in the residual component with NaN values.
+        The outliers are determined based on the provided `absolute_threshold`.
+
+    Returns
+    -------
+    pd.DataFrame
+        The transformed DataFrame with outliers replaced by NaN.
+    """
+
+    def __init__(
+        self,
+        period: int | str | dt.timedelta,
+        absolute_threshold: int | float,
+        seasonal: int | str | dt.timedelta = None,
+        stl_additional_kwargs: dict[str, float] = None,
+    ):
+        super().__init__()
+        self.stl = STLEDetector(
+            period, absolute_threshold, seasonal, stl_additional_kwargs
+        )
+
+    def fit(self, X, y=None):
+        self.columns = X.columns
+        self.index = X.index
+        return self
+
+    def transform(self, X):
+        errors = self.stl.predict(X)
+        errors = errors.astype(bool)
+        for col in errors:
+            X.loc[errors[col], col] = np.nan
+
+        return X

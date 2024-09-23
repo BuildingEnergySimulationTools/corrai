@@ -1,4 +1,5 @@
 import datetime as dt
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -23,7 +24,10 @@ from corrai.transformers import (
     PdSkTransformer,
     PdTimeGradient,
     PdReplaceDuplicated,
+    PdSTLFilter,
 )
+
+RESOURCES_PATH = Path(__file__).parent / "resources"
 
 
 class TestCustomTransformers:
@@ -353,3 +357,31 @@ class TestCustomTransformers:
         trans.drop_columns = False
 
         pd.testing.assert_frame_equal(trans.fit_transform(x_in), ref)
+
+    def test_pd_stl_filter(self):
+        data = pd.read_csv(
+            RESOURCES_PATH / "stl_transformer_data.csv", index_col=0, parse_dates=True
+        )
+        data = data.asfreq("15min")
+
+        # Errors :
+        # "2024-08-23 01:45:00+00:00", "Temp_1"] - 0.7
+        # "2024-08-26 23:45:00+00:00 ", "Temp_1"] - 0.7
+        # "2024-09-08 00:45:00+00:00", "Temp_1"] - 0.7
+
+        # "2024-09-01 12:00:00+00:00", "Temp_2"] -= 0.7
+        # "2024-09-15 12:00:00+00:00", "Temp_2"] += 0.7
+
+        filter = PdSTLFilter(
+            period="24h",
+            seasonal="365d",
+            stl_additional_kwargs={"robust": True},
+            absolute_threshold=0.5,
+        )
+
+        res = filter.fit_transform(data)
+
+        # Check that we have the right number of holes
+        pd.testing.assert_series_equal(
+            res.isna().sum(), pd.Series({"Temp_1": 3, "Temp_2": 2})
+        )
