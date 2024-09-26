@@ -29,8 +29,8 @@ class TestErrorDetection:
 
         stl = STLEDetector(
             period="24h",
-            seasonal="365d",
-            stl_additional_kwargs={"robust": True},
+            trend='1d',
+            stl_kwargs={"robust": True},
             absolute_threshold=0.6,
         )
 

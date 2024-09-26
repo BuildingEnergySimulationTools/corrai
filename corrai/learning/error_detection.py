@@ -16,6 +16,24 @@ def timedelta_to_int(td: int | str | dt.timedelta, df):
         return int(td / df.index.freq)
 
 
+def validate_odd_param(param_name, param_value):
+    if isinstance(param_value, int) and param_value % 2 == 0:
+        raise ValueError(
+            f"{param_name}={param_value} is not valid, it must be an odd number"
+        )
+
+
+def process_stl_odd_args(param_name, param_value, X, stl_kwargs):
+    if isinstance(param_value, int):
+        # Is odd already check at init in case of int
+        stl_kwargs[param_name] = param_value
+    elif param_value is not None:
+        processed_value = timedelta_to_int(param_value, X)
+        if processed_value % 2 == 0:
+            processed_value += 1  # Ensure the value is odd
+        stl_kwargs[param_name] = processed_value
+
+
 class STLEDetector(BaseEstimator, ClusterMixin):
     """
     A custom anomaly detection model based on statsmodel STL
@@ -40,12 +58,17 @@ class STLEDetector(BaseEstimator, ClusterMixin):
         The threshold value for residuals. Any residuals exceeding this threshold
         are considered anomalies.
 
+    trend : int | str | dt.timedelta, optional
+        The length of the trend smoother. Must be odd and larger than season
+        Statsplot indicate it is usually around 150% of season.
+        Strongly depends on your time series.
+
     seasonal : int | str | dt.timedelta, optional
         The seasonal component's smoothing parameter for STL. It defines how much
         the seasonal component is smoothed. If given as an integer,
         it must be an odd number. If None, a default value will be used.
 
-    stl_additional_kwargs : dict[str, float], optional
+    stl_kwargs : dict[str, float], optional
         Additional keyword arguments for the STL decomposition.
         These allow fine-tuning of the decomposition process.
         (https://www.statsmodels.org/stable/index.html)
@@ -58,7 +81,7 @@ class STLEDetector(BaseEstimator, ClusterMixin):
         A DataFrame with binary labels (0 or 1), indicating whether an anomaly
         is detected (1) or not (0).
 
-    _stl_res : dict
+    stl_res : dict
         A dictionary that holds the fitted STL results for each feature in the dataset.
 
     Methods
@@ -85,22 +108,21 @@ class STLEDetector(BaseEstimator, ClusterMixin):
     def __init__(
         self,
         period: int | str | dt.timedelta,
+        trend: int | str | dt.timedelta,
         absolute_threshold: int | float,
         seasonal: int | str | dt.timedelta = None,
-        stl_additional_kwargs: dict[str, float] = None,
+        stl_kwargs: dict[str, float] = None,
     ):
         self.period = period
+        self.trend = trend
         self.absolute_threshold = absolute_threshold
         self.seasonal = seasonal
-        if isinstance(self.seasonal, int):
-            if self.seasonal % 2 == 0:
-                raise ValueError(
-                    f"seasonal={self.seasonal} is not valid, it must be "
-                    f"an odd number"
-                )
-        self.stl_additional_kwargs = stl_additional_kwargs or {}
+        validate_odd_param("seasonal", self.seasonal)
+        validate_odd_param("trend", self.trend)
+
+        self.stl_kwargs = stl_kwargs or {}
         self.labels_ = None
-        self._stl_res = {}
+        self.stl_res = {}
 
     def __sklearn_is_fitted__(self):
         """
@@ -113,19 +135,13 @@ class STLEDetector(BaseEstimator, ClusterMixin):
         if isinstance(X, pd.Series):
             X = as_1_column_dataframe(X)
 
-        stl_args = [timedelta_to_int(self.period, X)]
-
-        if isinstance(self.seasonal, int):
-            stl_args.append(self.seasonal)
-        elif self.seasonal is not None:
-            seasonal = timedelta_to_int(self.seasonal, X)
-            if seasonal % 2 == 0:
-                seasonal += 1  # Ensure the seasonal value is odd
-            stl_args.append(seasonal)
+        self.stl_kwargs["period"] = timedelta_to_int(self.period, X)
+        process_stl_odd_args("seasonal", self.seasonal, X, self.stl_kwargs)
+        process_stl_odd_args("trend", self.trend, X, self.stl_kwargs)
 
         for feat in X.columns:
-            stl = STL(X[feat], *stl_args, **self.stl_additional_kwargs)
-            self._stl_res[feat] = stl.fit()
+            stl = STL(X[feat], **self.stl_kwargs)
+            self.stl_res[feat] = stl.fit()
 
         self._is_fitted = True
 
@@ -133,7 +149,7 @@ class STLEDetector(BaseEstimator, ClusterMixin):
 
     def predict(self, X: pd.Series | pd.DataFrame):
         self.fit(X)
-        res_df = pd.concat([res.resid for res in self._stl_res.values()], axis=1)
+        res_df = pd.concat([res.resid for res in self.stl_res.values()], axis=1)
         res_df.columns = X.columns
         self.labels_ = (abs(res_df) > self.absolute_threshold).astype(int)
 
