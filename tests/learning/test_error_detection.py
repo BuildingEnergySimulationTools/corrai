@@ -29,7 +29,7 @@ class TestErrorDetection:
 
         stl = STLEDetector(
             period="24h",
-            trend='1d',
+            trend="1d",
             stl_kwargs={"robust": True},
             absolute_threshold=0.6,
         )

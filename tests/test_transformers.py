@@ -374,7 +374,7 @@ class TestCustomTransformers:
 
         filter = PdSTLFilter(
             period="24h",
-            seasonal="365d",
+            trend="1d",
             stl_additional_kwargs={"robust": True},
             absolute_threshold=0.5,
         )

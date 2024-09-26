@@ -1067,6 +1067,11 @@ class PdSTLFilter(PdTransformerBC):
         - a string representing the time frequency (e.g., '15T' for 15 minutes),
         - a timedelta object representing the duration of the seasonal cycle.
 
+    trend : int | str | dt.timedelta, optional
+        The length of the trend smoother. Must be odd and larger than season
+        Statsplot indicate it is usually around 150% of season.
+        Strongly depends on your time series.
+
     absolute_threshold : int | float
         The threshold for detecting anomalies in the residual component.
         Any value in the residual that exceeds this threshold (absolute value)
@@ -1103,12 +1108,14 @@ class PdSTLFilter(PdTransformerBC):
     def __init__(
         self,
         period: int | str | dt.timedelta,
+        trend: int | str | dt.timedelta,
         absolute_threshold: int | float,
         seasonal: int | str | dt.timedelta = None,
         stl_additional_kwargs: dict[str, float] = None,
     ):
         super().__init__()
         self.period = period
+        self.trend = trend
         self.absolute_threshold = absolute_threshold
         self.seasonal = seasonal
         self.stl_additional_kwargs = stl_additional_kwargs
@@ -1122,6 +1129,7 @@ class PdSTLFilter(PdTransformerBC):
     def transform(self, X):
         self.stl = STLEDetector(
             self.period,
+            self.trend,
             self.absolute_threshold,
             self.seasonal,
             self.stl_additional_kwargs,
