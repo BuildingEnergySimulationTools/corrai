@@ -3,12 +3,15 @@ import numpy as np
 
 import pytest
 
-from corrai.base.utils import _reshape_1d
-from corrai.base.utils import as_1_column_dataframe
-from corrai.base.utils import check_datetime_index
-from corrai.base.utils import float_to_hour
-from corrai.base.utils import hour_to_float
-from corrai.base.utils import get_reversed_dict
+from corrai.base.utils import (
+    _reshape_1d,
+    as_1_column_dataframe,
+    check_datetime_index,
+    float_to_hour,
+    hour_to_float,
+    get_reversed_dict,
+    get_biggest_group,
+)
 
 
 class TestUtils:
@@ -89,3 +92,15 @@ class TestUtils:
 
         assert get_reversed_dict(dictionary, 2) == {2: "a"}
         assert get_reversed_dict(dictionary, [2, 3]) == {2: "a", 3: "b"}
+
+    def test_get_biggest_group(self):
+        toy_serie = pd.Series(
+            np.random.randn(365), pd.date_range("2009", freq="d", periods=365)
+        )
+
+        toy_serie.loc["2009-07-05"] = np.nan
+        toy_serie.loc["2009-07-13":"2009-07-14"] = np.nan
+
+        res = get_biggest_group(toy_serie)
+
+        pd.testing.assert_series_equal(res, toy_serie.loc[:"2009-07-04"])

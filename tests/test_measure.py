@@ -9,12 +9,11 @@ import pytest
 
 from corrai.measure import (
     MeasuredDats,
-    gaps_describe,
-    missing_values_dict,
     select_data,
     Transformer,
     AggMethod,
 )
+from corrai.base.utils import gaps_describe, missing_values_dict
 
 RESOURCES_DIR = Path(__file__).parent / "resources"
 

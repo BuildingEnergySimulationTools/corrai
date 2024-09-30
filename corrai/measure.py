@@ -4,7 +4,6 @@ from collections import defaultdict
 from enum import Enum
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from sklearn.compose import ColumnTransformer
@@ -13,7 +12,13 @@ from sklearn.pipeline import make_pipeline
 import corrai.transformers as ct
 from corrai.base.math import time_integrate
 from corrai.transformers import PdIdentity
-from corrai.base.utils import check_datetime_index
+from corrai.base.utils import (
+    check_datetime_index,
+    find_gaps,
+    gaps_describe,
+    get_mean_timestep,
+    missing_values_dict,
+)
 
 
 class Transformer(Enum):
@@ -74,13 +79,6 @@ AGG_METHOD_MAP = {
 COLOR_PALETTE = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
 
 
-def missing_values_dict(df):
-    return {
-        "Number_of_missing": df.count(),
-        "Percent_of_missing": (1 - df.count() / df.shape[0]) * 100,
-    }
-
-
 def set_multi_yaxis_layout(figure, ax_dict, axis_space):
     nb_right_y_axis = len(set(ax_dict.values()))
     x_right_space = 1 - axis_space * (nb_right_y_axis - 1)
@@ -115,73 +113,6 @@ def select_data(df, cols=None, begin=None, end=None):
     end = df.index[-1] if end is None else end
 
     return df.loc[begin:end, cols]
-
-
-def find_gaps(data, cols=None, timestep=None):
-    """
-    Find gaps in time series data. Find individual columns gap and combined gap
-    for all columns.
-
-    Parameters:
-    -----------
-        data (pandas.DataFrame or pandas.Series): The time series data to check
-            for gaps.
-
-        cols (list, optional): The columns to check for gaps. Defaults to None,
-            in which case all columns are checked.
-
-        timestep (str or pandas.Timedelta, optional): The time step of the
-            data. Can be either a string representation of a time period
-            (e.g., '1H' for hourly data), or a pandas.Timedelta object.
-            Defaults to None, in which case the time step is automatically
-            determined.
-
-    Raises:
-    -------
-
-        ValueError: If cols or timestep are invalid.
-
-    Returns:
-    --------
-        dict: A dictionary containing the duration of the gaps for each
-        specified column, as well as the overall combination of columns.
-    """
-
-    check_datetime_index(data)
-    cols = data.columns if cols is None else cols
-    timestep = get_mean_timestep(data) if timestep is None else timestep
-
-    # Aggregate in a single columns to know overall quality
-    df = data.copy()
-    df = ~df.isnull()
-    df["combination"] = df.all(axis=1)
-
-    # Index are added at the beginning and at the end to account for
-    # missing values and each side of the dataset
-    first_index = df.index[0] - (df.index[1] - df.index[0])
-    last_index = df.index[-1] - (df.index[-2] - df.index[-1])
-
-    df.loc[first_index] = np.ones(df.shape[1], dtype=bool)
-    df.loc[last_index] = np.ones(df.shape[1], dtype=bool)
-    df.sort_index(inplace=True)
-
-    # Compute gaps duration
-    res = {}
-    for col in list(cols) + ["combination"]:
-        time_der = df[col].loc[df[col]].index.to_series().diff()
-        res[col] = time_der[time_der > timestep]
-
-    return res
-
-
-def gaps_describe(df_in, cols=None, timestep=None):
-    res_find_gaps = find_gaps(df_in, cols, timestep)
-
-    return pd.DataFrame({k: val.describe() for k, val in res_find_gaps.items()})
-
-
-def get_mean_timestep(df):
-    return df.index.to_frame().diff().mean()[0]
 
 
 def add_scatter_and_gaps(

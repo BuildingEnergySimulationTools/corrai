@@ -139,3 +139,114 @@ def get_reversed_dict(dictionary, values=None):
         values = [values]
 
     return {val: key for key, val in dictionary.items() if val in values}
+
+
+def find_gaps(data, cols=None, timestep=None, return_combination=True):
+    """
+    Find gaps in time series data. Find individual columns gap and combined gap
+    for all columns.
+
+    Parameters:
+    -----------
+        data (pandas.DataFrame or pandas.Series): The time series data to check
+            for gaps.
+
+        cols (list, optional): The columns to check for gaps. Defaults to None,
+            in which case all columns are checked.
+
+        timestep (str or pandas.Timedelta, optional): The time step of the
+            data. Can be either a string representation of a time period
+            (e.g., '1H' for hourly data), or a pandas.Timedelta object.
+            Defaults to None, in which case the time step is automatically
+            determined using inferred_freq or using mean of timesteps if frequency
+             cannot be inferred.
+
+        return_combination (Bool, default True): wether or not to return a dict key
+        "combination" that aggregate gaps of each columns in the DataFrame.
+
+    Raises:
+    -------
+
+        ValueError: If cols or timestep are invalid.
+
+    Returns:
+    --------
+        dict: A dictionary containing the duration of the gaps for each
+        specified column, as well as the overall combination of columns.
+    """
+
+    check_datetime_index(data)
+    if isinstance(data, pd.Series):
+        data = as_1_column_dataframe(data)
+    cols = data.columns if cols is None else cols
+    timestep = get_mean_timestep(data) if timestep is None else timestep
+
+    # Aggregate in a single columns to know overall quality
+    df = data.copy()
+    df = ~df.isnull()
+    df["combination"] = df.all(axis=1)
+
+    # Index are added at the beginning and at the end to account for
+    # missing values and each side of the dataset
+    first_index = df.index[0] - (df.index[1] - df.index[0])
+    last_index = df.index[-1] - (df.index[-2] - df.index[-1])
+
+    df.loc[first_index] = np.ones(df.shape[1], dtype=bool)
+    df.loc[last_index] = np.ones(df.shape[1], dtype=bool)
+    df.sort_index(inplace=True)
+
+    # Compute gaps duration
+    res = {}
+    cols = list(cols) + ["combination"] if return_combination else list(cols)
+    for col in cols:
+        time_der = df[col].loc[df[col]].index.to_series().diff()
+        res[col] = time_der[time_der > timestep]
+
+    return res
+
+
+def get_biggest_group(data: pd.Series):
+    """
+    Returns the largest continuous group of non-NaN values from a pandas Series
+    with a datetime index.
+
+    Parameters:
+    -----------
+    data : pd.Series
+        A pandas Series with a datetime index. The Series may contain NaN values
+        representing gaps.
+
+    Returns:
+    --------
+    pd.Series
+        The largest continuous segment of the input Series that does not contain
+        NaN values.
+    """
+    check_datetime_index(data)
+    valid_mask = data.notna()
+    groups = (valid_mask != valid_mask.shift()).cumsum()
+    largest_group_id = data[valid_mask].groupby(groups).size().idxmax()
+    return data[groups == largest_group_id]
+
+
+def gaps_describe(df_in, cols=None, timestep=None):
+    res_find_gaps = find_gaps(df_in, cols, timestep)
+
+    return pd.DataFrame({k: val.describe() for k, val in res_find_gaps.items()})
+
+
+def get_mean_timestep(df):
+    freq = df.index.inferred_freq
+    if freq:
+        freq = pd.to_timedelta("1" + freq) if freq.isalpha() else pd.to_timedelta(freq)
+    else:
+        freq = df.index.to_frame().diff().mean()[0]
+
+    return freq
+
+
+def missing_values_dict(df):
+    return {
+        "Number_of_missing": df.count(),
+        "Percent_of_missing": (1 - df.count() / df.shape[0]) * 100,
+    }
