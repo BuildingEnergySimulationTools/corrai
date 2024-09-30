@@ -3,7 +3,7 @@ import typing
 from abc import ABC
 
 import pandas as pd
-from sklearn.base import BaseEstimator, ClusterMixin
+from sklearn.base import BaseEstimator, ClusterMixin, RegressorMixin
 from statsmodels.tsa.seasonal import STL
 from statsmodels.tsa.forecasting.stl import STLForecast
 from statsmodels.tsa.arima.model import ARIMA
@@ -172,3 +172,35 @@ class STLEDetector(STLBC, ClusterMixin):
         self.labels_ = (abs(res_df) > self.absolute_threshold).astype(int)
 
         return self.labels_
+
+
+class SkSTLForecast(STLBC, RegressorMixin):
+    def __init__(
+            self,
+            period: int | str | dt.timedelta,
+            trend: int | str | dt.timedelta,
+            ar_model,
+            seasonal: int | str | dt.timedelta = None,
+            stl_kwargs: dict[str, float] = None,
+            ar_kwargs: dict = None
+    ):
+        super().__init__(period, trend, seasonal, stl_kwargs)
+        self.ar_model = ar_model
+        self.stl_kwargs = {} if ar_kwargs is None else ar_kwargs
+        self.ar_kwargs = ar_kwargs
+        self.forecaster_ = {}
+
+    def fit(self, X, y=None):
+        self._pre_fit(X)
+
+        for feat in X:
+            self.forecaster_[feat] = STLForecast(
+                endog=X,
+                model=self.ar_model,
+                model_kwargs=self.ar_kwargs,
+                **self.stl_kwargs
+            ).fit()
+
+        self._is_fitted = True
+
+        return self
