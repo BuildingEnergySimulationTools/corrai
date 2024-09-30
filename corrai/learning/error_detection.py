@@ -1,8 +1,12 @@
 import datetime as dt
+import typing
+from abc import ABC
 
 import pandas as pd
 from sklearn.base import BaseEstimator, ClusterMixin
 from statsmodels.tsa.seasonal import STL
+from statsmodels.tsa.forecasting.stl import STLForecast
+from statsmodels.tsa.arima.model import ARIMA
 
 from corrai.base.utils import check_datetime_index, as_1_column_dataframe
 
@@ -23,7 +27,8 @@ def validate_odd_param(param_name, param_value):
         )
 
 
-def process_stl_odd_args(param_name, param_value, X, stl_kwargs):
+def process_stl_odd_args(param_name, X, stl_kwargs):
+    param_value = stl_kwargs[param_name]
     if isinstance(param_value, int):
         # Is odd already check at init in case of int
         stl_kwargs[param_name] = param_value
@@ -34,7 +39,40 @@ def process_stl_odd_args(param_name, param_value, X, stl_kwargs):
         stl_kwargs[param_name] = processed_value
 
 
-class STLEDetector(BaseEstimator, ClusterMixin):
+class STLBC(ABC, BaseEstimator):
+    def __init__(
+            self,
+            period: int | str | dt.timedelta,
+            trend: int | str | dt.timedelta,
+            seasonal: int | str | dt.timedelta = None,
+            stl_kwargs: dict[str, typing.Any] = None
+    ):
+        self.stl_kwargs = {} if stl_kwargs is None else stl_kwargs
+        self.stl_kwargs["period"] = period
+        validate_odd_param("trend", trend)
+        self.stl_kwargs["trend"] = trend
+        if seasonal is not None:
+            validate_odd_param("seasonal", seasonal)
+            self.stl_kwargs["seasonal"] = seasonal
+
+    def __sklearn_is_fitted__(self):
+        """
+        Check fitted status and return a Boolean value.
+        """
+        return hasattr(self, "_is_fitted") and self._is_fitted
+
+    def _pre_fit(self, X: pd.Series | pd.DataFrame):
+        check_datetime_index(X)
+        if isinstance(X, pd.Series):
+            X = as_1_column_dataframe(X)
+
+        self.stl_kwargs["period"] = timedelta_to_int(self.stl_kwargs["period"], X)
+        process_stl_odd_args("trend", X, self.stl_kwargs)
+        if "seasonal" in self.stl_kwargs.keys():
+            process_stl_odd_args("seasonal", X, self.stl_kwargs)
+
+
+class STLEDetector(STLBC, ClusterMixin):
     """
     A custom anomaly detection model based on statsmodel STL
     (Seasonal and Trend decomposition using Loess).
@@ -106,42 +144,22 @@ class STLEDetector(BaseEstimator, ClusterMixin):
     """
 
     def __init__(
-        self,
-        period: int | str | dt.timedelta,
-        trend: int | str | dt.timedelta,
-        absolute_threshold: int | float,
-        seasonal: int | str | dt.timedelta = None,
-        stl_kwargs: dict[str, float] = None,
+            self,
+            period: int | str | dt.timedelta,
+            trend: int | str | dt.timedelta,
+            absolute_threshold: int | float,
+            seasonal: int | str | dt.timedelta = None,
+            stl_kwargs: dict[str, float] = None,
     ):
-        self.period = period
-        self.trend = trend
+        super().__init__(period, trend, seasonal, stl_kwargs)
         self.absolute_threshold = absolute_threshold
-        self.seasonal = seasonal
-        validate_odd_param("seasonal", self.seasonal)
-        validate_odd_param("trend", self.trend)
-
-        self.stl_kwargs = stl_kwargs or {}
         self.labels_ = None
-        self.stl_res = {}
+        self.stl_res_ = {}
 
-    def __sklearn_is_fitted__(self):
-        """
-        Check fitted status and return a Boolean value.
-        """
-        return hasattr(self, "_is_fitted") and self._is_fitted
-
-    def fit(self, X: pd.Series | pd.DataFrame):
-        check_datetime_index(X)
-        if isinstance(X, pd.Series):
-            X = as_1_column_dataframe(X)
-
-        self.stl_kwargs["period"] = timedelta_to_int(self.period, X)
-        process_stl_odd_args("seasonal", self.seasonal, X, self.stl_kwargs)
-        process_stl_odd_args("trend", self.trend, X, self.stl_kwargs)
-
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        self._pre_fit(X)
         for feat in X.columns:
-            stl = STL(X[feat], **self.stl_kwargs)
-            self.stl_res[feat] = stl.fit()
+            self.stl_res_[feat] = STL(X[feat], **self.stl_kwargs).fit()
 
         self._is_fitted = True
 
@@ -149,7 +167,7 @@ class STLEDetector(BaseEstimator, ClusterMixin):
 
     def predict(self, X: pd.Series | pd.DataFrame):
         self.fit(X)
-        res_df = pd.concat([res.resid for res in self.stl_res.values()], axis=1)
+        res_df = pd.concat([res.resid for res in self.stl_res_.values()], axis=1)
         res_df.columns = X.columns
         self.labels_ = (abs(res_df) > self.absolute_threshold).astype(int)
 
