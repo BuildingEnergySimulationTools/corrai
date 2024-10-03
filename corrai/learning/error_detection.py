@@ -1,9 +1,12 @@
 import datetime as dt
 import typing
+import warnings
+
 from abc import ABC
 
 import pandas as pd
 from sklearn.base import BaseEstimator, ClusterMixin, RegressorMixin
+from sklearn.utils.validation import check_is_fitted
 from statsmodels.tsa.seasonal import STL
 from statsmodels.tsa.forecasting.stl import STLForecast
 from statsmodels.tsa.arima.model import ARIMA
@@ -17,7 +20,7 @@ def timedelta_to_int(td: int | str | dt.timedelta, df):
     else:
         if isinstance(td, str):
             td = pd.to_timedelta(td)
-        return int(td / df.index.freq)
+        return abs(int(td / df.index.freq))
 
 
 def validate_odd_param(param_name, param_value):
@@ -41,11 +44,11 @@ def process_stl_odd_args(param_name, X, stl_kwargs):
 
 class STLBC(ABC, BaseEstimator):
     def __init__(
-            self,
-            period: int | str | dt.timedelta,
-            trend: int | str | dt.timedelta,
-            seasonal: int | str | dt.timedelta = None,
-            stl_kwargs: dict[str, typing.Any] = None
+        self,
+        period: int | str | dt.timedelta,
+        trend: int | str | dt.timedelta,
+        seasonal: int | str | dt.timedelta = None,
+        stl_kwargs: dict[str, typing.Any] = None,
     ):
         self.stl_kwargs = {} if stl_kwargs is None else stl_kwargs
         self.stl_kwargs["period"] = period
@@ -54,12 +57,6 @@ class STLBC(ABC, BaseEstimator):
         if seasonal is not None:
             validate_odd_param("seasonal", seasonal)
             self.stl_kwargs["seasonal"] = seasonal
-
-    def __sklearn_is_fitted__(self):
-        """
-        Check fitted status and return a Boolean value.
-        """
-        return hasattr(self, "_is_fitted") and self._is_fitted
 
     def _pre_fit(self, X: pd.Series | pd.DataFrame):
         check_datetime_index(X)
@@ -144,12 +141,12 @@ class STLEDetector(STLBC, ClusterMixin):
     """
 
     def __init__(
-            self,
-            period: int | str | dt.timedelta,
-            trend: int | str | dt.timedelta,
-            absolute_threshold: int | float,
-            seasonal: int | str | dt.timedelta = None,
-            stl_kwargs: dict[str, float] = None,
+        self,
+        period: int | str | dt.timedelta,
+        trend: int | str | dt.timedelta,
+        absolute_threshold: int | float,
+        seasonal: int | str | dt.timedelta = None,
+        stl_kwargs: dict[str, float] = None,
     ):
         super().__init__(period, trend, seasonal, stl_kwargs)
         self.absolute_threshold = absolute_threshold
@@ -176,31 +173,84 @@ class STLEDetector(STLBC, ClusterMixin):
 
 class SkSTLForecast(STLBC, RegressorMixin):
     def __init__(
-            self,
-            period: int | str | dt.timedelta,
-            trend: int | str | dt.timedelta,
-            ar_model,
-            seasonal: int | str | dt.timedelta = None,
-            stl_kwargs: dict[str, float] = None,
-            ar_kwargs: dict = None
+        self,
+        period: int | str | dt.timedelta,
+        trend: int | str | dt.timedelta,
+        ar_model=None,
+        seasonal: int | str | dt.timedelta = None,
+        stl_kwargs: dict[str, float] = None,
+        ar_kwargs: dict = None,
+        backcast: bool = False,
     ):
         super().__init__(period, trend, seasonal, stl_kwargs)
-        self.ar_model = ar_model
-        self.stl_kwargs = {} if ar_kwargs is None else ar_kwargs
-        self.ar_kwargs = ar_kwargs
-        self.forecaster_ = {}
+        self.backcast = backcast
+        self.ar_model = ARIMA if ar_model is None else ar_model
+        self.ar_kwargs = {} if ar_kwargs is None else ar_kwargs
 
-    def fit(self, X, y=None):
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
         self._pre_fit(X)
+        self.training_freq_ = (
+            X.index.freq if X.index.freq is not None else X.index.inferred_freq
+        )
+        if self.backcast:
+            X = X[::-1]
+        self.train_dat_end_ = X.index[-1]
+        self.forecaster_ = {}
 
         for feat in X:
             self.forecaster_[feat] = STLForecast(
-                endog=X,
+                endog=X[feat].to_numpy(),
                 model=self.ar_model,
                 model_kwargs=self.ar_kwargs,
-                **self.stl_kwargs
+                **self.stl_kwargs,
             ).fit()
 
-        self._is_fitted = True
-
         return self
+
+    def predict(self, X: pd.Series | pd.DataFrame):
+        check_is_fitted(
+            self,
+            attributes=[
+                "forecaster_",
+                "train_dat_end_",
+                "training_freq_",
+            ],
+        )
+
+        if X.index.freq != self.training_freq_:
+            raise ValueError(
+                f"Required prediction freq {X.index.freq} "
+                f"differs from training_freq_ {self.training_freq_}"
+            )
+
+        if (self.backcast and X.index[-1] >= self.train_dat_end_) or (
+            not self.backcast and X.index[0] <= self.train_dat_end_
+        ):
+            direction = "future" if self.backcast else "past"
+            raise ValueError(
+                f"Cannot forecast on {direction} values or training data. "
+                f"{'Backcast' if self.backcast else 'Forecast'} can only happen "
+                f"{'before' if self.backcast else 'after'} {self.train_dat_end_}"
+            )
+
+        output_index = X.index[::-1] if self.backcast else X.index
+
+        if set(self.forecaster_.keys()) != set(X.columns):
+            warnings.warn(
+                "Columns in X differs from columns in the training DataSet. "
+                "Forecast will be performed for the trained data",
+                UserWarning,
+            )
+
+        casting_steps = int(
+            len(output_index)
+            + abs(output_index[0] - self.train_dat_end_) / self.training_freq_
+            - 1
+        )
+        steps_to_jump = casting_steps - len(output_index)
+        inferred_df = pd.DataFrame(index=output_index)
+        for feat in self.forecaster_.keys():
+            cast = self.forecaster_[feat].forecast(casting_steps)
+            inferred_df[feat] = cast[steps_to_jump:]
+
+        return inferred_df
