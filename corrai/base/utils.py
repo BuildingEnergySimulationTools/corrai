@@ -57,7 +57,7 @@ def check_datetime_index(X):
     """Check if X is an instance od DatFrame or Series and has a DatetimeIndex"""
     if not isinstance(X, (pd.Series, pd.DataFrame)):
         raise ValueError(
-            "A DataFrame or a Series was expected, got an instance of " f"{type(X)}"
+            f"A DataFrame or a Series was expected, got an instance of {type(X)}"
         )
     if not isinstance(X.index, pd.DatetimeIndex):
         raise ValueError("X do not have a DateTimeIndex")
