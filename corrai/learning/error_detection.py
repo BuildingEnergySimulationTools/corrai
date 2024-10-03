@@ -51,21 +51,22 @@ class STLBC(ABC, BaseEstimator):
         stl_kwargs: dict[str, typing.Any] = None,
     ):
         self.stl_kwargs = {} if stl_kwargs is None else stl_kwargs
-        self.stl_kwargs["period"] = period
+        self.period = period
         validate_odd_param("trend", trend)
-        self.stl_kwargs["trend"] = trend
-        if seasonal is not None:
-            validate_odd_param("seasonal", seasonal)
-            self.stl_kwargs["seasonal"] = seasonal
+        self.trend = trend
+        validate_odd_param("seasonal", seasonal)
+        self.seasonal = seasonal
 
     def _pre_fit(self, X: pd.Series | pd.DataFrame):
         check_datetime_index(X)
         if isinstance(X, pd.Series):
             X = as_1_column_dataframe(X)
 
-        self.stl_kwargs["period"] = timedelta_to_int(self.stl_kwargs["period"], X)
+        self.stl_kwargs["period"] = timedelta_to_int(self.period, X)
+        self.stl_kwargs["trend"] = self.trend
         process_stl_odd_args("trend", X, self.stl_kwargs)
-        if "seasonal" in self.stl_kwargs.keys():
+        if self.seasonal is not None:
+            self.stl_kwargs["seasonal"] = self.seasonal
             process_stl_odd_args("seasonal", X, self.stl_kwargs)
 
 
@@ -172,6 +173,57 @@ class STLEDetector(STLBC, ClusterMixin):
 
 
 class SkSTLForecast(STLBC, RegressorMixin):
+    """
+    A model designed for time series forecasting or backcasting
+    (predicting past values).
+    It applies seasonal-trend decomposition (STL) to the training data to capture both
+    trend and seasonal patterns. The model then uses ARIMA or a custom autoregressive
+    model to predict these components, as well as the overall observed variable.
+
+    Parameters
+    ----------
+    period : int, str, or datetime.timedelta
+        The period of the time series (e.g., daily, weekly, monthly, etc.).
+        Can be an integer, string, or timedelta.
+        This defines the seasonal periodicity for the STL decomposition.
+
+    trend : int, str, or datetime.timedelta
+        The length of the trend smoother. If an int is specified, it must be odd and
+        larger than season. Statsplot indicate it is usually around 150% of season.
+        Strongly depends on your time series.
+
+    ar_model : object, optional
+        Autoregressive model to be used after the STL decomposition.
+        If not provided, ARIMA will be used as the default model.
+
+    seasonal : int, str, or datetime.timedelta, optional
+        The seasonal component's smoothing parameter for STL. It defines how much
+        the seasonal component is smoothed. If given as an integer,
+        it must be an odd number. If None, a default value will be used.
+
+    stl_kwargs : dict[str, float], optional
+        Additional keyword arguments for the STL decomposition.
+        These allow fine-tuning of the decomposition process.
+        (https://www.statsmodels.org/stable/index.html)
+
+    ar_kwargs : dict, optional
+        Keyword arguments to be passed to the autoregressive model
+        (e.g., order for ARIMA).
+    backcast : bool, optional
+        If True, the model will be trained to backcast (predict the past), otherwise,
+        it will perform standard forward forecasting.
+
+    Attributes
+    ----------
+    forecaster_ : dict
+        Dictionary containing the fitted forecaster for each feature in the time series.
+    train_dat_end_ : pandas.Timestamp
+        Timestamp of the last data point used in training.
+    training_freq_ : pandas.tseries.offsets.BaseOffset
+        Frequency of the training data, either provided explicitly or inferred.
+
+    """
+
     def __init__(
         self,
         period: int | str | dt.timedelta,
@@ -253,4 +305,4 @@ class SkSTLForecast(STLBC, RegressorMixin):
             cast = self.forecaster_[feat].forecast(casting_steps)
             inferred_df[feat] = cast[steps_to_jump:]
 
-        return inferred_df
+        return inferred_df.sort_index()

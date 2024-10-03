@@ -69,28 +69,22 @@ class TestErrorDetection:
         )
 
         forecaster.fit(toy_df["2009-01-24":"2009-07-24"])
-        prediction = forecaster.predict(toy_df["2009-07-27":"2009-07-30"])
 
-        import matplotlib.pyplot as plt
+        reg_score = forecaster.score(
+            toy_df["2009-07-27":"2009-07-30"], toy_df["2009-07-27":"2009-07-30"]
+        )
+        assert reg_score > 0.99
 
-        plt.plot(prediction)
-        plt.plot(toy_df.loc["2009-07-20":"2009-07-27", :])
-        plt.show()
-
-        forecaster = SkSTLForecast(
+        backcaster = SkSTLForecast(
             period="24h",
             trend="15d",
             ar_kwargs=dict(order=(1, 1, 0), trend="t"),
             backcast=True,
         )
 
-        forecaster.fit(toy_df["2009-01-24":"2009-07-24"])
-        prediction = forecaster.predict(toy_df["2009-01-20":"2009-01-22"])
+        backcaster.fit(toy_df["2009-01-24":"2009-07-24"])
 
-        import matplotlib.pyplot as plt
-
-        plt.plot(prediction)
-        plt.plot(toy_df.loc["2009-01-22":"2009-01-30", :])
-        plt.show()
-
-        assert True
+        reg_score = backcaster.score(
+            toy_df["2009-01-20":"2009-01-22"], toy_df["2009-01-20":"2009-01-22"]
+        )
+        assert reg_score > 0.99
