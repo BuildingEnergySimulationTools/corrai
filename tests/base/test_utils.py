@@ -10,7 +10,9 @@ from corrai.base.utils import (
     float_to_hour,
     hour_to_float,
     get_reversed_dict,
-    get_biggest_group,
+    get_biggest_group_valid,
+    get_data_gaps,
+    get_outer_timestamps,
 )
 
 
@@ -101,6 +103,45 @@ class TestUtils:
         toy_serie.loc["2009-07-05"] = np.nan
         toy_serie.loc["2009-07-13":"2009-07-14"] = np.nan
 
-        res = get_biggest_group(toy_serie)
+        res = get_biggest_group_valid(toy_serie)
 
         pd.testing.assert_series_equal(res, toy_serie.loc[:"2009-07-04"])
+
+    def test_get_data_gaps(self):
+        toy_df = pd.DataFrame(
+            {"data_1": np.random.randn(24), "data_2": np.random.randn(24)},
+            index=pd.date_range("2009-01-01", freq="h", periods=24),
+        )
+
+        toy_df.loc["2009-01-01 01:00:00", "data_1"] = np.nan
+        toy_df.loc["2009-01-01 10:00:00":"2009-01-01 12:00:00", "data_1"] = np.nan
+        toy_df.loc["2009-01-01 15:00:00":"2009-01-01 23:00:00", "data_2"] = np.nan
+
+        res = get_data_gaps(toy_df)
+        assert len(res["combination"]) == 3
+        pd.testing.assert_index_equal(
+            res["data_1"][0], pd.DatetimeIndex(["2009-01-01 01:00:00"])
+        )
+        pd.testing.assert_index_equal(
+            res["data_2"][0], pd.date_range("2009-01-01 15:00:00", freq="h", periods=9)
+        )
+
+        res = get_data_gaps(toy_df, gap_threshold="2h")
+        assert len(res["data_1"]) == 1
+
+        res = get_data_gaps(toy_df, return_combination=False)
+        assert "combination" not in res.keys()
+
+        assert True
+
+    def test_outer_timestamps(self):
+        ref_index = pd.date_range("2009-01-01", freq="d", periods=5)
+        idx = pd.date_range("2009-01-02", freq="d", periods=2)
+        start, end = get_outer_timestamps(idx, ref_index)
+
+        assert start == pd.to_datetime("2009-01-01")
+        assert end == pd.to_datetime("2009-01-04")
+
+        start, end = get_outer_timestamps(ref_index, ref_index)
+        assert start == ref_index[0]
+        assert end == ref_index[-1]

@@ -13,7 +13,7 @@ from corrai.measure import (
     Transformer,
     AggMethod,
 )
-from corrai.base.utils import gaps_describe, missing_values_dict
+from corrai.base.utils import missing_values_dict
 
 RESOURCES_DIR = Path(__file__).parent / "resources"
 
@@ -206,71 +206,59 @@ class TestMeasuredDats:
             index=time_index_df,
         )
 
-        one_hour_dt = pd.to_timedelta("2h")
-        one_n_half = pd.to_timedelta("2h30min")
-        two_hour_dt = pd.to_timedelta("3h")
-        two_n_half = pd.to_timedelta("3h30min")
-        three_hour = pd.to_timedelta("4h")
-        spec_std = pd.to_timedelta("0 days 01:24:51.168824543")
-        nat = pd.NaT
-
-        ref = pd.DataFrame(
-            {
-                "dumb_column1": [
-                    1,
-                    one_hour_dt,
-                    nat,
-                    one_hour_dt,
-                    one_hour_dt,
-                    one_hour_dt,
-                    one_hour_dt,
-                    one_hour_dt,
-                ],
-                "dumb_column2": [
-                    1,
-                    one_hour_dt,
-                    nat,
-                    one_hour_dt,
-                    one_hour_dt,
-                    one_hour_dt,
-                    one_hour_dt,
-                    one_hour_dt,
-                ],
-                "dumb_column3": [
-                    1,
-                    two_hour_dt,
-                    nat,
-                    two_hour_dt,
-                    two_hour_dt,
-                    two_hour_dt,
-                    two_hour_dt,
-                    two_hour_dt,
-                ],
-                "dumb_column4": [
-                    1,
-                    one_hour_dt,
-                    nat,
-                    one_hour_dt,
-                    one_hour_dt,
-                    one_hour_dt,
-                    one_hour_dt,
-                    one_hour_dt,
-                ],
-                "combination": [
-                    2,
-                    two_hour_dt,
-                    spec_std,
-                    one_hour_dt,
-                    one_n_half,
-                    two_hour_dt,
-                    two_n_half,
-                    three_hour,
-                ],
+        md = MeasuredDats(df)
+        assert md.get_gaps_description().to_dict() == {
+            "dumb_column1": {
+                "count": 1,
+                "mean": pd.Timedelta("0 days 01:00:00"),
+                "std": pd.NaT,
+                "min": pd.Timedelta("0 days 01:00:00"),
+                "25%": pd.Timedelta("0 days 01:00:00"),
+                "50%": pd.Timedelta("0 days 01:00:00"),
+                "75%": pd.Timedelta("0 days 01:00:00"),
+                "max": pd.Timedelta("0 days 01:00:00"),
             },
-            index=["count", "mean", "std", "min", "25%", "50%", "75%", "max"],
-        )
-
-        assert ref.equals(gaps_describe(df))
+            "dumb_column2": {
+                "count": 1,
+                "mean": pd.Timedelta("0 days 01:00:00"),
+                "std": pd.NaT,
+                "min": pd.Timedelta("0 days 01:00:00"),
+                "25%": pd.Timedelta("0 days 01:00:00"),
+                "50%": pd.Timedelta("0 days 01:00:00"),
+                "75%": pd.Timedelta("0 days 01:00:00"),
+                "max": pd.Timedelta("0 days 01:00:00"),
+            },
+            "dumb_column3": {
+                "count": 1,
+                "mean": pd.Timedelta("0 days 02:00:00"),
+                "std": pd.NaT,
+                "min": pd.Timedelta("0 days 02:00:00"),
+                "25%": pd.Timedelta("0 days 02:00:00"),
+                "50%": pd.Timedelta("0 days 02:00:00"),
+                "75%": pd.Timedelta("0 days 02:00:00"),
+                "max": pd.Timedelta("0 days 02:00:00"),
+            },
+            "dumb_column4": {
+                "count": 1,
+                "mean": pd.Timedelta("0 days 01:00:00"),
+                "std": pd.NaT,
+                "min": pd.Timedelta("0 days 01:00:00"),
+                "25%": pd.Timedelta("0 days 01:00:00"),
+                "50%": pd.Timedelta("0 days 01:00:00"),
+                "75%": pd.Timedelta("0 days 01:00:00"),
+                "max": pd.Timedelta("0 days 01:00:00"),
+            },
+            "combination": {
+                "count": 2,
+                "mean": pd.Timedelta("0 days 02:00:00"),
+                "std": pd.Timedelta("0 days 01:24:51.168824543"),
+                "min": pd.Timedelta("0 days 01:00:00"),
+                "25%": pd.Timedelta("0 days 01:30:00"),
+                "50%": pd.Timedelta("0 days 02:00:00"),
+                "75%": pd.Timedelta("0 days 02:30:00"),
+                "max": pd.Timedelta("0 days 03:00:00"),
+            },
+        }
 
     def test_get_reversed_data_type_dict(self, my_measure):
         to_test = my_measure._get_reversed_category_dict(
@@ -346,11 +334,12 @@ class TestMeasuredDats:
 
     def test_plot_gap(self, my_measure):
         my_measure.plot_gaps(
-            gaps_timestep=dt.timedelta(hours=1), transformers_list=["ANOMALIES"]
+            transformers_list=["ANOMALIES"],
         )
+
         my_measure.plot_gaps(
             category="col_1",
-            gaps_timestep=dt.timedelta(hours=1),
+            gap_threshold="1h",
             transformers_list=["ANOMALIES"],
         )
 

@@ -14,10 +14,10 @@ from corrai.base.math import time_integrate
 from corrai.transformers import PdIdentity
 from corrai.base.utils import (
     check_datetime_index,
-    find_gaps,
-    gaps_describe,
-    get_mean_timestep,
+    get_data_gaps,
+    get_outer_timestamps,
     missing_values_dict,
+    get_freq_delta_or_mean_time_interval,
 )
 
 
@@ -116,22 +116,27 @@ def select_data(df, cols=None, begin=None, end=None):
 
 
 def add_scatter_and_gaps(
-    figure, series, gap_series, color_rgb, alpha, y_min, y_max, yaxis
+    figure, series, gap_threshold, color_rgb, alpha, y_min, y_max, yaxis
 ):
     figure.add_trace(
         go.Scattergl(
             x=series.index,
-            y=series.to_numpy().flatten(),
+            y=series.to_numpy(),
             mode="lines+markers",
             name=series.name,
             yaxis=yaxis,
         )
     )
 
-    for t_idx, gap in gap_series.items():
+    gaps_index_list = get_data_gaps(
+        data=series, gap_threshold=gap_threshold, return_combination=False
+    )
+
+    for idx in gaps_index_list[series.name]:
+        gap_start, gap_end = get_outer_timestamps(idx, series.index)
         figure.add_trace(
             go.Scattergl(
-                x=[t_idx - gap, t_idx - gap, t_idx, t_idx],
+                x=[gap_start, gap_start, gap_end, gap_end],
                 y=[y_min, y_max, y_max, y_min],
                 mode="none",
                 fill="toself",
@@ -355,7 +360,8 @@ class MeasuredDats:
         cols: str | list[str] = None,
         transformers_list: list[str] = None,
         resampling_rule: str | dt.timedelta = False,
-        gaps_timedelta: dt.timedelta = None,
+        gap_threshold: str | dt.timedelta = None,
+        return_combination: bool = True,
     ):
         """
         Returns statistics on gaps duration for specified columns for the
@@ -363,10 +369,25 @@ class MeasuredDats:
         gaps statistics
         """
 
-        if gaps_timedelta is None:
-            gaps_timedelta = get_mean_timestep(self.data)
         data = self.get_corrected_data(transformers_list, resampling_rule)
-        return gaps_describe(df_in=data, cols=cols, timestep=gaps_timedelta)
+        res = get_data_gaps(data, cols, gap_threshold, return_combination)
+        dt = get_freq_delta_or_mean_time_interval(data)
+        ext_index = data.index.copy()
+        ext_index = ext_index.union([ext_index[0] - dt])
+        ext_index = ext_index.union([ext_index[-1] + dt])
+        series_list = []
+        for col, idx_list in res.items():
+            series_list.append(
+                pd.Series(
+                    [
+                        get_outer_timestamps(idx, ext_index)[1] - idx[0]
+                        for idx in idx_list
+                    ],
+                    name=col,
+                ).describe()
+            )
+
+        return pd.concat(series_list, axis=1)
 
     def get_pipeline(
         self,
@@ -574,7 +595,7 @@ class MeasuredDats:
         category: str = None,
         begin: str | dt.datetime = None,
         end: str | dt.datetime = None,
-        gaps_timestep: dt.timedelta = None,
+        gap_threshold: str | dt.timedelta = None,
         title: str = "Gaps plot",
         plot_raw: bool = False,
         color_rgb: set[int, int, int] = (100, 100, 100),
@@ -621,10 +642,6 @@ class MeasuredDats:
         """
         cols = self._select_columns(cols, category)
 
-        gaps_timestep = (
-            dt.timedelta(hours=5) if gaps_timestep is None else gaps_timestep
-        )
-
         if plot_raw:
             to_plot = select_data(self.data, cols, begin, end)
         else:
@@ -654,9 +671,7 @@ class MeasuredDats:
             add_scatter_and_gaps(
                 figure=fig,
                 series=to_plot[col],
-                gap_series=find_gaps(data=to_plot, cols=[col], timestep=gaps_timestep)[
-                    col
-                ],
+                gap_threshold=gap_threshold,
                 color_rgb=color_rgb,
                 alpha=alpha,
                 y_min=y_min,

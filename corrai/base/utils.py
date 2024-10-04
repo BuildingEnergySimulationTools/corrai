@@ -80,7 +80,6 @@ def apply_transformation(x, function):
     elif isinstance(x, pd.Series):
         return x.apply(function)
     elif isinstance(x, pd.DataFrame):
-        # applymap will be deprecated in future version
         return x.map(function)
 
     return function(x)
@@ -141,71 +140,98 @@ def get_reversed_dict(dictionary, values=None):
     return {val: key for key, val in dictionary.items() if val in values}
 
 
-def find_gaps(data, cols=None, timestep=None, return_combination=True):
+def get_data_gaps(
+    data: pd.Series | pd.DataFrame,
+    cols: str | list[str] = None,
+    gap_threshold: str | dt.timedelta = None,
+    return_combination=True,
+):
     """
-    Find gaps in time series data. Find individual columns gap and combined gap
-    for all columns.
+    Identifies gaps (consecutive NaN values) in the provided time series (pandas Series
+    and DataFrames) data and returns them as groups of consecutive missing data
+    points (NaNs).
+    A gap threshold can be specified to filter gaps by their sizes.
 
-    Parameters:
-    -----------
-        data (pandas.DataFrame or pandas.Series): The time series data to check
-            for gaps.
+    Parameters
+    ----------
+    data : pd.Series or pd.DataFrame
+        The input time series data with a DateTime index. NaN values are
+        considered gaps.
+    cols : str or list[str], optional
+        The columns in the DataFrame for which to detect gaps. If None (default), all
+        columns are considered.
+    gap_threshold : str or timedelta, optional
+        The minimum duration of a gap for it to be considered valid.
+        Can be passed as a string (e.g., '1d' for one day) or a `timedelta`.
+        If None, no threshold is applied, NaN values are considered gaps.
+    return_combination : bool, optional
+        If True (default), a combination column is created that checks for NaNs
+        across all columns in the DataFrame. Gaps in this combination column represent
+        rows where NaNs are present in any of the columns.
 
-        cols (list, optional): The columns to check for gaps. Defaults to None,
-            in which case all columns are checked.
-
-        timestep (str or pandas.Timedelta, optional): The time step of the
-            data. Can be either a string representation of a time period
-            (e.g., '1H' for hourly data), or a pandas.Timedelta object.
-            Defaults to None, in which case the time step is automatically
-            determined using inferred_freq or using mean of timesteps if frequency
-             cannot be inferred.
-
-        return_combination (Bool, default True): wether or not to return a dict key
-        "combination" that aggregate gaps of each columns in the DataFrame.
-
-    Raises:
+    Returns
     -------
+    dict[str, list[pd.DatetimeIndex]]
+        A dictionary where the keys are the column names (or "combination" if
+        `return_combination` is True) and the values are lists of `DatetimeIndex`
+        objects.
+        Each `DatetimeIndex` represents a group of one or several consecutive
+        timestamps where the values in the corresponding column were NaN and
+        exceeded the gap threshold.
 
-        ValueError: If cols or timestep are invalid.
-
-    Returns:
-    --------
-        dict: A dictionary containing the duration of the gaps for each
-        specified column, as well as the overall combination of columns.
     """
 
     check_datetime_index(data)
     if isinstance(data, pd.Series):
         data = as_1_column_dataframe(data)
-    cols = data.columns if cols is None else cols
-    timestep = get_mean_timestep(data) if timestep is None else timestep
 
-    # Aggregate in a single columns to know overall quality
-    df = data.copy()
-    df = ~df.isnull()
-    df["combination"] = df.all(axis=1)
+    if isinstance(cols, str):
+        cols = [cols]
+    elif cols is None:
+        cols = list(data.columns)
 
-    # Index are added at the beginning and at the end to account for
-    # missing values and each side of the dataset
-    first_index = df.index[0] - (df.index[1] - df.index[0])
-    last_index = df.index[-1] - (df.index[-2] - df.index[-1])
+    if isinstance(gap_threshold, str):
+        gap_threshold = pd.to_timedelta(gap_threshold)
+    elif gap_threshold is None:
+        gap_threshold = pd.to_timedelta(0)
 
-    df.loc[first_index] = np.ones(df.shape[1], dtype=bool)
-    df.loc[last_index] = np.ones(df.shape[1], dtype=bool)
-    df.sort_index(inplace=True)
+    df = data.isnull()
+    if return_combination:
+        df["combination"] = df.any(axis=1)
+        cols += ["combination"]
 
-    # Compute gaps duration
-    res = {}
-    cols = list(cols) + ["combination"] if return_combination else list(cols)
+    def is_valid_gap(group):
+        new_gap = pd.DatetimeIndex(group)
+        return (new_gap.max() - new_gap.min()) >= gap_threshold
+
+    def finalize_gap(current_group):
+        new_gap_index = pd.DatetimeIndex(current_group)
+        new_gap_index.freq = new_gap_index.inferred_freq
+        return new_gap_index
+
+    gap_dict = {}
     for col in cols:
-        time_der = df[col].loc[df[col]].index.to_series().diff()
-        res[col] = time_der[time_der > timestep]
+        nan_groups = []
+        current_group = []
 
-    return res
+        for timestamp in df.index:
+            if df.loc[timestamp, col]:
+                current_group.append(timestamp)
+            else:
+                if current_group and is_valid_gap(current_group):
+                    nan_groups.append(finalize_gap(current_group))
+                current_group = []
+
+        # Append the last group if it exists and is valid
+        if current_group and is_valid_gap(current_group):
+            nan_groups.append(finalize_gap(current_group))
+
+        gap_dict[col] = nan_groups
+
+    return gap_dict
 
 
-def get_biggest_group(data: pd.Series):
+def get_biggest_group_valid(data: pd.Series):
     """
     Returns the largest continuous group of non-NaN values from a pandas Series
     with a datetime index.
@@ -229,13 +255,8 @@ def get_biggest_group(data: pd.Series):
     return data[groups == largest_group_id]
 
 
-def gaps_describe(df_in, cols=None, timestep=None):
-    res_find_gaps = find_gaps(df_in, cols, timestep)
-
-    return pd.DataFrame({k: val.describe() for k, val in res_find_gaps.items()})
-
-
-def get_mean_timestep(df):
+def get_freq_delta_or_mean_time_interval(df: pd.Series | pd.DataFrame):
+    check_datetime_index(df)
     freq = df.index.inferred_freq
     if freq:
         freq = pd.to_timedelta("1" + freq) if freq.isalpha() else pd.to_timedelta(freq)
@@ -250,3 +271,17 @@ def missing_values_dict(df):
         "Number_of_missing": df.count(),
         "Percent_of_missing": (1 - df.count() / df.shape[0]) * 100,
     }
+
+
+def get_outer_timestamps(idx: pd.DatetimeIndex, ref_index: pd.DatetimeIndex):
+    try:
+        out_start = ref_index[ref_index < idx[0]][-1]
+    except IndexError:
+        out_start = ref_index[0]
+
+    try:
+        out_end = ref_index[ref_index > idx[-1]][0]
+    except IndexError:
+        out_end = ref_index[-1]
+
+    return out_start, out_end
