@@ -14,10 +14,10 @@ from corrai.base.math import time_integrate
 from corrai.transformers import PdIdentity
 from corrai.base.utils import (
     check_datetime_index,
-    get_data_gaps,
+    get_data_groups,
     get_outer_timestamps,
     missing_values_dict,
-    get_freq_delta_or_mean_time_interval,
+    get_freq_delta_or_min_time_interval,
 )
 
 
@@ -128,8 +128,8 @@ def add_scatter_and_gaps(
         )
     )
 
-    gaps_index_list = get_data_gaps(
-        data=series, gap_threshold=gap_threshold, return_combination=False
+    gaps_index_list = get_data_groups(
+        data=series, lower_dt_threshold=gap_threshold, return_combination=False
     )
 
     for idx in gaps_index_list[series.name]:
@@ -370,8 +370,8 @@ class MeasuredDats:
         """
 
         data = self.get_corrected_data(transformers_list, resampling_rule)
-        res = get_data_gaps(data, cols, gap_threshold, return_combination)
-        dt = get_freq_delta_or_mean_time_interval(data)
+        res = get_data_groups(data, cols, gap_threshold, return_combination)
+        dt = get_freq_delta_or_min_time_interval(data)
         ext_index = data.index.copy()
         ext_index = ext_index.union([ext_index[0] - dt])
         ext_index = ext_index.union([ext_index[-1] + dt])

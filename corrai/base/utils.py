@@ -140,28 +140,40 @@ def get_reversed_dict(dictionary, values=None):
     return {val: key for key, val in dictionary.items() if val in values}
 
 
-def get_data_gaps(
+def get_data_groups(
     data: pd.Series | pd.DataFrame,
+    is_null: bool = False,
     cols: str | list[str] = None,
-    gap_threshold: str | dt.timedelta = None,
+    lower_dt_threshold: str | dt.timedelta = None,
+    higher_dt_threshold: str | dt.timedelta = None,
     return_combination=True,
 ):
     """
-    Identifies gaps (consecutive NaN values) in the provided time series (pandas Series
-    and DataFrames) data and returns them as groups of consecutive missing data
-    points (NaNs).
-    A gap threshold can be specified to filter gaps by their sizes.
+    Identifies groups of valid data if is_null = False, or groups of nan if
+    is_null = True (gaps in measurements).
+    Returns them in a dictionary as list of DateTimeIndex. The keys values are
+    data columns (or name if data is a Series).
+    The groups can be filtered using lower_dt_threshold or higher_dt_threshold.
+    The argument return indicates if an additional key must be set to the dictionary
+    to account for all data presence.
 
     Parameters
     ----------
     data : pd.Series or pd.DataFrame
         The input time series data with a DateTime index. NaN values are
         considered gaps.
+    is_null : Bool, default False
+        Whether to return groups with valid data, or groups of Nan values
+        (is_null = True)
     cols : str or list[str], optional
         The columns in the DataFrame for which to detect gaps. If None (default), all
         columns are considered.
-    gap_threshold : str or timedelta, optional
-        The minimum duration of a gap for it to be considered valid.
+    lower_dt_threshold : str or timedelta, optional
+        The minimum duration of a period for it to be considered valid.
+        Can be passed as a string (e.g., '1d' for one day) or a `timedelta`.
+        If None, no threshold is applied, NaN values are considered gaps.
+    higher_dt_threshold : str or timedelta, optional
+        The maximum duration of a period for it to be considered valid.
         Can be passed as a string (e.g., '1d' for one day) or a `timedelta`.
         If None, no threshold is applied, NaN values are considered gaps.
     return_combination : bool, optional
@@ -190,21 +202,36 @@ def get_data_gaps(
     elif cols is None:
         cols = list(data.columns)
 
-    if isinstance(gap_threshold, str):
-        gap_threshold = pd.to_timedelta(gap_threshold)
-    elif gap_threshold is None:
-        gap_threshold = pd.to_timedelta(0)
+    if isinstance(lower_dt_threshold, str):
+        lower_dt_threshold = pd.to_timedelta(lower_dt_threshold)
+    elif lower_dt_threshold is None:
+        lower_dt_threshold = pd.to_timedelta(0)
 
-    df = data.isnull()
+    if isinstance(higher_dt_threshold, str):
+        higher_dt_threshold = pd.to_timedelta(higher_dt_threshold)
+    elif higher_dt_threshold is None:
+        higher_dt_threshold = pd.Timedelta.max
+
+
+    freq = get_freq_delta_or_min_time_interval(data)
+    # If data index has no frequency, a frequency based on minimum
+    # timedelta is set.
+    df = data.asfreq(freq)
+
+    df = df.isnull() if is_null else ~df.isnull()
+
     if return_combination:
         df["combination"] = df.any(axis=1)
         cols += ["combination"]
 
-    def is_valid_gap(group):
+    def is_valid_gap(group, lgt, hgt):
         new_gap = pd.DatetimeIndex(group)
-        return (new_gap.max() - new_gap.min()) >= gap_threshold
+        return lgt <= new_gap.max() - new_gap.min() + freq <= hgt
 
     def finalize_gap(current_group):
+        # For indexes where frequency has been imposed,
+        # Get back to the original data index
+        current_group = [ts for ts in current_group if ts in data.index]
         new_gap_index = pd.DatetimeIndex(current_group)
         new_gap_index.freq = new_gap_index.inferred_freq
         return new_gap_index
@@ -218,12 +245,16 @@ def get_data_gaps(
             if df.loc[timestamp, col]:
                 current_group.append(timestamp)
             else:
-                if current_group and is_valid_gap(current_group):
+                if current_group and is_valid_gap(
+                    current_group, lower_dt_threshold, higher_dt_threshold
+                ):
                     nan_groups.append(finalize_gap(current_group))
                 current_group = []
 
         # Append the last group if it exists and is valid
-        if current_group and is_valid_gap(current_group):
+        if current_group and is_valid_gap(
+            current_group, lower_dt_threshold, higher_dt_threshold
+        ):
             nan_groups.append(finalize_gap(current_group))
 
         gap_dict[col] = nan_groups
@@ -255,13 +286,13 @@ def get_biggest_group_valid(data: pd.Series):
     return data[groups == largest_group_id]
 
 
-def get_freq_delta_or_mean_time_interval(df: pd.Series | pd.DataFrame):
+def get_freq_delta_or_min_time_interval(df: pd.Series | pd.DataFrame):
     check_datetime_index(df)
     freq = df.index.inferred_freq
     if freq:
         freq = pd.to_timedelta("1" + freq) if freq.isalpha() else pd.to_timedelta(freq)
     else:
-        freq = df.index.to_frame().diff().mean()[0]
+        freq = df.index.to_frame().diff().min()[0]
 
     return freq
 
