@@ -140,7 +140,7 @@ def get_reversed_dict(dictionary, values=None):
     return {val: key for key, val in dictionary.items() if val in values}
 
 
-def get_data_groups(
+def get_data_blocks(
     data: pd.Series | pd.DataFrame,
     is_null: bool = False,
     cols: str | list[str] = None,
@@ -224,42 +224,42 @@ def get_data_groups(
         df["combination"] = df.any(axis=1)
         cols += ["combination"]
 
-    def is_valid_gap(group, lgt, hgt):
-        new_gap = pd.DatetimeIndex(group)
-        return lgt <= new_gap.max() - new_gap.min() + freq <= hgt
+    def is_valid_block(group, lgt, hgt):
+        new_block = pd.DatetimeIndex(group)
+        return lgt <= new_block.max() - new_block.min() + freq <= hgt
 
-    def finalize_gap(current_group):
+    def finalize_block(current_group):
         # For indexes where frequency has been imposed,
         # Get back to the original data index
         current_group = [ts for ts in current_group if ts in data.index]
-        new_gap_index = pd.DatetimeIndex(current_group)
-        new_gap_index.freq = new_gap_index.inferred_freq
-        return new_gap_index
+        new_block_index = pd.DatetimeIndex(current_group)
+        new_block_index.freq = new_block_index.inferred_freq
+        return new_block_index
 
-    gap_dict = {}
+    block_dict = {}
     for col in cols:
-        nan_groups = []
+        groups = []
         current_group = []
 
         for timestamp in df.index:
             if df.loc[timestamp, col]:
                 current_group.append(timestamp)
             else:
-                if current_group and is_valid_gap(
+                if current_group and is_valid_block(
                     current_group, lower_dt_threshold, higher_dt_threshold
                 ):
-                    nan_groups.append(finalize_gap(current_group))
+                    groups.append(finalize_block(current_group))
                 current_group = []
 
         # Append the last group if it exists and is valid
-        if current_group and is_valid_gap(
+        if current_group and is_valid_block(
             current_group, lower_dt_threshold, higher_dt_threshold
         ):
-            nan_groups.append(finalize_gap(current_group))
+            groups.append(finalize_block(current_group))
 
-        gap_dict[col] = nan_groups
+        block_dict[col] = groups
 
-    return gap_dict
+    return block_dict
 
 
 def get_biggest_group_valid(data: pd.Series):

@@ -11,7 +11,7 @@ from corrai.base.utils import (
     hour_to_float,
     get_reversed_dict,
     get_biggest_group_valid,
-    get_data_groups,
+    get_data_blocks,
     get_outer_timestamps,
 )
 
@@ -107,7 +107,7 @@ class TestUtils:
 
         pd.testing.assert_series_equal(res, toy_serie.loc[:"2009-07-04"])
 
-    def test_get_data_groups(self):
+    def test_get_data_blocks(self):
         toy_df = pd.DataFrame(
             {"data_1": np.random.randn(24), "data_2": np.random.randn(24)},
             index=pd.date_range("2009-01-01", freq="h", periods=24),
@@ -117,7 +117,7 @@ class TestUtils:
         toy_df.loc["2009-01-01 10:00:00":"2009-01-01 12:00:00", "data_1"] = np.nan
         toy_df.loc["2009-01-01 15:00:00":"2009-01-01 23:00:00", "data_2"] = np.nan
 
-        res = get_data_groups(
+        res = get_data_blocks(
             toy_df,
             is_null=False,
             lower_dt_threshold="1h30min",
@@ -125,7 +125,7 @@ class TestUtils:
         )
         assert len(res["data_1"]) == 1
 
-        res = get_data_groups(toy_df, is_null=True)
+        res = get_data_blocks(toy_df, is_null=True)
         assert len(res["combination"]) == 3
         pd.testing.assert_index_equal(
             res["data_1"][0], pd.DatetimeIndex(["2009-01-01 01:00:00"])
@@ -134,10 +134,10 @@ class TestUtils:
             res["data_2"][0], pd.date_range("2009-01-01 15:00:00", freq="h", periods=9)
         )
 
-        res = get_data_groups(toy_df, is_null=True, lower_dt_threshold="1h30min")
+        res = get_data_blocks(toy_df, is_null=True, lower_dt_threshold="1h30min")
         assert len(res["data_1"]) == 1
 
-        res = get_data_groups(toy_df, return_combination=False)
+        res = get_data_blocks(toy_df, return_combination=False)
         assert "combination" not in res.keys()
 
         # Remove timestamps to get indexes wtihout frequency
@@ -148,7 +148,7 @@ class TestUtils:
         )
 
         # The gap from 01:00:00 to 04:00:00 shall be identified.
-        res = get_data_groups(toy_df, is_null=True, lower_dt_threshold="3h")
+        res = get_data_blocks(toy_df, is_null=True, lower_dt_threshold="3h")
         assert len(res["data_1"]) == 2
 
     def test_outer_timestamps(self):
