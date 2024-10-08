@@ -261,30 +261,6 @@ def get_data_blocks(
     return block_dict
 
 
-def get_biggest_group_valid(data: pd.Series):
-    """
-    Returns the largest continuous group of non-NaN values from a pandas Series
-    with a datetime index.
-
-    Parameters:
-    -----------
-    data : pd.Series
-        A pandas Series with a datetime index. The Series may contain NaN values
-        representing gaps.
-
-    Returns:
-    --------
-    pd.Series
-        The largest continuous segment of the input Series that does not contain
-        NaN values.
-    """
-    check_datetime_index(data)
-    valid_mask = data.notna()
-    groups = (valid_mask != valid_mask.shift()).cumsum()
-    largest_group_id = data[valid_mask].groupby(groups).size().idxmax()
-    return data[groups == largest_group_id]
-
-
 def get_freq_delta_or_min_time_interval(df: pd.Series | pd.DataFrame):
     check_datetime_index(df)
     freq = df.index.inferred_freq

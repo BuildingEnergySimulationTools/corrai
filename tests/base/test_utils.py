@@ -95,18 +95,6 @@ class TestUtils:
         assert get_reversed_dict(dictionary, 2) == {2: "a"}
         assert get_reversed_dict(dictionary, [2, 3]) == {2: "a", 3: "b"}
 
-    def test_get_biggest_group(self):
-        toy_serie = pd.Series(
-            np.random.randn(365), pd.date_range("2009", freq="d", periods=365)
-        )
-
-        toy_serie.loc["2009-07-05"] = np.nan
-        toy_serie.loc["2009-07-13":"2009-07-14"] = np.nan
-
-        res = get_biggest_group_valid(toy_serie)
-
-        pd.testing.assert_series_equal(res, toy_serie.loc[:"2009-07-04"])
-
     def test_get_data_blocks(self):
         toy_df = pd.DataFrame(
             {"data_1": np.random.randn(24), "data_2": np.random.randn(24)},
