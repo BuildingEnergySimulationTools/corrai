@@ -145,7 +145,7 @@ def get_data_blocks(
     is_null: bool = False,
     cols: str | list[str] = None,
     lower_dt_threshold: str | dt.timedelta = None,
-    higher_dt_threshold: str | dt.timedelta = None,
+    upper_dt_threshold: str | dt.timedelta = None,
     return_combination=True,
 ):
     """
@@ -172,7 +172,7 @@ def get_data_blocks(
         The minimum duration of a period for it to be considered valid.
         Can be passed as a string (e.g., '1d' for one day) or a `timedelta`.
         If None, no threshold is applied, NaN values are considered gaps.
-    higher_dt_threshold : str or timedelta, optional
+    upper_dt_threshold : str or timedelta, optional
         The maximum duration of a period for it to be considered valid.
         Can be passed as a string (e.g., '1d' for one day) or a `timedelta`.
         If None, no threshold is applied, NaN values are considered gaps.
@@ -207,11 +207,10 @@ def get_data_blocks(
     elif lower_dt_threshold is None:
         lower_dt_threshold = pd.to_timedelta(0)
 
-    if isinstance(higher_dt_threshold, str):
-        higher_dt_threshold = pd.to_timedelta(higher_dt_threshold)
-    elif higher_dt_threshold is None:
-        higher_dt_threshold = pd.Timedelta.max
-
+    if isinstance(upper_dt_threshold, str):
+        upper_dt_threshold = pd.to_timedelta(upper_dt_threshold)
+    elif upper_dt_threshold is None:
+        upper_dt_threshold = pd.Timedelta.max
 
     freq = get_freq_delta_or_min_time_interval(data)
     # If data index has no frequency, a frequency based on minimum
@@ -246,14 +245,14 @@ def get_data_blocks(
                 current_group.append(timestamp)
             else:
                 if current_group and is_valid_block(
-                    current_group, lower_dt_threshold, higher_dt_threshold
+                    current_group, lower_dt_threshold, upper_dt_threshold
                 ):
                     groups.append(finalize_block(current_group))
                 current_group = []
 
         # Append the last group if it exists and is valid
         if current_group and is_valid_block(
-            current_group, lower_dt_threshold, higher_dt_threshold
+            current_group, lower_dt_threshold, upper_dt_threshold
         ):
             groups.append(finalize_block(current_group))
 

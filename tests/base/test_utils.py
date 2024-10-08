@@ -121,7 +121,7 @@ class TestUtils:
             toy_df,
             is_null=False,
             lower_dt_threshold="1h30min",
-            higher_dt_threshold="8h",
+            upper_dt_threshold="8h",
         )
         assert len(res["data_1"]) == 1
 
