@@ -360,7 +360,8 @@ class MeasuredDats:
         cols: str | list[str] = None,
         transformers_list: list[str] = None,
         resampling_rule: str | dt.timedelta = False,
-        gap_threshold: str | dt.timedelta = None,
+        lower_td_threshold: str | dt.timedelta = None,
+        upper_td_threshold: str | dt.timedelta = None,
         return_combination: bool = True,
     ):
         """
@@ -370,7 +371,14 @@ class MeasuredDats:
         """
 
         data = self.get_corrected_data(transformers_list, resampling_rule)
-        res = get_data_blocks(data, cols, gap_threshold, return_combination)
+        res = get_data_blocks(
+            data=data,
+            is_null=True,
+            cols=cols,
+            lower_dt_threshold=lower_td_threshold,
+            upper_dt_threshold=upper_td_threshold,
+            return_combination=return_combination,
+        )
         dt = get_freq_delta_or_min_time_interval(data)
         ext_index = data.index.copy()
         ext_index = ext_index.union([ext_index[0] - dt])

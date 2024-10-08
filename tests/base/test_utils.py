@@ -10,7 +10,6 @@ from corrai.base.utils import (
     float_to_hour,
     hour_to_float,
     get_reversed_dict,
-    get_biggest_group_valid,
     get_data_blocks,
     get_outer_timestamps,
 )

@@ -46,7 +46,11 @@ class TestLearning:
             decimal=3,
         )
 
-        clustered = pipe.predict(pd.Series([4400, 0, 156]).to_frame())
+        clustered = pipe.predict(
+            pd.Series(
+                [4400, 0, 156], index=pd.date_range("2009", freq="h", periods=3)
+            ).to_frame()
+        )
 
         np.testing.assert_array_almost_equal(clustered, np.array([1, 0, -1]))
 
@@ -66,7 +70,11 @@ class TestLearning:
 
     def test_plot_kde_set_point(self):
         # Generate test data
-        x = pd.Series(np.random.randn(100), name="x")
+        x = pd.Series(
+            np.random.randn(100),
+            name="x",
+            index=pd.date_range("2009", freq="h", periods=100),
+        )
 
         estimator = KdeSetPointIdentificator()
         estimator.fit(x.to_frame())

@@ -32,7 +32,9 @@ RESOURCES_PATH = Path(__file__).parent / "resources"
 
 class TestCustomTransformers:
     def test_pd_identity(self):
-        df = pd.DataFrame({"a": [1.0]})
+        df = pd.DataFrame(
+            {"a": [1.0]}, index=pd.date_range("2009", freq="h", periods=1)
+        )
 
         identity = PdIdentity()
         res = identity.fit_transform(df)
@@ -57,9 +59,15 @@ class TestCustomTransformers:
         pd.testing.assert_frame_equal(res_dup, res)
 
     def test_pd_dropna(self):
-        df = pd.DataFrame({"a": [1.0, 2.0, np.nan], "b": [3.0, 4.0, 5.0]})
+        df = pd.DataFrame(
+            {"a": [1.0, 2.0, np.nan], "b": [3.0, 4.0, 5.0]},
+            index=pd.date_range("2009", freq="h", periods=3),
+        )
 
-        ref = pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]})
+        ref = pd.DataFrame(
+            {"a": [1.0, 2.0], "b": [3.0, 4.0]},
+            index=pd.date_range("2009", freq="h", periods=2),
+        )
 
         dropper = PdDropna(how="any")
 
@@ -69,7 +77,10 @@ class TestCustomTransformers:
         pd.testing.assert_frame_equal(dropper.transform(df), ref)
 
     def test_pd_rename_columns(self):
-        df = pd.DataFrame({"a": [1.0, 2.0, np.nan], "b": [3.0, 4.0, 5.0]})
+        df = pd.DataFrame(
+            {"a": [1.0, 2.0, np.nan], "b": [3.0, 4.0, 5.0]},
+            index=pd.date_range("2009", freq="h", periods=3),
+        )
 
         new_cols = ["c", "d"]
 
@@ -77,7 +88,7 @@ class TestCustomTransformers:
 
         renamer.fit(df)
         assert list(df.columns) == list(renamer.get_feature_names_out())
-        pd.testing.assert_index_equal(df.index, renamer.index)
+        pd.testing.assert_index_equal(df.index, renamer.index_)
         assert list(renamer.transform(df).columns) == new_cols
 
         new_cols_dict = {"d": "a"}
@@ -89,26 +100,33 @@ class TestCustomTransformers:
         assert list(inversed.columns) == ["c", "a"]
 
     def test_pd_sk_transformer(self):
-        df = pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]})
+        df = pd.DataFrame(
+            {"a": [1.0, 2.0], "b": [3.0, 4.0]},
+            index=pd.date_range("2009", freq="h", periods=2),
+        )
 
         scaler = PdSkTransformer(StandardScaler())
         to_test = scaler.fit_transform(df)
 
-        ref = pd.DataFrame({"a": [-1.0, 1.0], "b": [-1.0, 1.0]})
+        ref = pd.DataFrame(
+            {"a": [-1.0, 1.0], "b": [-1.0, 1.0]},
+            index=pd.date_range("2009", freq="h", periods=2),
+        )
 
         pd.testing.assert_frame_equal(to_test, ref)
         assert list(df.columns) == list(scaler.get_feature_names_out())
 
-        to_inverse = to_test.to_numpy()
-        pd.testing.assert_frame_equal(scaler.inverse_transform(to_inverse), df)
+        pd.testing.assert_frame_equal(scaler.inverse_transform(to_test), df)
 
     def test_pd_drop_threshold(self):
         df = pd.DataFrame(
-            {"col1": [1, 2, 3, np.nan, 4], "col2": [1, np.nan, np.nan, 4, 5]}
+            {"col1": [1, 2, 3, np.nan, 4], "col2": [1, np.nan, np.nan, 4, 5]},
+            index=pd.date_range("2009", freq="h", periods=5),
         )
 
         ref = pd.DataFrame(
-            {"col1": [np.nan, 2, 3, np.nan, 4], "col2": [np.nan, np.nan, np.nan, 4, 5]}
+            {"col1": [np.nan, 2, 3, np.nan, 4], "col2": [np.nan, np.nan, np.nan, 4, 5]},
+            index=pd.date_range("2009", freq="h", periods=5),
         )
 
         dropper = PdDropThreshold(lower=1.1, upper=5)
@@ -150,9 +168,15 @@ class TestCustomTransformers:
         pd.testing.assert_frame_equal(dropper.transform(df), df)
 
     def test_pd_apply_expression(self):
-        df = pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]})
+        df = pd.DataFrame(
+            {"a": [1.0, 2.0], "b": [3.0, 4.0]},
+            index=pd.date_range("2009", freq="h", periods=2),
+        )
 
-        ref = pd.DataFrame({"a": [2.0, 4.0], "b": [6.0, 8.0]})
+        ref = pd.DataFrame(
+            {"a": [2.0, 4.0], "b": [6.0, 8.0]},
+            index=pd.date_range("2009", freq="h", periods=2),
+        )
 
         transformer = PdApplyExpression("X * 2")
 
@@ -184,14 +208,16 @@ class TestCustomTransformers:
             {
                 "cpt1": [0.0, np.nan, 2.0, 2.0, np.nan, 3.0],
                 "cpt2": [0.0, 1.0, 2.0, 2.0, np.nan, 3.0],
-            }
+            },
+            index=pd.date_range("2009", freq="h", periods=6),
         )
 
         ref = pd.DataFrame(
             {
                 "cpt1": [0.0, 0.0, 2.0, 2.0, 2.0, 3.0],
                 "cpt2": [0.0, 1.0, 2.0, 2.0, 2.0, 3.0],
-            }
+            },
+            index=pd.date_range("2009", freq="h", periods=6),
         )
 
         filler = PdFfill()
@@ -202,14 +228,16 @@ class TestCustomTransformers:
             {
                 "cpt1": [0.0, np.nan, 2.0, 2.0, np.nan, 3.0],
                 "cpt2": [0.0, 1.0, 2.0, 2.0, np.nan, 3.0],
-            }
+            },
+            index=pd.date_range("2009", freq="h", periods=6),
         )
 
         ref = pd.DataFrame(
             {
                 "cpt1": [0.0, 2.0, 2.0, 2.0, 3.0, 3.0],
                 "cpt2": [0.0, 1.0, 2.0, 2.0, 3.0, 3.0],
-            }
+            },
+            index=pd.date_range("2009", freq="h", periods=6),
         )
 
         filler = PdBfill()
@@ -220,14 +248,16 @@ class TestCustomTransformers:
             {
                 "cpt1": [0.0, np.nan, 2.0, 2.0, np.nan, 3.0],
                 "cpt2": [0.0, 1.0, 2.0, 2.0, np.nan, 3.0],
-            }
+            },
+            index=pd.date_range("2009", freq="h", periods=6),
         )
 
         ref = pd.DataFrame(
             {
                 "cpt1": [0.0, 0.0, 2.0, 2.0, 0.0, 3.0],
                 "cpt2": [0.0, 1.0, 2.0, 2.0, 0.0, 3.0],
-            }
+            },
+            index=pd.date_range("2009", freq="h", periods=6),
         )
 
         filler = PdFillNa(value=0.0)
@@ -322,7 +352,10 @@ class TestCustomTransformers:
         pd.testing.assert_frame_equal(ref, lager.fit_transform(df))
 
     def test_pd_gaussian_filter(self):
-        df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+        df = pd.DataFrame(
+            {"a": [1, 2, 3], "b": [4, 5, 6]},
+            index=pd.date_range("2009", freq="h", periods=3),
+        )
 
         gfilter = PdGaussianFilter1D()
 
@@ -339,7 +372,10 @@ class TestCustomTransformers:
         assert list(to_test.columns) == list(df.columns)
 
     def test_pd_combine_columns(self):
-        x_in = pd.DataFrame({"a": [1, 2], "b": [1, 2], "c": [1, 2]})
+        x_in = pd.DataFrame(
+            {"a": [1, 2], "b": [1, 2], "c": [1, 2]},
+            index=pd.date_range("2009", freq="h", periods=2),
+        )
 
         trans = PdCombineColumns(
             columns_to_combine=["a", "b"],
@@ -349,7 +385,11 @@ class TestCustomTransformers:
         )
 
         pd.testing.assert_frame_equal(
-            trans.fit_transform(x_in), pd.DataFrame({"c": [1, 2], "combined": [2, 4]})
+            trans.fit_transform(x_in),
+            pd.DataFrame(
+                {"c": [1, 2], "combined": [2, 4]},
+                index=pd.date_range("2009", freq="h", periods=2),
+            ),
         )
 
         ref = x_in.copy()

@@ -11,6 +11,18 @@ def _reshape_1d(sample):
         return sample.flatten()
 
 
+def check_and_return_dt_index_df(X: pd.Series | pd.DataFrame):
+    if not (isinstance(X, pd.Series) or isinstance(X, pd.DataFrame)):
+        raise ValueError(
+            f"Invalid X data, was expected an instance of pandas Dataframe "
+            f"or Pandas Series. Got {type(X)}"
+        )
+    if not isinstance(X.index, pd.DatetimeIndex):
+        raise ValueError("X index is not a pandas DateTime index")
+
+    return X.to_frame() if isinstance(X, pd.Series) else X
+
+
 def as_1_column_dataframe(X):
     """
     Converts a 1D array-like object to a pandas DataFrame with a single column.

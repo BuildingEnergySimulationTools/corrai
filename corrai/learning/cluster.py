@@ -16,6 +16,7 @@ from corrai.base.utils import (
     check_datetime_index,
     float_to_hour,
     _reshape_1d,
+    check_and_return_dt_index_df,
 )
 
 
@@ -225,10 +226,7 @@ def set_point_identifier(
     to each column of the input data, and then finding the peaks of the density
     estimate, which shall correspond to the set points.
     """
-    if isinstance(X, pd.Series):
-        X = as_1_column_dataframe(X)
-    check_datetime_index(X)
-
+    X = check_and_return_dt_index_df(X)
     model = make_pipeline(PdSkTransformer(StandardScaler()), estimator)
 
     pd_scaler = model.named_steps["pdsktransformer"]
@@ -246,7 +244,9 @@ def set_point_identifier(
     for col in X.columns:
         model.fit(X[[col]])
         try:
-            set_points = pd_scaler.inverse_transform(kde.set_points)
+            set_points = pd_scaler.transformer.inverse_transform(
+                kde.set_points.reshape(-1, 1)
+            )
         except ValueError:
             set_points = None
 
@@ -256,7 +256,7 @@ def set_point_identifier(
             ]
             multiindex = pd.MultiIndex.from_tuples(index_tuple)
             set_points_series = pd.Series(
-                set_points.to_numpy().flatten(), index=multiindex, name=col
+                set_points.flatten(), index=multiindex, name=col
             )
             multi_series_list.append(set_points_series)
 

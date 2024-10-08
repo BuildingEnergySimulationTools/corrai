@@ -10,22 +10,20 @@ from sklearn.utils.validation import check_is_fitted
 from scipy.ndimage import gaussian_filter1d
 
 from corrai.base.math import time_gradient
-from corrai.learning.error_detection import STLEDetector
+from corrai.base.utils import (
+    get_data_blocks,
+    get_outer_timestamps,
+    check_and_return_dt_index_df,
+)
+from corrai.learning.error_detection import STLEDetector, STLForecast
+
+MODEL_MAP = {"STL_FORECAST": STLForecast}
 
 
 class PdTransformerBC(TransformerMixin, BaseEstimator, ABC):
-    def __init__(self):
-        self.columns = None
-        self.index = None
-
-    def __sklearn_is_fitted__(self):
-        """
-        Check fitted status and return a Boolean value.
-        """
-        return hasattr(self, "_is_fitted") and self._is_fitted
-
     def get_feature_names_out(self, input_features=None):
-        return self.columns
+        check_is_fitted(self, attributes=["features_"])
+        return self.features_
 
     @abstractmethod
     def fit(self, X: pd.Series | pd.DataFrame, y=None):
@@ -84,13 +82,14 @@ class PdIdentity(PdTransformerBC):
     def __init__(self):
         super().__init__()
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
-        self.index = X.index
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
+        self.index_ = X.index
         return self
 
     def transform(self, X):
-        return X
+        return check_and_return_dt_index_df(X)
 
 
 class PdReplaceDuplicated(PdTransformerBC):
@@ -123,12 +122,14 @@ class PdReplaceDuplicated(PdTransformerBC):
         self.keep = keep
         self.value = value
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
-        self.index = X.index
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
+        self.index_ = X.index
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        X = check_and_return_dt_index_df(X)
         for col in X.columns:
             X.loc[X[col].duplicated(keep=self.keep), col] = self.value
         return X
@@ -165,13 +166,14 @@ class PdDropna(PdTransformerBC):
         super().__init__()
         self.how = how
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
         self.index = X.index
         return self
 
-    def transform(self, X):
-        return X.dropna(how=self.how)
+    def transform(self, X: pd.Series | pd.DataFrame):
+        return check_and_return_dt_index_df(X).dropna(how=self.how)
 
 
 class PdRenameColumns(PdTransformerBC):
@@ -206,17 +208,15 @@ class PdRenameColumns(PdTransformerBC):
     def __init__(self, new_names: list[str] | dict[str, str]):
         super().__init__()
         self.new_names = new_names
-        self.columns = None
 
     def fit(self, X, y=None):
-        self.columns = X.columns
-        self.index = X.index
-        self._is_fitted = True
+        self.features_ = X.columns
+        self.index_ = X.index
 
         return self
 
-    def transform(self, X):
-        check_is_fitted(self)
+    def transform(self, X: pd.Series | pd.DataFrame):
+        check_is_fitted(self, attributes=["features_", "index_"])
         if isinstance(self.new_names, list):
             if len(self.new_names) != len(X.columns):
                 raise ValueError(
@@ -228,11 +228,11 @@ class PdRenameColumns(PdTransformerBC):
             X.rename(columns=self.new_names, inplace=True)
         return X
 
-    def inverse_transform(self, X):
-        check_is_fitted(self)
+    def inverse_transform(self, X: pd.Series | pd.DataFrame):
+        check_is_fitted(self, attributes=["features_", "index_"])
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X)
-        X.columns = self.columns
+        X.columns = self.features_
         return self.transform(X)
 
 
@@ -272,21 +272,22 @@ class PdSkTransformer(PdTransformerBC):
         super().__init__()
         self.transformer = transformer
 
-    def fit(self, X, y=None):
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
         self.transformer.fit(X)
-        self.columns = X.columns
-        self.index = X.index
+        self.features_ = X.columns
+        self.index_ = X.index
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        check_is_fitted(self, attributes=["features_", "index_"])
         return pd.DataFrame(
             data=self.transformer.transform(X), index=X.index, columns=X.columns
         )
 
-    def inverse_transform(self, X):
-        if isinstance(X, np.ndarray):
-            X = pd.DataFrame(X)
-            X.columns = self.columns
+    def inverse_transform(self, X: pd.Series | pd.DataFrame):
+        check_is_fitted(self, attributes=["features_", "index_"])
+        X = check_and_return_dt_index_df(X)
         return pd.DataFrame(
             data=self.transformer.inverse_transform(X), index=X.index, columns=X.columns
         )
@@ -331,12 +332,14 @@ class PdDropThreshold(PdTransformerBC):
         self.lower = lower
         self.upper = upper
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
-        self.index = X.index
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
+        self.index_ = X.index
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        X = check_and_return_dt_index_df(X)
         if self.lower is not None:
             lower_mask = X < self.lower
         else:
@@ -399,12 +402,14 @@ class PdDropTimeGradient(PdTransformerBC):
         self.upper_rate = upper_rate
         self.lower_rate = lower_rate
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
-        self.index = X.index
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
+        self.index_ = X.index
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        X = check_and_return_dt_index_df(X)
         X_transformed = []
         for column in X.columns:
             X_column = X[column]
@@ -473,12 +478,14 @@ class PdApplyExpression(PdTransformerBC):
         super().__init__()
         self.expression = expression
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
         self.index = X.index
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        X = check_and_return_dt_index_df(X)
         return eval(self.expression)
 
 
@@ -511,12 +518,14 @@ class PdTimeGradient(PdTransformerBC):
     def __init__(self):
         super().__init__()
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
         self.index = X.index
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        X = check_and_return_dt_index_df(X)
         original_index = X.index.copy()
         derivative = time_gradient(X)
         return derivative.reindex(original_index)
@@ -547,12 +556,14 @@ class PdFfill(PdTransformerBC):
         super().__init__()
         self.limit = limit
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
         self.index = X.index
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        X = check_and_return_dt_index_df(X)
         return X.ffill(limit=self.limit)
 
 
@@ -581,12 +592,14 @@ class PdBfill(PdTransformerBC):
         super().__init__()
         self.limit = limit
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
         self.index = X.index
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        X = check_and_return_dt_index_df(X)
         return X.bfill(limit=self.limit)
 
 
@@ -610,12 +623,14 @@ class PdFillNa(PdTransformerBC):
         super().__init__()
         self.value = value
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
-        self.index = X.index
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
+        self.index_ = X.index
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        X = check_and_return_dt_index_df(X)
         return X.fillna(self.value)
 
 
@@ -664,21 +679,23 @@ class PdResampler(PdTransformerBC):
         The resampled Pandas DataFrame.
     """
 
-    def __init__(self, rule, method=None):
+    def __init__(self, rule: str | pd.Timedelta | dt.timedelta, method=None):
         super().__init__()
         self.rule = rule
         self.method = method
-        self.resampled_index = None
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
-        self.resampled_index = X.resample(self.rule).asfreq()
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
+        self.resampled_index_ = X.resample(self.rule).asfreq()
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        X = check_and_return_dt_index_df(X)
+        check_is_fitted(self, attributes=["resampled_index_", "features_"])
         X = X.apply(pd.to_numeric)
         X_resampled = X.resample(self.rule).agg(self.method)
-        self.resampled_index = X_resampled.index
+        self.resampled_index_ = X_resampled.index
         return X_resampled
 
 
@@ -722,12 +739,14 @@ class PdInterpolate(PdTransformerBC):
         super().__init__()
         self.method = method
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
-        self.index = X.index
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
+        self.index_ = X.index
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        X = check_and_return_dt_index_df(X)
         return X.interpolate(method=self.method)
 
 
@@ -800,18 +819,21 @@ class PdColumnResampler(PdTransformerBC):
                 if col not in X.columns:
                     raise ValueError("Columns in columns_method not found in" "X")
 
-    def fit(self, X, y=None):
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
         self._check_columns(X)
         if self.remainder == "drop":
-            self.columns = []
+            self.features_ = []
             for col_list, _ in self.columns_method:
-                self.columns += col_list
+                self.features_ += col_list
         else:
-            self.columns = X.columns
+            self.features_ = X.columns
 
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        check_is_fitted(self, attributes=["features_"])
+        X = check_and_return_dt_index_df(X)
         if self.columns_method:
             transformed_X = pd.concat(
                 [
@@ -835,7 +857,7 @@ class PdColumnResampler(PdTransformerBC):
                 axis=1,
             )
 
-        return transformed_X[self.columns]
+        return transformed_X[self.features_]
 
 
 class PdAddTimeLag(PdTransformerBC):
@@ -870,25 +892,35 @@ class PdAddTimeLag(PdTransformerBC):
 
     def __init__(
         self,
-        time_lag: dt.timedelta,
+        time_lag: str | pd.Timedelta | dt.timedelta = "1h",
         features_to_lag: str | list[str] = None,
         feature_marker: str = None,
         drop_resulting_nan=False,
     ):
         super().__init__()
         self.time_lag = time_lag
-        self.features_to_lag = (
-            [features_to_lag] if isinstance(features_to_lag, str) else features_to_lag
-        )
+        self.features_to_lag = features_to_lag
+        self.feature_marker = feature_marker
         self.drop_resulting_nan = drop_resulting_nan
-        self.feature_marker = (
-            str(time_lag) + "_" if feature_marker is None else feature_marker
-        )
 
-    def fit(self, X, y=None):
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_to_lag = (
+            [self.features_to_lag]
+            if isinstance(self.features_to_lag, str)
+            else self.features_to_lag
+        )
+        self.feature_marker = (
+            str(self.time_lag) + "_"
+            if self.feature_marker is None
+            else self.feature_marker
+        )
+        self.is_fitted_ = True
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        check_is_fitted(self, attributes=["is_fitted_"])
+        X = check_and_return_dt_index_df(X)
         if self.features_to_lag is None:
             self.features_to_lag = X.columns
         to_lag = X[self.features_to_lag].copy()
@@ -956,17 +988,15 @@ class PdGaussianFilter1D(PdTransformerBC):
         self.mode = mode
         self.truncate = truncate
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
-        self.index = X.index
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
+        self.index_ = X.index
         return self
 
-    def transform(self, X, y=None):
-        if self.columns is None:
-            raise ValueError(
-                "Transformer is not fitted yet. Perform fitting using fit() method"
-            )
-
+    def transform(self, X: pd.Series | pd.DataFrame, y=None):
+        check_is_fitted(self, attributes=["features_"])
+        X = check_and_return_dt_index_df(X)
         gauss_filter = partial(
             gaussian_filter1d, sigma=self.sigma, mode=self.mode, truncate=self.truncate
         )
@@ -1018,30 +1048,34 @@ class PdCombineColumns(PdTransformerBC):
         label_name="combined",
     ):
         super().__init__()
-        if function_kwargs is None:
-            function_kwargs = {}
         self.function_kwargs = function_kwargs
         self.columns_to_combine = columns_to_combine
         self.function = function
         self.drop_columns = drop_columns
         self.label_name = label_name
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
-        self.index = X.index
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.function_kwargs = (
+            {} if self.function_kwargs is None else self.function_kwargs
+        )
+        self.features_ = X.columns
+        self.index_ = X.index
         for lab in self.columns_to_combine:
-            if lab not in self.columns:
+            if lab not in self.features_:
                 raise ValueError(f"{lab} is not found in X DataFrame columns")
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.Series | pd.DataFrame):
+        check_is_fitted(self, attributes=["features_"])
+        X = check_and_return_dt_index_df(X)
         X_transformed = X.copy()
         if self.drop_columns:
             col_to_return = [
-                col for col in self.columns if col not in self.columns_to_combine
+                col for col in self.features_ if col not in self.columns_to_combine
             ]
         else:
-            col_to_return = list(self.columns)
+            col_to_return = list(self.features_)
 
         X_transformed[self.label_name] = self.function(
             X_transformed[self.columns_to_combine], **self.function_kwargs
@@ -1119,22 +1153,25 @@ class PdSTLFilter(PdTransformerBC):
         self.absolute_threshold = absolute_threshold
         self.seasonal = seasonal
         self.stl_additional_kwargs = stl_additional_kwargs
-        self.stl = None
 
-    def fit(self, X, y=None):
-        self.columns = X.columns
-        self.index = X.index
-        return self
-
-    def transform(self, X):
-        self.stl = STLEDetector(
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.features_ = X.columns
+        self.index_ = X.index
+        self.stl_ = STLEDetector(
             self.period,
             self.trend,
             self.absolute_threshold,
             self.seasonal,
             self.stl_additional_kwargs,
         )
-        errors = self.stl.predict(X)
+        self.stl_.fit(X)
+        return self
+
+    def transform(self, X: pd.Series | pd.DataFrame):
+        check_is_fitted(self, attributes=["features_", "stl_"])
+        X = check_and_return_dt_index_df(X)
+        errors = self.stl_.predict(X)
         errors = errors.astype(bool)
         for col in errors:
             X.loc[errors[col], col] = np.nan
