@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from scipy.ndimage import gaussian_filter1d
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import r2_score
 
 from corrai.transformers import (
     PdAddTimeLag,
@@ -25,6 +26,7 @@ from corrai.transformers import (
     PdTimeGradient,
     PdReplaceDuplicated,
     PdSTLFilter,
+    PdFillGaps,
 )
 
 RESOURCES_PATH = Path(__file__).parent / "resources"
@@ -425,3 +427,44 @@ class TestCustomTransformers:
         pd.testing.assert_series_equal(
             res.isna().sum(), pd.Series({"Temp_1": 3, "Temp_2": 2})
         )
+
+    def test_pd_fill_gap(self):
+        index = pd.date_range("2009-01-01", "2009-12-31 23:00:00", freq="h")
+        cumsum_second = np.arange(
+            start=0, stop=(index[-1] - index[0]).total_seconds() + 1, step=3600
+        )
+        annual = 5 * -np.cos(
+            2 * np.pi / dt.timedelta(days=360).total_seconds() * cumsum_second
+        )
+        daily = 5 * np.sin(
+            2 * np.pi / dt.timedelta(days=1).total_seconds() * cumsum_second
+        )
+        toy_series = pd.Series(annual + daily + 5, index=index)
+
+        toy_df = pd.DataFrame({"Temp_1": toy_series, "Temp_2": toy_series * 1.25 + 2})
+
+        # Diggy diggy holes !
+        holes_pairs = [
+            ("2009-05-24", "Temp_1"),
+            (pd.date_range("2009-07-05", "2009-07-06", freq="h"), "Temp_1"),
+            (
+                pd.date_range("2009-12-24 14:00:00", "2009-12-24 16:00:00", freq="h"),
+                "Temp_1",
+            ),
+            ("2009-04-24", "Temp_2"),
+            (pd.date_range("2009-06-05", "2009-06-06", freq="h"), "Temp_2"),
+            (
+                pd.date_range("2009-11-24 14:00:00", "2009-11-24 16:00:00", freq="h"),
+                "Temp_2",
+            ),
+        ]
+
+        toy_df_gaps = toy_df.copy()
+        for gap in holes_pairs:
+            toy_df_gaps.loc[gap[0], gap[1]] = np.nan
+
+        filler = PdFillGaps()
+        res = filler.fit_transform(toy_df_gaps)
+
+        for gap in holes_pairs:
+            assert r2_score(toy_df.loc[gap[0], gap[1]], res.loc[gap[0], gap[1]]) > 0.99

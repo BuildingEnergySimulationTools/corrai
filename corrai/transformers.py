@@ -15,9 +15,9 @@ from corrai.base.utils import (
     get_outer_timestamps,
     check_and_return_dt_index_df,
 )
-from corrai.learning.error_detection import STLEDetector, STLForecast
+from corrai.learning.error_detection import STLEDetector, SkSTLForecast
 
-MODEL_MAP = {"STL_FORECAST": STLForecast}
+MODEL_MAP = {"STL": SkSTLForecast}
 
 
 class PdTransformerBC(TransformerMixin, BaseEstimator, ABC):
@@ -1175,5 +1175,101 @@ class PdSTLFilter(PdTransformerBC):
         errors = errors.astype(bool)
         for col in errors:
             X.loc[errors[col], col] = np.nan
+
+        return X
+
+
+class PdFillGaps(PdTransformerBC):
+    """
+    A class designed to identify gaps in time series data and fill them using
+    a specified model.
+
+    1- The class identified the gaps to fill and filter them using upper and lower gap
+    thresholds.
+    2- The biggest group of valid data is identified and is used to fit the model.
+    3- The neighboring gaps are filled using backcasting or forecasting.
+
+    The process is repeated at step 2 until there are no more gaps to fill
+
+    Parameters
+    ----------
+    model_name : str, optional
+        The name of the model to be used for filling gaps, by default "STL".
+        It must be a key of MODEL_MAP
+    model_kwargs : dict, optional
+        A dictionary containing the arguments of the model.
+    lower_gap_threshold : str or datetime.datetime, optional
+        The lower threshold for the size of gaps to be considered, by default None.
+    upper_gap_threshold : str or datetime.datetime, optional
+        The upper threshold for the size of gaps to be considered, by default None.
+
+    Attributes
+    ----------
+    model_ : callable
+        The predictive model class used to fill gaps, determined by `model_name`.
+    features_ : list
+        The list of feature columns present in the data.
+    index_ : pd.Index
+        The index of the data passed during the `fit` method.
+    """
+
+    def __init__(
+        self,
+        model_name: str = "STL",
+        model_kwargs: dict = {},
+        lower_gap_threshold: str | dt.datetime = None,
+        upper_gap_threshold: str | dt.datetime = None,
+    ):
+        super().__init__()
+        self.model_name = model_name
+        self.model_kwargs = model_kwargs
+        self.lower_gap_threshold = lower_gap_threshold
+        self.upper_gap_threshold = upper_gap_threshold
+
+    def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
+        self.model_ = MODEL_MAP[self.model_name]
+        self.features_ = X.columns
+        self.index_ = X.index
+
+        return self
+
+    def transform(self, X: pd.Series | pd.DataFrame):
+        check_is_fitted(self, attributes=["model_"])
+        X = check_and_return_dt_index_df(X)
+        gaps = get_data_blocks(
+            X,
+            is_null=True,
+            return_combination=False,
+            lower_td_threshold=self.lower_gap_threshold,
+            upper_td_threshold=self.upper_gap_threshold,
+        )
+
+        for col in X:
+            while gaps[col]:
+                data_blocks = get_data_blocks(X[col], return_combination=False)[col]
+                data_timedelta = [block[-1] - block[0] for block in data_blocks]
+                biggest_group = data_blocks[data_timedelta.index(max(data_timedelta))]
+                start, end = get_outer_timestamps(biggest_group, X.index)
+
+                indices_to_delete = []
+                for i, idx in enumerate(gaps[col]):
+                    if start in idx:
+                        bc_model = self.model_(backcast=True, **self.model_kwargs)
+                        bc_model.fit(X.loc[biggest_group, col])
+                        X.loc[idx, col] = (
+                            bc_model.predict(idx.to_series()).to_numpy().flatten()
+                        )
+                        indices_to_delete.append(i)
+                    elif end in idx:
+                        fc_model = self.model_(**self.model_kwargs)
+                        fc_model.fit(X.loc[biggest_group, col])
+                        X.loc[idx, col] = (
+                            fc_model.predict(idx.to_series()).to_numpy().flatten()
+                        )
+                        indices_to_delete.append(i)
+
+                for i in sorted(indices_to_delete, reverse=True):
+                    del gaps[col][i]
 
         return X

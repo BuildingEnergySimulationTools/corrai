@@ -11,7 +11,7 @@ from statsmodels.tsa.seasonal import STL
 from statsmodels.tsa.forecasting.stl import STLForecast
 from statsmodels.tsa.arima.model import ARIMA
 
-from corrai.base.utils import check_datetime_index
+from corrai.base.utils import check_datetime_index, check_and_return_dt_index_df
 
 MODEL_MAP = {"ARIMA": ARIMA}
 
@@ -248,6 +248,7 @@ class SkSTLForecast(RegressorMixin, STLBC):
         self.ar_kwargs = ar_kwargs
 
     def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        X = check_and_return_dt_index_df(X)
         ar_model = MODEL_MAP[self.ar_model]
         if self.ar_kwargs is None:
             ar_kwargs = MODEL_DEFAULT_CONF[self.ar_model]
