@@ -38,6 +38,7 @@ class TestErrorDetection:
             absolute_threshold=0.6,
         )
 
+        stl.fit(data)
         res = stl.predict(data)
 
         pd.testing.assert_index_equal(res.index, data.index)
@@ -75,12 +76,7 @@ class TestErrorDetection:
         )
         assert reg_score > 0.99
 
-        backcaster = SkSTLForecast(
-            period="24h",
-            trend="15d",
-            ar_kwargs=dict(order=(1, 1, 0), trend="t"),
-            backcast=True,
-        )
+        backcaster = SkSTLForecast(backcast=True)
 
         backcaster.fit(toy_df["2009-01-24":"2009-07-24"])
 

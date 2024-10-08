@@ -5,13 +5,17 @@ import warnings
 from abc import ABC
 
 import pandas as pd
-from sklearn.base import BaseEstimator, ClusterMixin, RegressorMixin
-from sklearn.utils.validation import check_is_fitted
+from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin
+from sklearn.utils.validation import check_is_fitted, check_array
 from statsmodels.tsa.seasonal import STL
 from statsmodels.tsa.forecasting.stl import STLForecast
 from statsmodels.tsa.arima.model import ARIMA
 
-from corrai.base.utils import check_datetime_index, as_1_column_dataframe
+from corrai.base.utils import check_datetime_index
+
+MODEL_MAP = {"ARIMA": ARIMA}
+
+MODEL_DEFAULT_CONF = {"ARIMA": {"order": (1, 1, 0), "trend": "t"}}
 
 
 def timedelta_to_int(td: int | str | dt.timedelta, df):
@@ -45,24 +49,26 @@ def process_stl_odd_args(param_name, X, stl_kwargs):
 class STLBC(ABC, BaseEstimator):
     def __init__(
         self,
-        period: int | str | dt.timedelta,
-        trend: int | str | dt.timedelta,
+        period: int | str | dt.timedelta = "24h",
+        trend: int | str | dt.timedelta = "15d",
         seasonal: int | str | dt.timedelta = None,
         stl_kwargs: dict[str, typing.Any] = None,
     ):
-        self.stl_kwargs = {} if stl_kwargs is None else stl_kwargs
+        self.stl_kwargs = stl_kwargs
         self.period = period
-        validate_odd_param("trend", trend)
         self.trend = trend
-        validate_odd_param("seasonal", seasonal)
         self.seasonal = seasonal
 
     def _pre_fit(self, X: pd.Series | pd.DataFrame):
+        self.stl_kwargs = {} if self.stl_kwargs is None else self.stl_kwargs
+
         check_datetime_index(X)
         if isinstance(X, pd.Series):
-            X = as_1_column_dataframe(X)
+            X = X.to_frame()
+        check_array(X)
 
         self.stl_kwargs["period"] = timedelta_to_int(self.period, X)
+        validate_odd_param("trend", self.trend)
         self.stl_kwargs["trend"] = self.trend
         process_stl_odd_args("trend", X, self.stl_kwargs)
         if self.seasonal is not None:
@@ -70,7 +76,7 @@ class STLBC(ABC, BaseEstimator):
             process_stl_odd_args("seasonal", X, self.stl_kwargs)
 
 
-class STLEDetector(STLBC, ClusterMixin):
+class STLEDetector(ClassifierMixin, STLBC):
     """
     A custom anomaly detection model based on statsmodel STL
     (Seasonal and Trend decomposition using Loess).
@@ -143,36 +149,36 @@ class STLEDetector(STLBC, ClusterMixin):
 
     def __init__(
         self,
-        period: int | str | dt.timedelta,
-        trend: int | str | dt.timedelta,
-        absolute_threshold: int | float,
+        period: int | str | dt.timedelta = "24h",
+        trend: int | str | dt.timedelta = "15d",
+        absolute_threshold: int | float = 100,
         seasonal: int | str | dt.timedelta = None,
         stl_kwargs: dict[str, float] = None,
     ):
         super().__init__(period, trend, seasonal, stl_kwargs)
         self.absolute_threshold = absolute_threshold
-        self.labels_ = None
-        self.stl_res_ = {}
 
     def fit(self, X: pd.Series | pd.DataFrame, y=None):
         self._pre_fit(X)
+        self.stl_fit_res_ = {}
         for feat in X.columns:
-            self.stl_res_[feat] = STL(X[feat], **self.stl_kwargs).fit()
-
-        self._is_fitted = True
+            self.stl_fit_res_[feat] = STL(X[feat], **self.stl_kwargs).fit()
 
         return self
 
     def predict(self, X: pd.Series | pd.DataFrame):
-        self.fit(X)
-        res_df = pd.concat([res.resid for res in self.stl_res_.values()], axis=1)
+        check_is_fitted(self, attributes=["stl_fit_res_"])
+        check_datetime_index(X)
+        if isinstance(X, pd.Series):
+            X = X.to_frame()
+        check_array(X)
+
+        res_df = pd.concat([res.resid for res in self.stl_fit_res_.values()], axis=1)
         res_df.columns = X.columns
-        self.labels_ = (abs(res_df) > self.absolute_threshold).astype(int)
-
-        return self.labels_
+        return (abs(res_df) > self.absolute_threshold).astype(int)
 
 
-class SkSTLForecast(STLBC, RegressorMixin):
+class SkSTLForecast(RegressorMixin, STLBC):
     """
     A model designed for time series forecasting or backcasting
     (predicting past values).
@@ -193,7 +199,9 @@ class SkSTLForecast(STLBC, RegressorMixin):
         Strongly depends on your time series.
 
     ar_model : object, optional
-        Autoregressive model to be used after the STL decomposition.
+        A string corresponding to the name of the Autoregressive model to be used
+        to predict STL trend an periodic component.
+        The name must be chosen among MODEL_MAP keys()
         If not provided, ARIMA will be used as the default model.
 
     seasonal : int, str, or datetime.timedelta, optional
@@ -226,20 +234,26 @@ class SkSTLForecast(STLBC, RegressorMixin):
 
     def __init__(
         self,
-        period: int | str | dt.timedelta,
-        trend: int | str | dt.timedelta,
-        ar_model=None,
+        period: int | str | dt.timedelta = "24h",
+        trend: int | str | dt.timedelta = "15d",
+        ar_model: str = "ARIMA",
         seasonal: int | str | dt.timedelta = None,
         stl_kwargs: dict[str, float] = None,
-        ar_kwargs: dict = None,
+        ar_kwargs: str | dict = None,
         backcast: bool = False,
     ):
         super().__init__(period, trend, seasonal, stl_kwargs)
         self.backcast = backcast
-        self.ar_model = ARIMA if ar_model is None else ar_model
-        self.ar_kwargs = {} if ar_kwargs is None else ar_kwargs
+        self.ar_model = ar_model
+        self.ar_kwargs = ar_kwargs
 
     def fit(self, X: pd.Series | pd.DataFrame, y=None):
+        ar_model = MODEL_MAP[self.ar_model]
+        if self.ar_kwargs is None:
+            ar_kwargs = MODEL_DEFAULT_CONF[self.ar_model]
+        else:
+            ar_kwargs = self.ar_kwargs
+
         self._pre_fit(X)
         self.training_freq_ = (
             X.index.freq if X.index.freq is not None else X.index.inferred_freq
@@ -252,8 +266,8 @@ class SkSTLForecast(STLBC, RegressorMixin):
         for feat in X:
             self.forecaster_[feat] = STLForecast(
                 endog=X[feat].to_numpy(),
-                model=self.ar_model,
-                model_kwargs=self.ar_kwargs,
+                model=ar_model,
+                model_kwargs=ar_kwargs,
                 **self.stl_kwargs,
             ).fit()
 
@@ -268,6 +282,9 @@ class SkSTLForecast(STLBC, RegressorMixin):
                 "training_freq_",
             ],
         )
+        check_datetime_index(X)
+        X = X.to_frame() if isinstance(X, pd.Series) else X
+        check_array(X)
 
         if X.index.freq != self.training_freq_:
             raise ValueError(
