@@ -129,7 +129,7 @@ def add_scatter_and_gaps(
     )
 
     gaps_index_list = get_data_blocks(
-        data=series, lower_dt_threshold=gap_threshold, return_combination=False
+        data=series, lower_td_threshold=gap_threshold, return_combination=False
     )
 
     for idx in gaps_index_list[series.name]:
@@ -375,8 +375,8 @@ class MeasuredDats:
             data=data,
             is_null=True,
             cols=cols,
-            lower_dt_threshold=lower_td_threshold,
-            upper_dt_threshold=upper_td_threshold,
+            lower_td_threshold=lower_td_threshold,
+            upper_td_threshold=upper_td_threshold,
             return_combination=return_combination,
         )
         dt = get_freq_delta_or_min_time_interval(data)

@@ -107,8 +107,8 @@ class TestUtils:
         res = get_data_blocks(
             toy_df,
             is_null=False,
-            lower_dt_threshold="1h30min",
-            upper_dt_threshold="8h",
+            lower_td_threshold="1h30min",
+            upper_td_threshold="8h",
         )
         assert len(res["data_1"]) == 1
 
@@ -121,7 +121,7 @@ class TestUtils:
             res["data_2"][0], pd.date_range("2009-01-01 15:00:00", freq="h", periods=9)
         )
 
-        res = get_data_blocks(toy_df, is_null=True, lower_dt_threshold="1h30min")
+        res = get_data_blocks(toy_df, is_null=True, lower_td_threshold="1h30min")
         assert len(res["data_1"]) == 1
 
         res = get_data_blocks(toy_df, return_combination=False)
@@ -135,7 +135,7 @@ class TestUtils:
         )
 
         # The gap from 01:00:00 to 04:00:00 shall be identified.
-        res = get_data_blocks(toy_df, is_null=True, lower_dt_threshold="3h")
+        res = get_data_blocks(toy_df, is_null=True, lower_td_threshold="3h")
         assert len(res["data_1"]) == 2
 
     def test_outer_timestamps(self):

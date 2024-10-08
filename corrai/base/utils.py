@@ -156,8 +156,8 @@ def get_data_blocks(
     data: pd.Series | pd.DataFrame,
     is_null: bool = False,
     cols: str | list[str] = None,
-    lower_dt_threshold: str | dt.timedelta = None,
-    upper_dt_threshold: str | dt.timedelta = None,
+    lower_td_threshold: str | dt.timedelta = None,
+    upper_td_threshold: str | dt.timedelta = None,
     return_combination=True,
 ):
     """
@@ -180,11 +180,11 @@ def get_data_blocks(
     cols : str or list[str], optional
         The columns in the DataFrame for which to detect gaps. If None (default), all
         columns are considered.
-    lower_dt_threshold : str or timedelta, optional
+    lower_td_threshold : str or timedelta, optional
         The minimum duration of a period for it to be considered valid.
         Can be passed as a string (e.g., '1d' for one day) or a `timedelta`.
         If None, no threshold is applied, NaN values are considered gaps.
-    upper_dt_threshold : str or timedelta, optional
+    upper_td_threshold : str or timedelta, optional
         The maximum duration of a period for it to be considered valid.
         Can be passed as a string (e.g., '1d' for one day) or a `timedelta`.
         If None, no threshold is applied, NaN values are considered gaps.
@@ -214,15 +214,15 @@ def get_data_blocks(
     elif cols is None:
         cols = list(data.columns)
 
-    if isinstance(lower_dt_threshold, str):
-        lower_dt_threshold = pd.to_timedelta(lower_dt_threshold)
-    elif lower_dt_threshold is None:
-        lower_dt_threshold = pd.to_timedelta(0)
+    if isinstance(lower_td_threshold, str):
+        lower_td_threshold = pd.to_timedelta(lower_td_threshold)
+    elif lower_td_threshold is None:
+        lower_td_threshold = pd.to_timedelta(0)
 
-    if isinstance(upper_dt_threshold, str):
-        upper_dt_threshold = pd.to_timedelta(upper_dt_threshold)
-    elif upper_dt_threshold is None:
-        upper_dt_threshold = pd.Timedelta.max
+    if isinstance(upper_td_threshold, str):
+        upper_td_threshold = pd.to_timedelta(upper_td_threshold)
+    elif upper_td_threshold is None:
+        upper_td_threshold = pd.Timedelta.max
 
     freq = get_freq_delta_or_min_time_interval(data)
     # If data index has no frequency, a frequency based on minimum
@@ -257,14 +257,14 @@ def get_data_blocks(
                 current_group.append(timestamp)
             else:
                 if current_group and is_valid_block(
-                    current_group, lower_dt_threshold, upper_dt_threshold
+                    current_group, lower_td_threshold, upper_td_threshold
                 ):
                     groups.append(finalize_block(current_group))
                 current_group = []
 
         # Append the last group if it exists and is valid
         if current_group and is_valid_block(
-            current_group, lower_dt_threshold, upper_dt_threshold
+            current_group, lower_td_threshold, upper_td_threshold
         ):
             groups.append(finalize_block(current_group))
 
