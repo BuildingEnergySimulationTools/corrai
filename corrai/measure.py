@@ -56,7 +56,7 @@ TRANSFORMER_MAP = {
     "GAUSSIAN_FILTER": ct.PdGaussianFilter1D,
     "REPLACE_DUPLICATED": ct.PdReplaceDuplicated,
     "STL_ERROR_FILTER": ct.PdSTLFilter,
-    "FILL_GAPS_AR": ct.PdFillGapsAR
+    "FILL_GAPS_AR": ct.PdFillGapsAR,
 }
 
 ENCODING_MAP = {"Transformer": Transformer}

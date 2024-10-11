@@ -1232,9 +1232,7 @@ class PdFillGapsAR(PdTransformerBC):
         bc_model.fit(X.loc[biggest_group, col])
         to_predict = idx.to_series()
         to_predict.name = col
-        X.loc[idx, col] = (
-            bc_model.predict(to_predict).to_numpy().flatten()
-        )
+        X.loc[idx, col] = bc_model.predict(to_predict).to_numpy().flatten()
 
     def fit(self, X: pd.Series | pd.DataFrame, y=None):
         X = check_and_return_dt_index_df(X)

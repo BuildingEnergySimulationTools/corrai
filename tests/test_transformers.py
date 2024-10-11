@@ -467,5 +467,6 @@ class TestCustomTransformers:
         filler = PdFillGapsAR()
         res = filler.fit_transform(toy_df_gaps)
 
-        for gap in holes_pairs[1:]: # Skip the first one. r2_score doesn't work for only value
+        for gap in holes_pairs[1:]:
+            # Skip the first one. r2_score doesn't work for only value
             assert r2_score(toy_df.loc[gap[0], gap[1]], res.loc[gap[0], gap[1]]) > 0.99
