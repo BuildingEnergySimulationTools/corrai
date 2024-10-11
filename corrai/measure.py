@@ -348,13 +348,14 @@ class MeasuredDats:
         self,
         transformers_list: [str] = None,
         resampling_rule: str | dt.timedelta = None,
+        verbose: bool = False,
     ):
         """
         Returns statistics on missing values NaN for the corresponding
         transformers_list pipeline. Number of missing values for all columns
         and corresponding % of missing values
         """
-        data = self.get_corrected_data(transformers_list, resampling_rule)
+        data = self.get_corrected_data(transformers_list, resampling_rule, verbose)
         return missing_values_dict(data)
 
     def get_gaps_description(
@@ -365,6 +366,7 @@ class MeasuredDats:
         lower_td_threshold: str | dt.timedelta = None,
         upper_td_threshold: str | dt.timedelta = None,
         return_combination: bool = True,
+        verbose: bool = False,
     ):
         """
         Returns statistics on gaps duration for specified columns for the
@@ -372,7 +374,7 @@ class MeasuredDats:
         gaps statistics
         """
 
-        data = self.get_corrected_data(transformers_list, resampling_rule)
+        data = self.get_corrected_data(transformers_list, resampling_rule, verbose)
         res = get_data_blocks(
             data=data,
             is_null=True,
@@ -403,6 +405,7 @@ class MeasuredDats:
         self,
         transformers_list: list[str] = None,
         resampling_rule: str | dt.timedelta = False,
+        verbose: bool = False,
     ):
         """
         Creates and returns a data processing pipeline. Custom transformer list may be
@@ -429,18 +432,19 @@ class MeasuredDats:
             obj_list = []
             for trans in transformers_list:
                 if trans in self.category_trans_names:
-                    obj_list.append(self.get_category_transformer(trans))
+                    obj_list.append(self.get_category_transformer(trans, verbose))
                 elif trans == Transformer.RESAMPLE.value:
                     obj_list.append(self.get_resampler(resampling_rule))
                 else:
-                    obj_list.append(self.get_common_transformer(trans))
+                    obj_list.append(self.get_common_transformer(trans, verbose))
 
-        return make_pipeline(*obj_list)
+        return make_pipeline(*obj_list, verbose=verbose)
 
     def get_corrected_data(
         self,
         transformers_list: list[str] = None,
         resampling_rule: str | dt.timedelta = False,
+        verbose: bool = False,
     ):
         """
         Applies the pipeline to the data and returns the corrected data.
@@ -448,21 +452,24 @@ class MeasuredDats:
         resampler to the pipeline or configures it if RESAMPLE is set in
         transformers_list.
         """
-        pipe = self.get_pipeline(
-            transformers_list=transformers_list, resampling_rule=resampling_rule
-        )
+        pipe = self.get_pipeline(transformers_list, resampling_rule, verbose)
         return pipe.fit_transform(self.data)
 
-    def get_common_transformer(self, transformation: str):
+    def get_common_transformer(self, transformation: str, verbose: bool = False):
         """
         Returns a pipeline for a common transformation.
         """
         common_trans = self.common_trans[transformation]
         return make_pipeline(
-            *[TRANSFORMER_MAP[trans[0].value](**trans[1]) for trans in common_trans]
+            *[TRANSFORMER_MAP[trans[0].value](**trans[1]) for trans in common_trans],
+            verbose=verbose,
         )
 
-    def get_category_transformer(self, transformation: str):
+    def get_category_transformer(
+        self,
+        transformation: str,
+        verbose: bool = False,
+    ):
         """
         Returns a pipeline for a category-specific transformation.
         """
@@ -481,7 +488,8 @@ class MeasuredDats:
                                 *[
                                     TRANSFORMER_MAP[trans[0].value](**trans[1])
                                     for trans in transformations
-                                ]
+                                ],
+                                verbose=verbose,
                             ),
                             cols,
                         )
@@ -613,6 +621,7 @@ class MeasuredDats:
         resampling_rule: str | dt.timedelta = None,
         transformers_list: list[str] = None,
         axis_space: float = 0.03,
+        verbose: bool = False,
     ):
         """
         Plot data (raw or corrected, default is corrected), plots grey boxes
@@ -656,9 +665,7 @@ class MeasuredDats:
             to_plot = select_data(self.data, cols, begin, end)
         else:
             to_plot = select_data(
-                self.get_corrected_data(
-                    transformers_list=transformers_list, resampling_rule=resampling_rule
-                ),
+                self.get_corrected_data(transformers_list, resampling_rule, verbose),
                 cols,
                 begin,
                 end,
@@ -720,6 +727,7 @@ class MeasuredDats:
         resampling_rule: str | dt.timedelta = None,
         transformers_list: list[str] = None,
         axis_space: float = 0.03,
+        verbose: bool = False,
     ):
         """
         Generate a plot of specified columns or category.
@@ -775,9 +783,7 @@ class MeasuredDats:
 
         to_plot_raw = select_data(self.data, cols, begin, end)
         to_plot_corr = select_data(
-            self.get_corrected_data(
-                transformers_list=transformers_list, resampling_rule=resampling_rule
-            ),
+            self.get_corrected_data(transformers_list, resampling_rule, verbose),
             cols,
             begin,
             end,
