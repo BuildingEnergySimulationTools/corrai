@@ -1179,7 +1179,7 @@ class PdSTLFilter(PdTransformerBC):
         return X
 
 
-class PdFillGaps(PdTransformerBC):
+class PdFillGapsAR(PdTransformerBC):
     """
     A class designed to identify gaps in time series data and fill them using
     a specified model.

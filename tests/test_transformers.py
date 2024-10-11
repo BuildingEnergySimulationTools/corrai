@@ -26,7 +26,7 @@ from corrai.transformers import (
     PdTimeGradient,
     PdReplaceDuplicated,
     PdSTLFilter,
-    PdFillGaps,
+    PdFillGapsAR,
 )
 
 RESOURCES_PATH = Path(__file__).parent / "resources"
@@ -464,7 +464,7 @@ class TestCustomTransformers:
         for gap in holes_pairs:
             toy_df_gaps.loc[gap[0], gap[1]] = np.nan
 
-        filler = PdFillGaps()
+        filler = PdFillGapsAR()
         res = filler.fit_transform(toy_df_gaps)
 
         for gap in holes_pairs[1:]: # Skip the first one. r2_score doesn't work for only value

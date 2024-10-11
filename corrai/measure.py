@@ -37,6 +37,7 @@ class Transformer(Enum):
     GAUSSIAN_FILTER = "GAUSSIAN_FILTER"
     REPLACE_DUPLICATED = "REPLACE_DUPLICATED"
     STL_ERROR_FILTER = "STL_ERROR_FILTER"
+    FILL_GAPS_AR = "FILL_GAPS_AR"
 
 
 TRANSFORMER_MAP = {
@@ -55,6 +56,7 @@ TRANSFORMER_MAP = {
     "GAUSSIAN_FILTER": ct.PdGaussianFilter1D,
     "REPLACE_DUPLICATED": ct.PdReplaceDuplicated,
     "STL_ERROR_FILTER": ct.PdSTLFilter,
+    "FILL_GAPS_AR": ct.PdFillGapsAR
 }
 
 ENCODING_MAP = {"Transformer": Transformer}
