@@ -1226,6 +1226,16 @@ class PdFillGapsAR(PdTransformerBC):
         self.lower_gap_threshold = lower_gap_threshold
         self.upper_gap_threshold = upper_gap_threshold
 
+    def _fit_and_fill_x(self, X, biggest_group, col, idx, backcast):
+        check_is_fitted(self, attributes=["model_"])
+        bc_model = self.model_(backcast=backcast, **self.model_kwargs)
+        bc_model.fit(X.loc[biggest_group, col])
+        to_predict = idx.to_series()
+        to_predict.name = col
+        X.loc[idx, col] = (
+            bc_model.predict(to_predict).to_numpy().flatten()
+        )
+
     def fit(self, X: pd.Series | pd.DataFrame, y=None):
         X = check_and_return_dt_index_df(X)
         self.model_ = MODEL_MAP[self.model_name]
@@ -1255,18 +1265,10 @@ class PdFillGapsAR(PdTransformerBC):
                 indices_to_delete = []
                 for i, idx in enumerate(gaps[col]):
                     if start in idx:
-                        bc_model = self.model_(backcast=True, **self.model_kwargs)
-                        bc_model.fit(X.loc[biggest_group, col])
-                        X.loc[idx, col] = (
-                            bc_model.predict(idx.to_series()).to_numpy().flatten()
-                        )
+                        self._fit_and_fill_x(X, biggest_group, col, idx, backcast=True)
                         indices_to_delete.append(i)
                     elif end in idx:
-                        fc_model = self.model_(**self.model_kwargs)
-                        fc_model.fit(X.loc[biggest_group, col])
-                        X.loc[idx, col] = (
-                            fc_model.predict(idx.to_series()).to_numpy().flatten()
-                        )
+                        self._fit_and_fill_x(X, biggest_group, col, idx, backcast=False)
                         indices_to_delete.append(i)
 
                 for i in sorted(indices_to_delete, reverse=True):
