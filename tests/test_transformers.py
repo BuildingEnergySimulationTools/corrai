@@ -445,6 +445,7 @@ class TestCustomTransformers:
 
         # Diggy diggy holes !
         holes_pairs = [
+            ("2009-06-14 12:00:00", "Temp_1"),
             ("2009-05-24", "Temp_1"),
             (pd.date_range("2009-07-05", "2009-07-06", freq="h"), "Temp_1"),
             (
@@ -466,5 +467,5 @@ class TestCustomTransformers:
         filler = PdFillGaps()
         res = filler.fit_transform(toy_df_gaps)
 
-        for gap in holes_pairs:
+        for gap in holes_pairs[1:]: # Skip the first one. r2_score doesn't work for only value
             assert r2_score(toy_df.loc[gap[0], gap[1]], res.loc[gap[0], gap[1]]) > 0.99
