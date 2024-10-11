@@ -287,6 +287,11 @@ class SkSTLForecast(RegressorMixin, STLBC):
         X = X.to_frame() if isinstance(X, pd.Series) else X
         check_array(X)
 
+        if X.index.shape[0] == 2:
+            X.index.freq = pd.tseries.frequencies.to_offset(
+                abs(X.index[-1] - X.index[0])
+            )
+
         if X.index.shape[0] > 1 and X.index.freq != self.training_freq_:
             raise ValueError(
                 f"Required prediction freq {X.index.freq} "
