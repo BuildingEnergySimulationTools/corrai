@@ -303,3 +303,54 @@ def get_outer_timestamps(idx: pd.DatetimeIndex, ref_index: pd.DatetimeIndex):
         out_end = ref_index[-1]
 
     return out_start, out_end
+
+
+def _get_gaps_mask(
+    data: pd.Series, operator: str, size: str | pd.Timedelta | dt.timedelta = None
+):
+    data = check_and_return_dt_index_df(data)
+    size = pd.to_timedelta(size) if isinstance(size, str) else size
+    if operator == "GTE":
+        gaps = get_data_blocks(
+            data, is_null=True, lower_td_threshold=size, return_combination=False
+        )
+    elif operator == "LTE":
+        gaps = get_data_blocks(
+            data, is_null=True, upper_td_threshold=size, return_combination=False
+        )
+
+    gaps_idx = gaps[data.columns[0]]
+
+    if gaps_idx:
+        if len(gaps_idx) > 1:
+            final_index = gaps_idx[0]
+            for idx in gaps_idx[1:]:
+                final_index = final_index.union(idx)
+        else:
+            final_index = gaps_idx[0]
+    else:
+        final_index = pd.DatetimeIndex([])
+
+    return np.isin(data.index, final_index)
+
+
+def get_gaps_gte_mask(data: pd.Series, size: str | pd.Timedelta | dt.timedelta = None):
+    """
+    Returns np boolean array of shape (len(data),) with True if an entry of data is
+    part of a gap greater or equal to size.
+    :param data: Pandas Series with DatetimeIndex
+    :param size: str | timedelta : size threshold of the gap
+    :return:
+    """
+    return _get_gaps_mask(data, operator="GTE", size=size)
+
+
+def get_gaps_lte_mask(data: pd.Series, size: str | pd.Timedelta | dt.timedelta = None):
+    """
+    Returns np boolean array of shape (len(data),) with True if an entry of data is
+    part of a gap less or equal to size.
+    :param data: Pandas Series with DatetimeIndex
+    :param size: str | timedelta : size threshold of the gap
+    :return:
+    """
+    return _get_gaps_mask(data, operator="LTE", size=size)

@@ -12,6 +12,8 @@ from corrai.base.utils import (
     get_reversed_dict,
     get_data_blocks,
     get_outer_timestamps,
+    get_gaps_gte_mask,
+    get_gaps_lte_mask,
 )
 
 
@@ -149,3 +151,86 @@ class TestUtils:
         start, end = get_outer_timestamps(ref_index, ref_index)
         assert start == ref_index[0]
         assert end == ref_index[-1]
+
+    def test_get_gaps_gte_mask(self):
+        toy_series = pd.Series(
+            np.random.randn(24),
+            index=pd.date_range("2009", freq="h", periods=24),
+            name="data",
+        )
+
+        toy_holes = toy_series.copy()
+        toy_holes.loc["2009-01-01 09:00:00"] = np.nan
+        toy_holes.loc["2009-01-01 11:00:00":"2009-01-01 13:00:00"] = np.nan
+        toy_holes.loc["2009-01-01 19:00:00":"2009-01-01 23:00:00"] = np.nan
+
+        res_1 = get_gaps_gte_mask(toy_holes)
+        res_2 = get_gaps_lte_mask(toy_holes)
+
+        np.testing.assert_array_equal(res_1, res_2)
+
+        res_gte = get_gaps_gte_mask(toy_holes, size="3h")
+        ref_gte = np.array(
+            [
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+                True,
+                True,
+                True,
+                True,
+            ]
+        )
+
+        np.testing.assert_array_equal(res_gte, ref_gte)
+
+        res_lte = get_gaps_lte_mask(toy_holes, size="3h")
+        ref_lte = np.array(
+            [
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+                False,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+            ]
+        )
+
+        np.testing.assert_array_equal(res_lte, ref_lte)
+
+        assert True
