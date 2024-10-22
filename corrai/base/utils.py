@@ -320,18 +320,54 @@ def get_outer_timestamps(idx: pd.DatetimeIndex, ref_index: pd.DatetimeIndex):
     return out_start, out_end
 
 
-def _get_gaps_mask(
+def get_gaps_mask(
     data: pd.Series, operator: str, size: str | pd.Timedelta | dt.timedelta = None
 ):
+    """
+    Returns np boolean array of shape (len(data),) with True if an entry of data is
+    part of a gap of size less han or equal to, LTE, less than LT, greater than or
+     equal to GTE, greater than GT the specified size.
+    :param data: Pandas Series with DatetimeIndex
+    :param operator : str the operator for the test.
+    Must be one of 'GTE', 'GT', 'LT', 'LTE'.
+    Will raise an error otherwise
+    :param size: str | timedelta : size threshold of the gap
+    :return:
+    """
+
     data = check_and_return_dt_index_df(data)
     size = pd.to_timedelta(size) if isinstance(size, str) else size
+
     if operator == "GTE":
         gaps = get_data_blocks(
             data, is_null=True, lower_td_threshold=size, return_combination=False
         )
+    elif operator == "GT":
+        gaps = get_data_blocks(
+            data,
+            is_null=True,
+            lower_td_threshold=size,
+            return_combination=False,
+            lower_threshold_inclusive=False,
+        )
+
     elif operator == "LTE":
         gaps = get_data_blocks(
             data, is_null=True, upper_td_threshold=size, return_combination=False
+        )
+
+    elif operator == "LT":
+        gaps = get_data_blocks(
+            data,
+            is_null=True,
+            upper_td_threshold=size,
+            return_combination=False,
+            upper_threshold_inclusive=False,
+        )
+
+    else:
+        raise ValueError(
+            f"invalid operator {operator}, choose one of 'LTE', 'LT', 'GTE', 'GT'"
         )
 
     gaps_idx = gaps[data.columns[0]]
@@ -347,25 +383,3 @@ def _get_gaps_mask(
         final_index = pd.DatetimeIndex([])
 
     return np.isin(data.index, final_index)
-
-
-def get_gaps_gte_mask(data: pd.Series, size: str | pd.Timedelta | dt.timedelta = None):
-    """
-    Returns np boolean array of shape (len(data),) with True if an entry of data is
-    part of a gap greater or equal to size.
-    :param data: Pandas Series with DatetimeIndex
-    :param size: str | timedelta : size threshold of the gap
-    :return:
-    """
-    return _get_gaps_mask(data, operator="GTE", size=size)
-
-
-def get_gaps_lte_mask(data: pd.Series, size: str | pd.Timedelta | dt.timedelta = None):
-    """
-    Returns np boolean array of shape (len(data),) with True if an entry of data is
-    part of a gap less or equal to size.
-    :param data: Pandas Series with DatetimeIndex
-    :param size: str | timedelta : size threshold of the gap
-    :return:
-    """
-    return _get_gaps_mask(data, operator="LTE", size=size)

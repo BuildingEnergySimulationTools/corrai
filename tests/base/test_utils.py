@@ -12,8 +12,7 @@ from corrai.base.utils import (
     get_reversed_dict,
     get_data_blocks,
     get_outer_timestamps,
-    get_gaps_gte_mask,
-    get_gaps_lte_mask,
+    get_gaps_mask,
 )
 
 
@@ -180,12 +179,12 @@ class TestUtils:
         toy_holes.loc["2009-01-01 11:00:00":"2009-01-01 13:00:00"] = np.nan
         toy_holes.loc["2009-01-01 19:00:00":"2009-01-01 23:00:00"] = np.nan
 
-        res_1 = get_gaps_gte_mask(toy_holes)
-        res_2 = get_gaps_lte_mask(toy_holes)
+        res_1 = get_gaps_mask(toy_holes, "GTE")
+        res_2 = get_gaps_mask(toy_holes, "LTE")
 
         np.testing.assert_array_equal(res_1, res_2)
 
-        res_gte = get_gaps_gte_mask(toy_holes, size="3h")
+        res_gte = get_gaps_mask(toy_holes, operator="GTE", size="3h")
         ref_gte = np.array(
             [
                 False,
@@ -217,7 +216,7 @@ class TestUtils:
 
         np.testing.assert_array_equal(res_gte, ref_gte)
 
-        res_lte = get_gaps_lte_mask(toy_holes, size="3h")
+        res_lte = get_gaps_mask(toy_holes, operator="LTE", size="3h")
         ref_lte = np.array(
             [
                 False,
@@ -249,4 +248,66 @@ class TestUtils:
 
         np.testing.assert_array_equal(res_lte, ref_lte)
 
-        assert True
+        res_lt = get_gaps_mask(toy_holes, operator="LT", size="3h")
+        ref_lt = np.array(
+            [
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+            ]
+        )
+
+        np.testing.assert_array_equal(res_lt, ref_lt)
+
+        res_gt = get_gaps_mask(toy_holes, operator="GT", size="5h")
+        ref_gt = np.array(
+            [
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+            ]
+        )
+
+        np.testing.assert_array_equal(res_gt, ref_gt)
