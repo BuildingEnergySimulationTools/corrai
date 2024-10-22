@@ -11,7 +11,7 @@ def _reshape_1d(sample):
         return sample.flatten()
 
 
-def check_and_return_dt_index_df(X: pd.Series | pd.DataFrame):
+def check_and_return_dt_index_df(X: pd.Series | pd.DataFrame) -> pd.DataFrame:
     if not (isinstance(X, pd.Series) or isinstance(X, pd.DataFrame)):
         raise ValueError(
             f"Invalid X data, was expected an instance of pandas Dataframe "

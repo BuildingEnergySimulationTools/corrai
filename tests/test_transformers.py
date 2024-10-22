@@ -27,6 +27,7 @@ from corrai.transformers import (
     PdReplaceDuplicated,
     PdSTLFilter,
     PdFillGapsAR,
+    PdInterpolate,
 )
 
 RESOURCES_PATH = Path(__file__).parent / "resources"
@@ -427,6 +428,95 @@ class TestCustomTransformers:
         pd.testing.assert_series_equal(
             res.isna().sum(), pd.Series({"Temp_1": 3, "Temp_2": 2})
         )
+
+    def test_pd_pd_interpolate(self):
+        toy_df = pd.DataFrame(
+            {
+                "data_1": np.arange(24).astype(float),
+                "data_2": 2 * np.arange(24).astype(float),
+            },
+            index=pd.date_range("2009", freq="h", periods=24),
+        )
+
+        toy_holes = toy_df.copy()
+        toy_holes.loc["2009-01-01 02:00:00", "data_1"] = np.nan
+        toy_holes.loc["2009-01-01 05:00:00":"2009-01-01 08:00:00", "data_1"] = np.nan
+        toy_holes.loc["2009-01-01 12:00:00":"2009-01-01 16:00:00", "data_1"] = np.nan
+        toy_holes.loc["2009-01-01 05:00:00":"2009-01-01 08:00:00", "data_2"] = np.nan
+
+        filler = PdInterpolate()
+        pd.testing.assert_frame_equal(toy_df, filler.fit_transform(toy_holes.copy()))
+
+        filler = PdInterpolate(gaps_lte="3h", gaps_gte="5h")
+        test_df = filler.fit_transform(toy_holes.copy())
+
+        np.testing.assert_array_equal(
+            test_df.to_numpy(),
+            np.array(
+                [
+                    [0.0, 0.0],
+                    [1.0, 2.0],
+                    [2.0, 4.0],
+                    [3.0, 6.0],
+                    [4.0, 8.0],
+                    [np.nan, np.nan],
+                    [np.nan, np.nan],
+                    [np.nan, np.nan],
+                    [np.nan, np.nan],
+                    [9.0, 18.0],
+                    [10.0, 20.0],
+                    [11.0, 22.0],
+                    [12.0, 24.0],
+                    [13.0, 26.0],
+                    [14.0, 28.0],
+                    [15.0, 30.0],
+                    [16.0, 32.0],
+                    [17.0, 34.0],
+                    [18.0, 36.0],
+                    [19.0, 38.0],
+                    [20.0, 40.0],
+                    [21.0, 42.0],
+                    [22.0, 44.0],
+                    [23.0, 46.0],
+                ]
+            ),
+        )
+
+        filler = PdInterpolate(gaps_lte="4h")
+        test_df = filler.fit_transform(toy_holes.copy())
+
+        np.testing.assert_array_equal(
+            test_df,
+            np.array(
+                [
+                    [0.0, 0.0],
+                    [1.0, 2.0],
+                    [2.0, 4.0],
+                    [3.0, 6.0],
+                    [4.0, 8.0],
+                    [5.0, 10.0],
+                    [6.0, 12.0],
+                    [7.0, 14.0],
+                    [8.0, 16.0],
+                    [9.0, 18.0],
+                    [10.0, 20.0],
+                    [11.0, 22.0],
+                    [np.nan, 24.0],
+                    [np.nan, 26.0],
+                    [np.nan, 28.0],
+                    [np.nan, 30.0],
+                    [np.nan, 32.0],
+                    [17.0, 34.0],
+                    [18.0, 36.0],
+                    [19.0, 38.0],
+                    [20.0, 40.0],
+                    [21.0, 42.0],
+                    [22.0, 44.0],
+                    [23.0, 46.0],
+                ]
+            ),
+        )
+        assert True
 
     def test_pd_fill_gap(self):
         index = pd.date_range("2009-01-01", "2009-12-31 23:00:00", freq="h")

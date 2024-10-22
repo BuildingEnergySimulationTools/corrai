@@ -14,6 +14,7 @@ from corrai.base.utils import (
     get_data_blocks,
     get_outer_timestamps,
     check_and_return_dt_index_df,
+    get_gaps_mask,
 )
 from corrai.learning.error_detection import STLEDetector, SkSTLForecast
 
@@ -705,12 +706,24 @@ class PdInterpolate(PdTransformerBC):
 
     This class is a transformer that performs interpolation of missing
     values in a Pandas DataFrame, using the specified `method`.
+    It will interpolate the gaps of size greater or equal to gaps_gte OR less than
+    or equal to gaps_lte.
 
     Parameters:
     -----------
     method : str or None, default None
         The interpolation method to use. If None, the default interpolation
          method of the Pandas DataFrame `interpolate()` method will be used.
+         ["linear", "time", "index", "values", "nearest", "zero", "slinear",
+         "quadratic", "cubic", "barycentric", "polynomial", "krogh",
+         "piecewise_polynomial", "spline", "pchip", "akima", "cubicspline",
+         "from_derivatives"]
+
+    gaps_lte: str | pd.Timedelta | dt.timedelta: Interpolate gaps of size less or
+        equal to gaps lte
+
+    gaps_gte: str | pd.Timedelta | dt.timedelta: Interpolate gaps of size greater or
+        equal to gaps lte
 
     Attributes:
     -----------
@@ -735,9 +748,16 @@ class PdInterpolate(PdTransformerBC):
     A transformed Pandas DataFrame with interpolated missing values.
     """
 
-    def __init__(self, method=None):
+    def __init__(
+        self,
+        method: str = "linear",
+        gaps_lte: str | pd.Timedelta | dt.timedelta = None,
+        gaps_gte: str | pd.Timedelta | dt.timedelta = None,
+    ):
         super().__init__()
         self.method = method
+        self.gaps_lte = gaps_lte
+        self.gaps_gte = gaps_gte
 
     def fit(self, X: pd.Series | pd.DataFrame, y=None):
         X = check_and_return_dt_index_df(X)
@@ -747,7 +767,27 @@ class PdInterpolate(PdTransformerBC):
 
     def transform(self, X: pd.Series | pd.DataFrame):
         X = check_and_return_dt_index_df(X)
-        return X.interpolate(method=self.method)
+        for col in X:
+            if self.gaps_lte is not None:
+                gt_mask = get_gaps_mask(X[col], "GT", self.gaps_lte)
+            else:
+                gt_mask = np.ones(X.shape[0]).astype(bool)
+
+            if self.gaps_gte is not None:
+                lt_mask = get_gaps_mask(X[col], "LT", self.gaps_gte)
+            else:
+                lt_mask = np.ones(X.shape[0]).astype(bool)
+
+            if self.gaps_lte is None and self.gaps_gte is None:
+                lt_mask = gt_mask = np.zeros(X.shape[0]).astype(bool)
+
+            gaps_to_discard = X.index[np.logical_and(gt_mask, lt_mask)]
+            to_be_interpolated = ~X.index.isin(gaps_to_discard)
+            X.loc[to_be_interpolated, col] = X.loc[to_be_interpolated, col].interpolate(
+                method=self.method
+            )
+
+        return X
 
 
 class PdColumnResampler(PdTransformerBC):
