@@ -140,6 +140,22 @@ class TestUtils:
         res = get_data_blocks(toy_df, is_null=True, lower_td_threshold="3h")
         assert len(res["data_1"]) == 2
 
+        res = get_data_blocks(
+            toy_df,
+            is_null=True,
+            lower_td_threshold="3h",
+            lower_threshold_inclusive=False,
+        )
+        assert len(res["data_1"]) == 1
+
+        res = get_data_blocks(
+            toy_df,
+            is_null=True,
+            upper_td_threshold="3h",
+            upper_threshold_inclusive=False,
+        )
+        assert not res["data_1"]
+
     def test_outer_timestamps(self):
         ref_index = pd.date_range("2009-01-01", freq="d", periods=5)
         idx = pd.date_range("2009-01-02", freq="d", periods=2)

@@ -158,6 +158,8 @@ def get_data_blocks(
     cols: str | list[str] = None,
     lower_td_threshold: str | dt.timedelta = None,
     upper_td_threshold: str | dt.timedelta = None,
+    lower_threshold_inclusive: bool = True,
+    upper_threshold_inclusive: bool = True,
     return_combination=True,
 ):
     """
@@ -188,6 +190,10 @@ def get_data_blocks(
         The maximum duration of a period for it to be considered valid.
         Can be passed as a string (e.g., '1d' for one day) or a `timedelta`.
         If None, no threshold is applied, NaN values are considered gaps.
+    lower_threshold_inclusive : bool, optional
+        Include the gaps of exactly lower_td_threshold duration
+    upper_threshold_inclusive : bool, optional
+        Include the gaps of exactly upper_td_threshold duration
     return_combination : bool, optional
         If True (default), a combination column is created that checks for NaNs
         across all columns in the DataFrame. Gaps in this combination column represent
@@ -237,7 +243,16 @@ def get_data_blocks(
 
     def is_valid_block(group, lgt, hgt):
         new_block = pd.DatetimeIndex(group)
-        return lgt <= new_block.max() - new_block.min() + freq <= hgt
+        block_duration = new_block.max() - new_block.min() + freq
+
+        lower_check = (
+            block_duration >= lgt if lower_threshold_inclusive else block_duration > lgt
+        )
+        upper_check = (
+            block_duration <= hgt if upper_threshold_inclusive else block_duration < hgt
+        )
+
+        return lower_check and upper_check
 
     def finalize_block(current_group):
         # For indexes where frequency has been imposed,
