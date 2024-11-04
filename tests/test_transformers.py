@@ -240,7 +240,7 @@ class TestCustomTransformers:
             index=pd.DatetimeIndex(["2009-01-01"], dtype="datetime64[ns]", freq="3h"),
         )
 
-        transformer = PdResampler(rule="3h", method=np.mean)
+        transformer = PdResampler(rule="3h", method="mean")
 
         pd.testing.assert_frame_equal(ref, transformer.fit_transform(test))
 
@@ -272,8 +272,8 @@ class TestCustomTransformers:
 
         column_resampler = PdColumnResampler(
             rule="5h",
-            columns_method=[(["col2"], np.mean), (["col1"], np.mean)],
-            remainder=np.max,
+            columns_method=[(["col2"], "mean"), (["col1"], "mean")],
+            remainder="max",
         )
 
         pd.testing.assert_frame_equal(
@@ -282,7 +282,7 @@ class TestCustomTransformers:
 
         column_resampler = PdColumnResampler(
             rule="5h",
-            columns_method=[(["col2"], np.mean), (["col1"], np.mean)],
+            columns_method=[(["col2"], "mean"), (["col1"], "mean")],
             remainder="drop",
         )
 

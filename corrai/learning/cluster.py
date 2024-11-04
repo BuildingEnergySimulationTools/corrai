@@ -416,7 +416,7 @@ def plot_kde_set_point(
         font=dict(size=14),
     )
 
-    fig.show()
+    return fig
 
 
 def plot_time_series_kde(
@@ -492,4 +492,4 @@ def plot_time_series_kde(
         legend=dict(orientation="h", yanchor="bottom", y=1, xanchor="center", x=0.5),
     )
 
-    fig.show()
+    return fig
