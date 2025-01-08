@@ -282,6 +282,7 @@ class ModelSampler:
         model,
         sampling_method="LatinHypercube",
         simulation_options=None,
+        param_mappings=None,
     ):
         """
         Initialize the SimulationSampler instance.
@@ -294,6 +295,9 @@ class ModelSampler:
             to be used (default is "LatinHypercube").
         :param simulation_options: A dictionary of options passed
         to the model when running simulations.
+        :param param_mappings: A dictionary defining how
+        sampled parameters should be expanded.
+
 
         """
         self.parameters = parameters
@@ -302,8 +306,26 @@ class ModelSampler:
         self.sample = np.empty(shape=(0, len(parameters)))
         self.simulation_options = simulation_options
         self.sample_results = []
+        self.param_mappings = param_mappings or {}
+
         if sampling_method == "LatinHypercube":
             self.sampling_method = LatinHypercube
+
+    def _expand_parameter_dict(self, parameter_dict):
+        """
+        Expand a sampled parameter dictionary based on predefined mappings.
+
+        :param parameter_dict: The original parameter dictionary from the sample.
+        :return: An expanded parameter dictionary.
+        """
+        expanded_dict = {}
+        for param_name, value in parameter_dict.items():
+            if param_name in self.param_mappings:
+                mapping = self.param_mappings[param_name]
+                expanded_dict.update({k: value for k in mapping})
+            else:
+                expanded_dict[param_name] = value
+        return expanded_dict
 
     def get_boundary_sample(self):
         """
@@ -330,9 +352,6 @@ class ModelSampler:
     def add_sample(self, sample_size, seed=None):
         """
         Add a new sample of parameter sets.
-
-        :param sample_size: The size of the new sample.
-        :param seed: The seed for the random number generator (default is None).
         """
         if seed is not None:
             np.random.seed(seed)
@@ -359,10 +378,12 @@ class ModelSampler:
             sim_config = {
                 par[Parameter.NAME]: val for par, val in zip(self.parameters, simul)
             }
+            expanded_config = self._expand_parameter_dict(sim_config)
             prog_bar.comment = "Simulations"
 
             results = self.model.simulate(
-                parameter_dict=sim_config, simulation_options=self.simulation_options
+                parameter_dict=expanded_config,
+                simulation_options=self.simulation_options,
             )
             self.sample_results.append(results)
 
