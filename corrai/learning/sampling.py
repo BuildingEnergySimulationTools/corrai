@@ -276,7 +276,13 @@ class ModelSampler:
     - add_sample(sample_size, seed=None): Adds a new sample of parameter sets.
     """
 
-    def __init__(self, parameters, model, sampling_method="LatinHypercube"):
+    def __init__(
+        self,
+        parameters,
+        model,
+        sampling_method="LatinHypercube",
+        simulation_options=None,
+    ):
         """
         Initialize the SimulationSampler instance.
 
@@ -286,11 +292,15 @@ class ModelSampler:
             used for running simulations.
         :param sampling_method: The name of the sampling method
             to be used (default is "LatinHypercube").
+        :param simulation_options: A dictionary of options passed
+        to the model when running simulations.
+
         """
         self.parameters = parameters
         self.model = model
         self.sampling_method = sampling_method
         self.sample = np.empty(shape=(0, len(parameters)))
+        self.simulation_options = simulation_options
         self.sample_results = []
         if sampling_method == "LatinHypercube":
             self.sampling_method = LatinHypercube
@@ -351,7 +361,9 @@ class ModelSampler:
             }
             prog_bar.comment = "Simulations"
 
-            results = self.model.simulate(parameter_dict=sim_config)
+            results = self.model.simulate(
+                parameter_dict=sim_config, simulation_options=self.simulation_options
+            )
             self.sample_results.append(results)
 
         self.sample = np.vstack((self.sample, new_sample_value))
