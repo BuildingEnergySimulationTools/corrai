@@ -313,16 +313,45 @@ class ModelSampler:
 
     def _expand_parameter_dict(self, parameter_dict):
         """
-        Expand a sampled parameter dictionary based on predefined mappings.
+        Expands a sampled parameter dictionary based on predefined mappings.
 
-        :param parameter_dict: The original parameter dictionary from the sample.
-        :return: An expanded parameter dictionary.
+        This method takes a dictionary of sampled parameters and expands it by applying
+        predefined mappings stored in `self.param_mappings`. The expansion process works
+        as follows:
+
+        1. **If the mapping for a parameter is a dictionary**:
+           - The method checks if the sampled value exists as a key in the mapping.
+           - If found, the corresponding mapped values are added to the expanded dictionary.
+
+        2. **If the mapping for a parameter is an iterable (non-dictionary)**:
+           - The method applies the sampled value to each key in the mapping and adds
+             these key-value pairs to the expanded dictionary.
+
+        3. **If a parameter has no predefined mapping**:
+           - The original parameter and its value are added directly to the expanded dictionary.
+
+        Parameters
+        ----------
+        parameter_dict : dict
+            The original parameter dictionary from the sample, with parameter names as keys
+            and sampled values as values.
+
+        Returns
+        -------
+        dict
+            An expanded parameter dictionary containing the original parameters along with
+            additional key-value pairs derived from the predefined mappings.
+
         """
         expanded_dict = {}
         for param_name, value in parameter_dict.items():
             if param_name in self.param_mappings:
                 mapping = self.param_mappings[param_name]
-                expanded_dict.update({k: value for k in mapping})
+                if isinstance(mapping, dict):
+                    if value in mapping:
+                        expanded_dict.update(mapping[value])
+                else:
+                    expanded_dict.update({k: value for k in mapping})
             else:
                 expanded_dict[param_name] = value
         return expanded_dict
