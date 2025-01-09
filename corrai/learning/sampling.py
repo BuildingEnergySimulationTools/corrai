@@ -4,6 +4,10 @@ from pathlib import Path
 from corrai.base.parameter import Parameter
 from corrai.variant import simulate_variants
 
+import pandas as pd
+import plotly.io as pio
+import plotly.graph_objects as go
+
 from scipy.stats.qmc import LatinHypercube
 from fastprogress.fastprogress import force_console_behavior
 
@@ -443,3 +447,73 @@ class ModelSampler:
         """
         self.sample = np.empty(shape=(0, len(self.parameters)))
         self.sample_results = []
+
+
+def plot_pcp(
+    sample_results,
+    param_sample,
+    parameters,
+    indicators,
+    aggregation_method=np.mean,
+    html_file_path=None,
+):
+    """
+    Plots a parallel coordinate plot for sensitivity analysis results.
+      Notes
+    -----
+    - The function handles categorical parameters by converting them to numerical
+      codes using `pandas.Categorical`. The tick values are shifted slightly to
+      improve readability.
+    - The first indicator in the list is used to color the lines in the plot.
+    - The function requires the Plotly library (`plotly.graph_objects`) to create
+      the interactive plot.
+    """
+    data_dict = [
+        {param[Parameter.NAME]: value for param, value in zip(parameters, sample)}
+        for sample in param_sample
+    ]
+
+    if isinstance(indicators, str):
+        indicators = [indicators]
+
+    for i, df in enumerate(sample_results):
+        for indicator in indicators:
+            if indicator in df.columns:
+                data_dict[i][indicator] = aggregation_method(df[indicator])
+
+    df_plot = pd.DataFrame(data_dict)
+    dim_list = []
+
+    for col in df_plot.select_dtypes(include="object").columns:
+        cat = pd.Categorical(df_plot[col])
+        df_plot[col] = cat.codes
+        dim_list.append(
+            dict(
+                range=[0, len(cat.categories) - 1],
+                label=col,
+                tickvals=list(set(cat.codes)),
+                ticktext=list(cat.categories),
+                values=df_plot[col].tolist(),
+            )
+        )
+
+    for col in indicators:
+        dim_list.append(dict(label=col, values=df_plot[col].tolist()))
+
+    color_indicator = indicators[0] if indicators else None
+
+    fig = go.Figure(
+        data=go.Parcoords(
+            line=dict(
+                color=df_plot[color_indicator],
+                colorscale="Plasma",
+                showscale=True,
+            ),
+            dimensions=dim_list,
+        )
+    )
+
+    if html_file_path:
+        pio.write_html(fig, html_file_path)
+
+    return fig
