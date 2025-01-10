@@ -13,6 +13,7 @@ from fastprogress.fastprogress import force_console_behavior
 
 import random
 import itertools
+from itertools import product
 
 master_bar, progress_bar = force_console_behavior()
 
@@ -254,6 +255,7 @@ class VariantSubSampler:
         self.not_simulated_combinations = []
 
 
+## TODO issue with n_sample: when 1, makes 3 (2 boundaries +1)
 class ModelSampler:
     """
     A class for sampling parameter sets and running simulations using a simulator.
@@ -314,6 +316,34 @@ class ModelSampler:
 
         if sampling_method == "LatinHypercube":
             self.sampling_method = LatinHypercube
+
+    def simulate_all_combinations(self):
+        choice_parameters = [
+            param for param in self.parameters if param[Parameter.TYPE] == "Choice"
+        ]
+        intervals = [param[Parameter.INTERVAL] for param in choice_parameters]
+        all_combinations = list(product(*intervals))
+        param_names = [param[Parameter.NAME] for param in choice_parameters]
+
+        prog_bar = progress_bar(range(len(all_combinations)))
+
+        applied_parameters = []
+        expanded_parameters = []
+
+        for idx, combination in zip(prog_bar, all_combinations):
+            param_dict = dict(zip(param_names, combination))
+            expanded_param_dict = self._expand_parameter_dict(param_dict)
+            prog_bar.comment = f"Simulation {idx + 1}/{len(all_combinations)}"
+            result = self.model.simulate(
+                parameter_dict=expanded_param_dict,
+                simulation_options=self.simulation_options,
+            )
+            self.sample_results.append(result)
+            applied_parameters.append(combination)
+            expanded_parameters.append(expanded_param_dict)
+
+        applied_parameters_array = np.array(applied_parameters)
+        self.sample = np.vstack((self.sample, applied_parameters_array))
 
     def _expand_parameter_dict(self, parameter_dict):
         """
