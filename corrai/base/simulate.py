@@ -74,6 +74,7 @@ def run_simulations(
 def run_list_of_models_in_parallel(
     models_list: list[Model],
     simulation_options: dict,
+    parameter_dicts: list[dict[str, any]],
     n_cpu: int = -1,
     simulate_kwargs: dict = None,
 ):
@@ -94,13 +95,20 @@ def run_list_of_models_in_parallel(
     grouped_sample = [
         models_list[i : i + n_cpu] for i in range(0, len(models_list), n_cpu)
     ]
+    grouped_params = [
+        parameter_dicts[i : i + n_cpu] for i in range(0, len(parameter_dicts), n_cpu)
+    ]
+
     prog_bar = progress_bar(range(len(grouped_sample)))
     collect = []
-    for _mb, group in zip(prog_bar, grouped_sample):
+
+    for _mb, (group, params_group) in zip(
+        prog_bar, zip(grouped_sample, grouped_params)
+    ):
         if n_cpu == 1:
             results = [
                 group[0].simulate(
-                    parameter_dict=None,
+                    parameter_dict=params_group[0],
                     simulation_options=simulation_options,
                     **simulate_kwargs,
                 )
@@ -110,8 +118,8 @@ def run_list_of_models_in_parallel(
                 results = pool.map(
                     run_model,
                     [
-                        (None, model, simulation_options, simulate_kwargs)
-                        for model in group
+                        (param_dict, model, simulation_options, simulate_kwargs)
+                        for param_dict, model in zip(params_group, group)
                     ],
                 )
         collect.append(results)

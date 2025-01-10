@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 from pathlib import Path
 
@@ -344,6 +346,100 @@ class ModelSampler:
 
         applied_parameters_array = np.array(applied_parameters)
         self.sample = np.vstack((self.sample, applied_parameters_array))
+
+    def simulate_combined_variants(
+        self,
+        variant_dict,
+        modifier_map,
+        simulation_options,
+        custom_combinations=None,
+    ):
+        """
+        Simulates all combinations of parameters and variants by applying a set of parameter values
+        and then generating multiple model variants based on the provided variant dictionary.
+
+        The function first generates all possible combinations of parameters specified as "Choice"
+        in the parameter list. For each parameter combination, it applies the expanded parameters
+        to the base model and then simulates the provided custom variant combinations.
+
+        The results of each simulation are stored in `self.sample_results`, and the parameter and variant
+        combinations used for each simulation are stored in `self.sample`.
+
+        Parameters
+        ----------
+        variant_dict : dict
+            A dictionary containing variant definitions. Keys are variant names, and values are dictionaries
+            with the modifier, arguments, and description required to apply each variant.
+
+        modifier_map : dict
+            A dictionary that maps variant modifiers to functions that apply the modifications to the model.
+
+        simulation_options : dict
+            A dictionary of options to be passed to the model's `simulate` method.
+
+        custom_combinations : list of tuples, optional
+            A list of custom variant combinations to be applied during the simulation. Each combination is
+            represented as a tuple of variant names.
+
+        Returns
+        -------
+        tuple
+            A tuple containing:
+            - `self.sample_results` (list): The list of results from all simulations.
+            - `self.sample` (numpy.ndarray): An array containing the parameter and variant combinations
+              used in each simulation.
+
+        Notes
+        -----
+        - The function expects that `self.parameters` contains parameters with the `Choice` type, which
+          defines a discrete set of possible values for each parameter.
+        - The function generates parameter combinations using `itertools.product` to exhaustively cover
+          all possible choices.
+        - The parameter and variant combinations are stored in `self.sample` using `np.vstack`, ensuring
+          that all combinations are stored in a structured format.
+        - The function calls `simulate_variants` to generate and simulate each variant combination.
+        """
+
+        from itertools import product
+
+        if not isinstance(self.sample, np.ndarray) or self.sample.size == 0:
+            self.sample = np.empty(
+                (0, len(self.parameters) + len(custom_combinations[0]))
+            )
+
+        choice_parameters = [
+            param for param in self.parameters if param[Parameter.TYPE] == "Choice"
+        ]
+        param_names = [param[Parameter.NAME] for param in choice_parameters]
+        param_values = [param[Parameter.INTERVAL] for param in choice_parameters]
+
+        all_parameter_dicts = [
+            dict(zip(param_names, combination))
+            for combination in product(*param_values)
+        ]
+
+        for idx, param_dict in enumerate(all_parameter_dicts):
+            expanded_param_dict = self._expand_parameter_dict(param_dict)
+            print(f"Simulating combination {idx + 1}/{len(all_parameter_dicts)}...")
+
+            result = simulate_variants(
+                n_cpu=1,
+                model=deepcopy(self.model),
+                variant_dict=variant_dict,
+                modifier_map=modifier_map,
+                simulation_options=simulation_options,
+                custom_combinations=custom_combinations,
+                parameter_dict=expanded_param_dict,
+            )
+
+            new_sample_value = np.array(
+                [
+                    list(param_dict.values()) + list(variant_tuple)
+                    for variant_tuple in custom_combinations
+                ]
+            )
+            self.sample = np.vstack((self.sample, new_sample_value))
+            self.sample_results.extend(result)
 
     def _expand_parameter_dict(self, parameter_dict):
         """
