@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 
 from corrai.base.parameter import Parameter
-from corrai.variant import simulate_variants
+from corrai.variant import simulate_variants, get_combined_variants
 
 import pandas as pd
 import plotly.io as pio
@@ -85,11 +85,11 @@ class VariantSubSampler:
         """
         Add a sample to the VariantSubSampler.
 
+            seed (optional): Seed for random number generation. Defaults to None.
         Args:
             sample_size: The size of the sample to be added.
             simulate (optional): Whether to perform simulation
             after adding the sample. Defaults to True.
-            seed (optional): Seed for random number generation. Defaults to None.
             ensure_full_coverage (optional): Whether to ensure
             full coverage of variants in the sample. Defaults to False.
             n_cpu (optional): Number of CPU cores to use for simulation. Defaults to -1.
@@ -145,7 +145,8 @@ class VariantSubSampler:
         if additional_needed > 0:
             print(
                 "Warning: Not enough unique combinations "
-                "to meet the additional requested sample size."
+                "to meet the additional requested sampl"
+                "e size."
             )
 
         if simulate:
@@ -353,6 +354,7 @@ class ModelSampler:
         modifier_map,
         simulation_options,
         custom_combinations=None,
+        add_existing=False,
     ):
         """
         Simulates all combinations of parameters and variants by applying a set of parameter values
@@ -402,10 +404,13 @@ class ModelSampler:
 
         from itertools import product
 
+        if custom_combinations is None:
+            combinations = get_combined_variants(variant_dict, add_existing)
+        else:
+            combinations = custom_combinations
+
         if not isinstance(self.sample, np.ndarray) or self.sample.size == 0:
-            self.sample = np.empty(
-                (0, len(self.parameters) + len(custom_combinations[0]))
-            )
+            self.sample = np.empty((0, len(self.parameters) + len(combinations[0])))
 
         choice_parameters = [
             param for param in self.parameters if param[Parameter.TYPE] == "Choice"
@@ -428,14 +433,14 @@ class ModelSampler:
                 variant_dict=variant_dict,
                 modifier_map=modifier_map,
                 simulation_options=simulation_options,
-                custom_combinations=custom_combinations,
+                custom_combinations=combinations,
                 parameter_dict=expanded_param_dict,
             )
 
             new_sample_value = np.array(
                 [
                     list(param_dict.values()) + list(variant_tuple)
-                    for variant_tuple in custom_combinations
+                    for variant_tuple in combinations
                 ]
             )
             self.sample = np.vstack((self.sample, new_sample_value))
