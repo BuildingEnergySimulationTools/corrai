@@ -88,12 +88,12 @@ def simulate_variants(
     variant_dict: dict[str, dict[VariantKeys, Any]],
     modifier_map: dict[str, Callable],
     simulation_options: dict[str, Any],
-    parameter_dict: dict[str, Any],
     n_cpu: int = -1,
     add_existing: bool = False,
     custom_combinations=None,
     save_dir: Path = None,
     file_extension: str = ".txt",
+    parameter_dict: dict = None,
     simulate_kwargs: dict = None,
 ):
     """
