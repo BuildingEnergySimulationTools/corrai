@@ -20,6 +20,54 @@ from itertools import product
 master_bar, progress_bar = force_console_behavior()
 
 
+def expand_parameter_dict(parameter_dict, param_mappings):
+    """
+    Expands a sampled parameter dictionary based on predefined mappings.
+
+    This method takes a dictionary of sampled parameters and expands it by applying
+    predefined mappings stored in `self.param_mappings`. The expansion process works
+    as follows:
+
+    1. **If the mapping for a parameter is a dictionary**:
+       - The method checks if the sampled value exists as a key in the mapping.
+       - If found, the corresponding mapped values are added to the expanded dictionary.
+
+    2. **If the mapping for a parameter is an iterable (non-dictionary)**:
+       - The method applies the sampled value to each key in the mapping and adds
+         these key-value pairs to the expanded dictionary.
+
+    3. **If a parameter has no predefined mapping**:
+       - The original parameter and its value are added directly to the expanded dictionary.
+
+    Parameters
+    ----------
+    parameter_dict : dict
+        The original parameter dictionary from the sample, with parameter names as keys
+        and sampled values as values.
+    param_mappings:  dict
+    A dictionary defining how sampled parameters should be expanded.
+
+    Returns
+    -------
+    dict
+        An expanded parameter dictionary containing the original parameters along with
+        additional key-value pairs derived from the predefined mappings.
+
+    """
+    expanded_dict = {}
+    for param_name, value in parameter_dict.items():
+        if param_name in param_mappings:
+            mapping = param_mappings[param_name]
+            if isinstance(mapping, dict):
+                if value in mapping:
+                    expanded_dict.update(mapping[value])
+            else:
+                expanded_dict.update({k: value for k in mapping})
+        else:
+            expanded_dict[param_name] = value
+    return expanded_dict
+
+
 class VariantSubSampler:
     """
     A class for subsampling variants from a given set of combinations.
@@ -28,10 +76,10 @@ class VariantSubSampler:
     def __init__(
         self,
         model,
-        combinations,
         add_existing=False,
         variant_dict=None,
         modifier_map=None,
+        custom_combination=None,
         simulation_options=None,
         save_dir=None,
         file_extension=".txt",
@@ -41,8 +89,9 @@ class VariantSubSampler:
 
         Args:
             model: The model to be used for simulations.
-            combinations: List of lists, each inner list
-            representing a combination of variants.
+            custom_combination: List of lists, each inner list
+            representing a custom combination of variants. Otherwise, all variants are automatically
+            deduced from variant_dict and modifier_map.
             add_existing: A boolean flag indicating whether to include existing
                 variant to each modifier.
                 If True, existing modifiers will be included;
@@ -59,16 +108,20 @@ class VariantSubSampler:
 
         """
         self.model = model
-        self.combinations = combinations
         self.add_existing = add_existing
         self.variant_dict = variant_dict
+        self.combinations = (
+            custom_combination
+            if custom_combination
+            else get_combined_variants(self.variant_dict)
+        )
         self.modifier_map = modifier_map
         self.simulation_options = simulation_options
         self.save_dir = save_dir
         self.file_extension = file_extension
         self.sample = []
         self.simulated_samples = []
-        self.all_variants = set(itertools.chain(*combinations))
+        self.all_variants = set(itertools.chain(*self.combinations))
         self.sample_results = []
         self.not_simulated_combinations = []
         self.variant_coverage = {variant: False for variant in self.all_variants}
@@ -222,6 +275,102 @@ class VariantSubSampler:
             self.simulated_samples.extend(self.not_simulated_combinations)
             self.not_simulated_combinations = []  # Clear the list after simulation
 
+    def simulate_all_variants_and_parameters(
+        self,
+        parameter_dict,
+        param_mapping=None,
+        simulation_options=None,
+        n_cpu=1,
+    ):
+        """
+        Simulates all combinations of parameters and variants by applying parameter sets
+        and generating multiple model variants based on the provided variant dictionary.
+
+
+        Parameters
+        ----------
+
+        parameter_dict : dict
+            A dictionary containing the initial sampled parameters, where keys are parameter names and values
+            are the sampled values. These parameters are expanded during simulation using the provided parameter
+            mappings.
+
+        param_mapping : dict, optional
+            A dictionary defining how sampled parameters should be expanded into additional key-value pairs
+            before being applied to the model. Each key in `param_mapping` corresponds to a parameter name
+            in `parameter_dict`. The value can be:
+            - A dictionary: Maps discrete parameter values to new parameter sets.
+            - An iterable: Directly applies the sampled value to a set of keys.
+
+        simulation_options : dict, optional
+            Simulation options to override the default `self.simulation_options` set during instantiation.
+
+        n_cpu : int, optional
+            Number of CPU cores to use for parallel simulation. Defaults to 1 (for now, -1 not working with both parameters and variants variations).
+
+        Returns
+        -------
+        None
+            The method updates the `self.sample` and `self.sample_results` attributes with the parameter and variant
+            combinations used in each simulation and the corresponding simulation results.
+
+        Notes
+        -----
+        - The function expects that `self.parameters` contains parameters with the `Choice` type, which defines a discrete
+          set of possible values for each parameter.
+        - It generates parameter combinations using `itertools.product` to exhaustively cover all possible choices.
+        - The parameter and variant combinations are stored in `self.sample` using `np.vstack`.
+        - The function calls `simulate_variants` to generate and simulate each variant combination.
+        - The `self.param_mappings` attribute is used to dynamically expand the sampled parameters into additional
+          key-value pairs, which can modify how the model parameters are applied during simulations.
+        """
+        effective_simulation_options = (
+            simulation_options
+            if simulation_options is not None
+            else self.simulation_options
+        )
+
+        if not effective_simulation_options:
+            raise ValueError("Simulation options must be provided for the simulation.")
+
+        if not isinstance(self.sample, np.ndarray) or self.sample.size == 0:
+            self.sample = np.empty((0, len(parameter_dict) + len(self.combinations[0])))
+
+        choice_parameters = [
+            param for param in parameter_dict if param[Parameter.TYPE] == "Choice"
+        ]
+        param_names = [param[Parameter.NAME] for param in choice_parameters]
+        param_values = [param[Parameter.INTERVAL] for param in choice_parameters]
+
+        all_parameter_dicts = [
+            dict(zip(param_names, combination))
+            for combination in product(*param_values)
+        ]
+
+        for idx, param_dict in enumerate(all_parameter_dicts):
+            expanded_param_dict = expand_parameter_dict(param_dict, param_mapping)
+            print(f"Simulating combination {idx + 1}/{len(all_parameter_dicts)}...")
+
+            result = simulate_variants(
+                n_cpu=n_cpu,
+                add_existing=self.add_existing,
+                model=deepcopy(self.model),
+                variant_dict=self.variant_dict,
+                modifier_map=self.modifier_map,
+                simulation_options=effective_simulation_options,
+                custom_combinations=self.combinations,
+                parameter_dict=expanded_param_dict,
+            )
+
+            new_sample_value = np.array(
+                [
+                    list(param_dict.values()) + list(variant_tuple)
+                    for variant_tuple in self.combinations
+                ]
+            )
+            self.sample = np.vstack((self.sample, new_sample_value))
+            self.sample_results.extend(result)
+
     def clear_sample(self):
         """
         Clears all samples and related simulation data from the sampler. This method is
@@ -335,7 +484,7 @@ class ModelSampler:
 
         for idx, combination in zip(prog_bar, all_combinations):
             param_dict = dict(zip(param_names, combination))
-            expanded_param_dict = self._expand_parameter_dict(param_dict)
+            expanded_param_dict = expand_parameter_dict(param_dict, self.param_mappings)
             prog_bar.comment = f"Simulation {idx + 1}/{len(all_combinations)}"
             result = self.model.simulate(
                 parameter_dict=expanded_param_dict,
@@ -347,149 +496,6 @@ class ModelSampler:
 
         applied_parameters_array = np.array(applied_parameters)
         self.sample = np.vstack((self.sample, applied_parameters_array))
-
-    def simulate_combined_variants(
-        self,
-        variant_dict,
-        modifier_map,
-        simulation_options,
-        custom_combinations=None,
-        add_existing=False,
-    ):
-        """
-        Simulates all combinations of parameters and variants by applying a set of parameter values
-        and then generating multiple model variants based on the provided variant dictionary.
-
-        The function first generates all possible combinations of parameters specified as "Choice"
-        in the parameter list. For each parameter combination, it applies the expanded parameters
-        to the base model and then simulates the provided custom variant combinations.
-
-        The results of each simulation are stored in `self.sample_results`, and the parameter and variant
-        combinations used for each simulation are stored in `self.sample`.
-
-        Parameters
-        ----------
-        variant_dict : dict
-            A dictionary containing variant definitions. Keys are variant names, and values are dictionaries
-            with the modifier, arguments, and description required to apply each variant.
-
-        modifier_map : dict
-            A dictionary that maps variant modifiers to functions that apply the modifications to the model.
-
-        simulation_options : dict
-            A dictionary of options to be passed to the model's `simulate` method.
-
-        custom_combinations : list of tuples, optional
-            A list of custom variant combinations to be applied during the simulation. Each combination is
-            represented as a tuple of variant names.
-
-        Returns
-        -------
-        tuple
-            A tuple containing:
-            - `self.sample_results` (list): The list of results from all simulations.
-            - `self.sample` (numpy.ndarray): An array containing the parameter and variant combinations
-              used in each simulation.
-
-        Notes
-        -----
-        - The function expects that `self.parameters` contains parameters with the `Choice` type, which
-          defines a discrete set of possible values for each parameter.
-        - The function generates parameter combinations using `itertools.product` to exhaustively cover
-          all possible choices.
-        - The parameter and variant combinations are stored in `self.sample` using `np.vstack`, ensuring
-          that all combinations are stored in a structured format.
-        - The function calls `simulate_variants` to generate and simulate each variant combination.
-        """
-
-        from itertools import product
-
-        if custom_combinations is None:
-            combinations = get_combined_variants(variant_dict, add_existing)
-        else:
-            combinations = custom_combinations
-
-        if not isinstance(self.sample, np.ndarray) or self.sample.size == 0:
-            self.sample = np.empty((0, len(self.parameters) + len(combinations[0])))
-
-        choice_parameters = [
-            param for param in self.parameters if param[Parameter.TYPE] == "Choice"
-        ]
-        param_names = [param[Parameter.NAME] for param in choice_parameters]
-        param_values = [param[Parameter.INTERVAL] for param in choice_parameters]
-
-        all_parameter_dicts = [
-            dict(zip(param_names, combination))
-            for combination in product(*param_values)
-        ]
-
-        for idx, param_dict in enumerate(all_parameter_dicts):
-            expanded_param_dict = self._expand_parameter_dict(param_dict)
-            print(f"Simulating combination {idx + 1}/{len(all_parameter_dicts)}...")
-
-            result = simulate_variants(
-                n_cpu=1,
-                model=deepcopy(self.model),
-                variant_dict=variant_dict,
-                modifier_map=modifier_map,
-                simulation_options=simulation_options,
-                custom_combinations=combinations,
-                parameter_dict=expanded_param_dict,
-            )
-
-            new_sample_value = np.array(
-                [
-                    list(param_dict.values()) + list(variant_tuple)
-                    for variant_tuple in combinations
-                ]
-            )
-            self.sample = np.vstack((self.sample, new_sample_value))
-            self.sample_results.extend(result)
-
-    def _expand_parameter_dict(self, parameter_dict):
-        """
-        Expands a sampled parameter dictionary based on predefined mappings.
-
-        This method takes a dictionary of sampled parameters and expands it by applying
-        predefined mappings stored in `self.param_mappings`. The expansion process works
-        as follows:
-
-        1. **If the mapping for a parameter is a dictionary**:
-           - The method checks if the sampled value exists as a key in the mapping.
-           - If found, the corresponding mapped values are added to the expanded dictionary.
-
-        2. **If the mapping for a parameter is an iterable (non-dictionary)**:
-           - The method applies the sampled value to each key in the mapping and adds
-             these key-value pairs to the expanded dictionary.
-
-        3. **If a parameter has no predefined mapping**:
-           - The original parameter and its value are added directly to the expanded dictionary.
-
-        Parameters
-        ----------
-        parameter_dict : dict
-            The original parameter dictionary from the sample, with parameter names as keys
-            and sampled values as values.
-
-        Returns
-        -------
-        dict
-            An expanded parameter dictionary containing the original parameters along with
-            additional key-value pairs derived from the predefined mappings.
-
-        """
-        expanded_dict = {}
-        for param_name, value in parameter_dict.items():
-            if param_name in self.param_mappings:
-                mapping = self.param_mappings[param_name]
-                if isinstance(mapping, dict):
-                    if value in mapping:
-                        expanded_dict.update(mapping[value])
-                else:
-                    expanded_dict.update({k: value for k in mapping})
-            else:
-                expanded_dict[param_name] = value
-        return expanded_dict
 
     def get_boundary_sample(self):
         """
@@ -542,7 +548,7 @@ class ModelSampler:
             sim_config = {
                 par[Parameter.NAME]: val for par, val in zip(self.parameters, simul)
             }
-            expanded_config = self._expand_parameter_dict(sim_config)
+            expanded_config = expand_parameter_dict(sim_config, self.param_mappings)
             prog_bar.comment = "Simulations"
 
             results = self.model.simulate(
