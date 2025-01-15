@@ -277,7 +277,7 @@ class VariantSubSampler:
 
     def simulate_all_variants_and_parameters(
         self,
-        parameter_dict,
+        parameter,
         param_mapping=None,
         simulation_options=None,
         n_cpu=1,
@@ -290,10 +290,8 @@ class VariantSubSampler:
         Parameters
         ----------
 
-        parameter_dict : dict
-            A dictionary containing the initial sampled parameters, where keys are parameter names and values
-            are the sampled values. These parameters are expanded during simulation using the provided parameter
-            mappings.
+        parameter : list
+            A list of parameters.
 
         param_mapping : dict, optional
             A dictionary defining how sampled parameters should be expanded into additional key-value pairs
@@ -334,10 +332,10 @@ class VariantSubSampler:
             raise ValueError("Simulation options must be provided for the simulation.")
 
         if not isinstance(self.sample, np.ndarray) or self.sample.size == 0:
-            self.sample = np.empty((0, len(parameter_dict) + len(self.combinations[0])))
+            self.sample = np.empty((0, len(parameter) + len(self.combinations[0])))
 
         choice_parameters = [
-            param for param in parameter_dict if param[Parameter.TYPE] == "Choice"
+            param for param in parameter if param[Parameter.TYPE] == "Choice"
         ]
         param_names = [param[Parameter.NAME] for param in choice_parameters]
         param_values = [param[Parameter.INTERVAL] for param in choice_parameters]
