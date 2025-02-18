@@ -75,6 +75,7 @@ def run_list_of_models_in_parallel(
     models_list: list[Model],
     simulation_options: dict,
     n_cpu: int = -1,
+    parameter_dicts: list[dict[str, any]] = None,
     simulate_kwargs: dict = None,
 ):
     """
@@ -85,6 +86,8 @@ def run_list_of_models_in_parallel(
         of cpus
     :param models_list: A list of Model objects to be simulated in parallel.
     :param simulation_options: A dictionary containing simulation options.
+    :param parameter_dicts: A list of dictionaries containing parameter sets for each model.
+                            If not provided, models will be simulated with `None` as the parameter dict.
     :return: A list of Pandas DataFrames with simulation results for each model.
     """
     simulate_kwargs = {} if simulate_kwargs is None else simulate_kwargs
@@ -94,24 +97,34 @@ def run_list_of_models_in_parallel(
     grouped_sample = [
         models_list[i : i + n_cpu] for i in range(0, len(models_list), n_cpu)
     ]
+    grouped_params = (
+        [parameter_dicts[i : i + n_cpu] for i in range(0, len(parameter_dicts), n_cpu)]
+        if parameter_dicts is not None
+        else [[None] * len(group) for group in grouped_sample]
+    )
+
     prog_bar = progress_bar(range(len(grouped_sample)))
     collect = []
-    for _mb, group in zip(prog_bar, grouped_sample):
+
+    for _mb, (group, params_group) in zip(
+        prog_bar, zip(grouped_sample, grouped_params)
+    ):
         if n_cpu == 1:
             results = [
-                group[0].simulate(
-                    parameter_dict=None,
+                group[i].simulate(
+                    parameter_dict=params_group[i],
                     simulation_options=simulation_options,
                     **simulate_kwargs,
                 )
+                for i in range(len(group))
             ]
         else:
             with Pool(n_cpu) as pool:
                 results = pool.map(
                     run_model,
                     [
-                        (None, model, simulation_options, simulate_kwargs)
-                        for model in group
+                        (param_dict, model, simulation_options, simulate_kwargs)
+                        for param_dict, model in zip(params_group, group)
                     ],
                 )
         collect.append(results)
