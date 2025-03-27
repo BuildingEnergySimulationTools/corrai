@@ -15,7 +15,6 @@ from corrai.base.model import Model
 from corrai.base.simulate import run_simulations
 from corrai.base.math import aggregate_time_series
 from corrai.multi_optimize import plot_parcoord
-from joblib.testing import param
 
 
 class Method(enum.Enum):
