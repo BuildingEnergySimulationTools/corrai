@@ -6,7 +6,10 @@ from pathlib import Path
 class Model(ABC):
     @abstractmethod
     def simulate(
-        self, parameter_dict: dict = None, simulation_options: dict = None
+        self,
+        parameter_dict: dict = None,
+        simulation_options: dict = None,
+        simulation_kwargs: dict = None,
     ) -> pd.DataFrame:
         """
         Run simulation for given parameter_dict and simulation options.
