@@ -1,5 +1,5 @@
 import enum
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -11,9 +11,11 @@ from SALib.sample import fast_sampler, latin
 from SALib.sample import morris as morris_sampler
 
 from corrai.base.parameter import Parameter
+from corrai.base.model import Model
 from corrai.base.simulate import run_simulations
 from corrai.base.math import aggregate_time_series
 from corrai.multi_optimize import plot_parcoord
+from joblib.testing import param
 
 
 class Method(enum.Enum):
@@ -670,115 +672,130 @@ def plot_pcp(
 
 class ObjectiveFunction:
     """
-    A class to represent the objective function for model
-    calibration and optimization using scipy.
+    A class to represent configure an objective function for model calibration
+    and optimization.
+    A specific method is designed for scipy compatibility.
+
+    Parameters
+    ----------
+    model : Model
+        The model to be calibrated.
+    simulation_options : dict
+        Dictionary containing simulation options.
+    param_list : list of dict
+        List of dictionaries specifying the parameters to be calibrated,
+        including bounds and initial values.
+    indicators_config : dict[str, tuple[Callable, pd.Series | pd.DataFrame | None] | Callable]
+        Dictionary where keys are indicator names corresponding to Model simulation
+         output names, and values are either:
+        - A aggregation function to compute the indicator (ex: np.mean, np.sum).
+        - A tuple (function, reference data) if comparison when reference is needed.
+        (ex. sklearn.metrics.mean_squared_error, corrai.metrics.mae)
+    scipy_obj_indicator : str, optional
+        The indicator to be used as the objective function for scipy optimization.
+        Defaults to the first key in `indicators_config`.
 
     Attributes
     ----------
     model : Model
-        The model to be calibrated
+        The simulation model being calibrated.
     simulation_options : dict
-        Dictionary containing simulation options, including input data.
+        Options for running the simulation.
     param_list : list of dict
-        List of dictionaries specifying the parameters to be calibrated.
-    indicators : list of str
-        List of indicators to be used in the objective function.
-    agg_methods_dict : dict, optional
-        Dictionary specifying aggregation methods for each indicator. Defaults to mean.
-    reference_dict : dict, optional
-        Dictionary mapping indicators to reference columns in
-        reference dataframe. Required if reference is provided.
-    reference_df : pd.DataFrame, optional
-        DataFrame containing reference data for the indicators.
-        Required if reference_dict is provided.
+        List of parameter dictionaries, each containing:
+        - `Parameter.NAME`: Name of the parameter.
+        - `Parameter.INTERVAL`: Bounds for the parameter.
+        - `Parameter.INIT_VALUE`: Initial value (optional).
+    indicators_config : dict
+        Dictionary mapping indicator names to their computation functions and optional reference data.
+    scipy_obj_indicator : str
+        The indicator used as the objective function in `scipy.optimize`.
+
+    Properties
+    ----------
+    bounds : list[tuple[float, float]]
+        List of parameter bounds extracted from `param_list`.
+    init_values : list[float] or None
+        List of initial values for parameters if provided; otherwise, None.
 
     Methods
     -------
-    function(x_dict)
-        Calculate the objective function for given parameter values.
-    scipy_obj_function(x)
-        Wrapper for scipy.optimize that calculates the objective
-        function for given parameter values.
+    function(param_dict, kwargs: dict = None) -> dict[str, float]
+        Runs the model simulation and computes indicator values.
+
+        Parameters
+        ----------
+        param_dict : dict
+            Dictionary containing parameter names and their values.
+        kwargs : dict, optional
+            Additional arguments for the model simulation.
+
+        Returns
+        -------
+        dict[str, float]
+            Dictionary containing computed indicator values.
+
+    scipy_obj_function(x, kwargs: dict = None) -> float
+        Computes the objective function value for scipy optimization.
+
+        Parameters
+        ----------
+        x : float or list of float
+            List of parameter values or a single parameter value.
+        kwargs : dict, optional
+            Additional arguments for the model simulation.
+
+        Returns
+        -------
+        float
+            The calculated value of the objective function based on `scipy_obj_indicator`.
+
+    Examples
+    --------
+    >>> from sklearn.metrics import mean_squared_error
+    >>> model = SomeModel()
+    >>> simulation_options = {"duration": 100}
+    >>> param_list = [{Parameter.NAME: "param1", Parameter.INTERVAL: [0, 1], Parameter.INIT_VALUE: 0.5}]
+    >>> indicators_config = {"res": (mean_squared_error, reference_series)}
+    >>> obj_func = ObjectiveFunction(model, simulation_options, param_list, indicators_config)
+    >>> obj_func.function({"param1": 0.8})
+    {'indicator1': 0.123}
+    >>> obj_func.scipy_obj_function([0.8])
+    0.123
     """
 
     def __init__(
         self,
-        model,
-        simulation_options,
-        param_list,
-        indicators,
-        agg_methods_dict=None,
-        reference_dict=None,
-        reference_df=None,
+        model: Model,
+        simulation_options: dict,
+        param_list: list[dict],
+        indicators_config: dict[
+            str, tuple[Callable, pd.Series | pd.DataFrame | None] | Callable
+        ],
+        scipy_obj_indicator: str = None,
     ):
-        """
-        Initialize the ObjectiveFunction class with the model,
-        simulation options, parameters, and indicators.
-
-        Parameters
-        ----------
-        model : Model
-            The model to be calibrated.
-        simulation_options : dict
-            Dictionary containing simulation options, including input data.
-        param_list : list of dict
-            List of dictionaries specifying the parameters to be calibrated.
-        indicators : list of str
-            List of indicators to be used in the objective function.
-        agg_methods_dict : dict, optional
-            Dictionary specifying aggregation methods for each indicator.
-            Defaults to mean.
-        """
         self.model = model
         self.param_list = param_list
-        self.indicators = indicators
+        self.indicators_config = indicators_config
         self.simulation_options = simulation_options
-
-        if agg_methods_dict is None:
-            self.agg_methods_dict = {ind: np.mean for ind in self.indicators}
-        else:
-            self.agg_methods_dict = agg_methods_dict
-        if (reference_dict is not None and reference_df is None) or (
-            reference_dict is None and reference_df is not None
-        ):
-            raise ValueError("Both reference_dict and reference_df should be provided")
-        self.reference_dict = reference_dict
-        self.reference_df = reference_df
+        self.scipy_obj_indicator = (
+            list(indicators_config.keys())[0]
+            if scipy_obj_indicator is None
+            else scipy_obj_indicator
+        )
 
     @property
     def bounds(self):
-        """
-        Get the bounds from param_list.
-
-        Returns
-        -------
-        list of tuple
-            A list of tuples containing the bounds for each parameter.
-            If one parameter, returns a tuple.
-        """
-        if len(self.param_list) == 1:
-            return self.param_list[0][Parameter.INTERVAL]
         return [param[Parameter.INTERVAL] for param in self.param_list]
 
     @property
     def init_values(self):
-        """
-        Get the initial values from param_list.
-
-        Returns
-        -------
-        list of tuple
-            A list of initial values for each parameter.
-            If one parameter, returns a float.
-        """
         if all(Parameter.INIT_VALUE in param for param in self.param_list):
-            if len(self.param_list) == 1:
-                return self.param_list[0][Parameter.INIT_VALUE]
             return [param[Parameter.INIT_VALUE] for param in self.param_list]
         else:
             return None
 
-    def function(self, x_dict, args: dict = None):
+    def function(self, param_dict, kwargs: dict = None):
         """
         Calculate the objective function for given parameter values.
 
@@ -792,39 +809,17 @@ class ObjectiveFunction:
         pd.Series
             A series containing the calculated values for each indicator.
         """
-        args = {} if args is None else args
-        temp_dict = {
-            param[Parameter.NAME]: x_dict[param[Parameter.NAME]]
-            for param in self.param_list
-        }
+        kwargs = {} if kwargs is None else kwargs
+        res = self.model.simulate(param_dict, self.simulation_options, **kwargs)
 
-        res = self.model.simulate(
-            temp_dict, simulation_options=self.simulation_options, **args
-        )
         function_results = {}
+        for ind, (func, ref) in self.indicators_config.items():
+            function_results[ind] = (
+                func(res[ind]) if ref is None else func(res[ind], ref)
+            )
+        return function_results
 
-        for ind in self.indicators:
-            if ind in res:
-                function_results[ind] = res[ind]
-
-        for ind in self.indicators:
-            if ind in function_results and ind in self.agg_methods_dict:
-                if self.reference_dict and ind in self.reference_dict:
-                    ref_values = self.reference_df[self.reference_dict[ind]]
-
-                    function_results[ind] = self.agg_methods_dict[ind](
-                        function_results[ind], ref_values
-                    )
-
-                else:
-                    function_results[ind] = self.agg_methods_dict[ind](
-                        function_results[ind]
-                    )
-
-        res_series = pd.Series(function_results, dtype="float64")
-        return res_series
-
-    def scipy_obj_function(self, x, args: dict = None):
+    def scipy_obj_function(self, x, kwargs: dict = None):
         """
         Wrapper for scipy.optimize that calculates the
         objective function for given parameter values.
@@ -839,18 +834,13 @@ class ObjectiveFunction:
         float
             The calculated value of the objective function.
         """
-        # if isinstance(x, float) and np.isnan(x):
-        #     return np.inf
-        # if isinstance(x, list) and any(np.isnan(xi) for xi in x):
-        #     return np.inf
-
         x = [x] if isinstance(x, (float, int)) else x
         if len(x) != len(self.param_list):
             raise ValueError("Length of x does not match length of param_list")
 
-        x_dict = {
+        param_dict = {
             self.param_list[i][Parameter.NAME]: x[i]
             for i in range(len(self.param_list))
         }
-        result = self.function(x_dict, args)
-        return float(result.iloc[0])
+        result = self.function(param_dict, kwargs)
+        return result[self.scipy_obj_indicator]

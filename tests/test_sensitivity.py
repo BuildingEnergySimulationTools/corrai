@@ -276,7 +276,7 @@ SIMU_OPTIONS = {
 
 class TestObjectiveFunction:
     def test_function_indicators(self):
-        expected_res = pd.DataFrame(
+        expected_model_res = pd.DataFrame(
             {
                 "res1": [6.79, 6.79],
                 "res2": [5.50, 5.50],
@@ -284,22 +284,15 @@ class TestObjectiveFunction:
             index=pd.date_range("2023-01-01 00:00:00", freq="s", periods=2),
         )
 
-        agg_methods_dict = {
-            "res1": mean_squared_error,
-            "res2": mean_absolute_error,
-        }
-
-        reference_dict = {"res1": "meas1", "res2": "meas2"}
-
         python_model = IshigamiTwoOutputs()
         obj_func = ObjectiveFunction(
             model=python_model,
             simulation_options=SIMU_OPTIONS,
             param_list=PARAMETERS,
-            agg_methods_dict=agg_methods_dict,
-            indicators=["res1", "res2"],
-            reference_df=dataset,
-            reference_dict=reference_dict,
+            indicators_config={
+                "res1": (mean_squared_error, dataset["meas1"]),
+                "res2": (mean_absolute_error, dataset["meas2"]),
+            },
         )
 
         res = obj_func.function(X_DICT)
@@ -307,33 +300,11 @@ class TestObjectiveFunction:
         np.testing.assert_allclose(
             np.array([res["res1"], res["res2"]]),
             (
-                mean_squared_error(expected_res["res1"], dataset["meas1"]),
-                mean_absolute_error(expected_res["res2"], dataset["meas2"]),
+                mean_squared_error(expected_model_res["res1"], dataset["meas1"]),
+                mean_absolute_error(expected_model_res["res2"], dataset["meas2"]),
             ),
             rtol=0.01,
         )
-
-    def test_warning_error(self):
-        python_model = IshigamiTwoOutputs()
-        with pytest.raises(ValueError):
-            ObjectiveFunction(
-                model=python_model,
-                simulation_options=SIMU_OPTIONS,
-                indicators=["res1", "res2"],
-                param_list=PARAMETERS,
-                reference_df=None,
-                reference_dict=dataset,
-            )
-
-        with pytest.raises(ValueError):
-            ObjectiveFunction(
-                model=python_model,
-                simulation_options=SIMU_OPTIONS,
-                indicators=["res1", "res2"],
-                param_list=PARAMETERS,
-                reference_df=dataset,
-                reference_dict=None,
-            )
 
     def test_bounds_and_init_values(self):
         python_model = IshigamiTwoOutputs()
@@ -341,7 +312,7 @@ class TestObjectiveFunction:
             model=python_model,
             simulation_options=SIMU_OPTIONS,
             param_list=PARAMETERS,
-            indicators=["res1", "res2"],
+            indicators_config={"res1": (np.mean, None), "res2": (np.mean, None)},
         )
 
         assert obj_func.bounds == [(0, 3.0), (0, 3.0)]
@@ -349,13 +320,11 @@ class TestObjectiveFunction:
 
     def test_scipy_obj_function(self):
         rosen = RosenModel()
-        agg_dict = {"res": np.mean}
         obj_func = ObjectiveFunction(
             model=rosen,
             simulation_options=SIMU_OPTIONS,
             param_list=PARAMETERS,
-            indicators=["res"],
-            agg_methods_dict=agg_dict,
+            indicators_config={"res": (np.mean, None)},
         )
 
         res = minimize(
