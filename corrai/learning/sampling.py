@@ -501,9 +501,71 @@ class ModelSampler:
         self.simulation_options = simulation_options
         self.sample_results = []
         self.param_mappings = param_mappings or {}
+        self.not_simulated_samples = []
 
         if sampling_method == "LatinHypercube":
             self.sampling_method = LatinHypercube
+
+    def draw_sample(self, sample_size, seed=None):
+        """
+        Draw a sample of parameter sets without running simulations.
+
+        Args:
+            sample_size (int): Number of samples to draw.
+            seed (int, optional): Seed for reproducibility.
+        """
+        if seed is not None:
+            np.random.seed(seed)
+
+        sampler = LatinHypercube(d=len(self.parameters), seed=seed)
+        new_sample = sampler.random(n=sample_size)
+        new_sample_value = np.empty(shape=(0, len(self.parameters)))
+
+        for s in new_sample:
+            new_sample_value = np.vstack(
+                (
+                    new_sample_value,
+                    [
+                        self._sample_parameter(par, val)
+                        for par, val in zip(self.parameters, s)
+                    ],
+                )
+            )
+
+        if self.sample.size == 0:
+            bound_sample = self.get_boundary_sample()
+            new_sample_value = np.vstack((new_sample_value, bound_sample.T))
+
+        self.sample = np.vstack((self.sample, new_sample_value))
+        self.not_simulated_samples.extend(new_sample_value.tolist())
+
+    def simulate_drawn_samples(self):
+        """
+        Simulate all drawn samples that haven't been simulated yet.
+        Assumes that self.sample contains samples drawn via draw_sample.
+        """
+        start_idx = len(self.sample_results)
+        drawn_samples = self.sample[start_idx:]
+
+        if drawn_samples.size == 0:
+            print("No new samples to simulate.")
+            return
+
+        prog_bar = progress_bar(range(drawn_samples.shape[0]))
+
+        for i, sample_row in zip(prog_bar, drawn_samples):
+            sim_config = {
+                par[Parameter.NAME]: val
+                for par, val in zip(self.parameters, sample_row)
+            }
+            expanded_config = expand_parameter_dict(sim_config, self.param_mappings)
+            prog_bar.comment = f"Simulating {start_idx + i + 1}/{self.sample.shape[0]}"
+
+            result = self.model.simulate(
+                parameter_dict=expanded_config,
+                simulation_options=self.simulation_options,
+            )
+            self.sample_results.append(result)
 
     def simulate_all_combinations(self):
         choice_parameters = [

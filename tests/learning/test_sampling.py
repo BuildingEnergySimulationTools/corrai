@@ -486,6 +486,24 @@ class TestVariantSubSampler:
 
 
 class TestSimulationSampler:
+    def test_draw_sample_only(self):
+        Simulator = Simul()
+        sampler = ModelSampler(parameters, model=Simulator)
+        sampler.draw_sample(sample_size=5, seed=42)
+
+        assert sampler.sample.shape[0] >= 5
+        assert len(sampler.sample_results) == 0
+
+    def test_draw_sample_then_simulate_drawn_samples(self):
+        Simulator = Simul()
+        sampler = ModelSampler(parameters, model=Simulator)
+        sampler.draw_sample(sample_size=3, seed=0)
+
+        assert len(sampler.sample_results) == 0
+
+        sampler.simulate_drawn_samples()
+        assert len(sampler.sample_results) == sampler.sample.shape[0]
+
     def test_get_boundary_sample(self):
         sampler = ModelSampler(parameters, model=None)
 
