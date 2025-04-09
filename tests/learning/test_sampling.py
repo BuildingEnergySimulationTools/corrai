@@ -10,6 +10,7 @@ from corrai.learning.sampling import (
     expand_parameter_dict,
     ModelSampler,
     plot_pcp,
+    get_mapped_bounds,
 )
 from corrai.variant import VariantKeys, get_combined_variants, get_modifier_dict
 
@@ -122,6 +123,43 @@ def test_expand_parameter_dict():
         "Parameter4": 25,
     }
     assert expanded_dict == expected_dict
+
+
+def test_get_mapped_bounds():
+    param_list = [
+        {
+            Parameter.NAME: "SHGC",
+            Parameter.INTERVAL: [0.2, 0.6],
+            Parameter.TYPE: "Real",
+        },
+        {
+            Parameter.NAME: "UFactor",
+            Parameter.INTERVAL: [1.2, 2.4],
+            Parameter.TYPE: "Real",
+        },
+    ]
+
+    param_mapping = {
+        "SHGC": [
+            "idf.WindowMaterial:SimpleGlazingSystem.GLAZING_1.Solar_Heat_Gain_Coefficient",
+            "idf.WindowMaterial:SimpleGlazingSystem.GLAZING_2.Solar_Heat_Gain_Coefficient",
+        ],
+        "UFactor": [
+            "idf.WindowMaterial:SimpleGlazingSystem.GLAZING_1.UFactor",
+            "idf.WindowMaterial:SimpleGlazingSystem.GLAZING_2.UFactor",
+        ],
+    }
+
+    bounds = get_mapped_bounds(param_list, param_mapping)
+
+    expected_bounds = [
+        (0.2, 0.6),
+        (0.2, 0.6),
+        (1.2, 2.4),
+        (1.2, 2.4),
+    ]
+
+    assert bounds == expected_bounds
 
 
 class ModelVariant(Model):

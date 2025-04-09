@@ -68,6 +68,44 @@ def expand_parameter_dict(parameter_dict, param_mappings):
     return expanded_dict
 
 
+def get_mapped_bounds(uncertain_param_list, param_mappings):
+    """
+    Return actual bounds (min, max) of all parameters after applying param_mappings.
+
+    Args:
+        uncertain_param_list (list): List of parameter dicts with NAME, INTERVAL, TYPE.
+        param_mappings (dict): Mapping rules to expand parameters.
+
+    Returns:
+        List[Tuple[float, float]]: List of bounds for each expanded parameter.
+    """
+    reverse_mapping = {}
+    for base_param, expanded_list in param_mappings.items():
+        for expanded_param in expanded_list:
+            reverse_mapping[expanded_param] = base_param
+
+    bounds_dict = {
+        param[Parameter.NAME]: tuple(param[Parameter.INTERVAL])
+        for param in uncertain_param_list
+    }
+
+    base_values = {name: bounds_dict[name][0] for name in bounds_dict}
+    expanded_dict = expand_parameter_dict(base_values, param_mappings)
+
+    bounds = []
+    for expanded_param in expanded_dict:
+        base_param = reverse_mapping.get(
+            expanded_param, expanded_param
+        )  # fall back to self
+        if base_param not in bounds_dict:
+            raise ValueError(
+                f"No matching bounds for parameter: {expanded_param} (base: {base_param})"
+            )
+        bounds.append(bounds_dict[base_param])
+
+    return bounds
+
+
 class VariantSubSampler:
     """
     A class for subsampling variants from a given set of combinations.
