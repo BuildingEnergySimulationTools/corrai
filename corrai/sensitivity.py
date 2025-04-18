@@ -165,22 +165,51 @@ class SAnalysis:
         agg_method_kwarg: dict = None,
         reference_df: pd.DataFrame = None,
         sensitivity_method_kwargs: dict = None,
+        freq: str = None,
+        absolute: bool = False,
     ):
         """
         Perform sensitivity analysis on the model outputs using the selected method
-         and indicator.
+        and indicator. Supports both static and dynamic analysis.
 
         Parameters:
-        - indicator (str): The model output indicator to analyze.
-        - agg_method (function, optional): Aggregation method for time series data.
-        - agg_method_kwarg (dict, optional): Additional keyword arguments for the
-            aggregation method.
-        - reference_df (pd.DataFrame, optional): Reference data to pass to the
-            aggregation method. Usually useful for error function analysis.
-            (eg. mean_error(simulation, reference_measurement)
-        - sensitivity_method_kwargs (dict, optional): Additional keyword arguments for
-            the sensitivity analysis method.
+        ----------
+        indicator : str
+            The name of the model output to analyze (must match a column name in the
+            simulation results).
+
+        agg_method : Callable, optional
+            Aggregation method to reduce time series to a single value per simulation.
+            Default is numpy.mean.
+
+        agg_method_kwarg : dict, optional
+            Additional keyword arguments passed to the aggregation method.
+
+        reference_df : pd.DataFrame, optional
+            Optional reference data (e.g., measured values) to use with error-based
+            aggregation methods (e.g., RMSE, NMBE). If provided, must align in time
+            with the simulation output.
+
+        sensitivity_method_kwargs : dict, optional
+            Additional keyword arguments passed to the sensitivity analysis method
+            from SALib.
+
+        freq : str, optional
+            If provided (e.g., "6h", "1D"), enables dynamic sensitivity analysis by
+            aggregating results over time intervals. Uses pandas frequency strings.
+
+        absolute : bool, optional
+            If True, multiplies sensitivity indices by the variance of the aggregated
+            output at each timestep. This gives absolute contributions to output
+            variability, not normalized indices.
+
+        Returns:
+        -------
+        None
+            Stores results in `self.sensitivity_results` (static)
+            or `self.sensitivity_dynamic_results` (dynamic).
         """
+        self.sensitivity_dynamic_results = {}  # here so that it's emptied when reran for new frequencies
 
         if sensitivity_method_kwargs is None:
             sensitivity_method_kwargs = {}
@@ -201,34 +230,102 @@ class SAnalysis:
             raise ValueError("Specified indicator not in computed outputs")
 
         analyser = METHOD_SAMPLER_DICT[self.method]["method"]
-        results_2d = pd.concat(
-            [s_res[2][indicator] for s_res in self.sample_results], axis=1
-        )
-        if reference_df is not None:
-            reference_df_duplicated = pd.concat(
-                [reference_df] * len(results_2d.columns), axis=1
-            )
+
+        if freq is not None:
+            aggregated_list = []
+            for result in self.sample_results:
+                series = result[2][indicator]
+                grouped = series.groupby(pd.Grouper(freq=freq))
+
+                if reference_df is not None:
+                    ref_grouped = reference_df.groupby(pd.Grouper(freq=freq))
+                    vals = [
+                        agg_method(g, r, **agg_method_kwarg)
+                        for (_, g), (_, r) in zip(grouped, ref_grouped)
+                    ]
+                else:
+                    vals = [agg_method(g, **agg_method_kwarg) for _, g in grouped]
+
+                aggregated_list.append(pd.Series(vals, index=[i for i, _ in grouped]))
+
+            index = aggregated_list[0].index
+            numpy_res = np.array([s.values for s in aggregated_list]).T
+
+            for t_idx, values in zip(index, numpy_res):
+                if self.method.value in ["SOBOL", "FAST"]:
+                    res = analyser.analyze(
+                        problem=self._salib_problem,
+                        Y=values,
+                        **sensitivity_method_kwargs,
+                    )
+                else:
+                    res = analyser.analyze(
+                        problem=self._salib_problem,
+                        X=self.sample.to_numpy(),
+                        Y=values,
+                        **sensitivity_method_kwargs,
+                    )
+
+                res["names"] = self._salib_problem["names"]
+                if absolute:
+                    res["_absolute"] = True
+                self.sensitivity_dynamic_results[t_idx] = res
+
+            # Option "absolute"
+            if absolute:
+                var_t = np.var(numpy_res, axis=1)
+
+                for key, res, var in zip(
+                    self.sensitivity_dynamic_results.keys(),
+                    self.sensitivity_dynamic_results.values(),
+                    var_t,
+                ):
+                    if self.method.value in ["SOBOL", "FAST"]:
+                        for k in list(res.keys()):
+                            if k == "names":
+                                continue
+                            try:
+                                res[k] = np.array(res[k], dtype=float) * var
+                            except (TypeError, ValueError):
+                                continue  # ignore non-numeric fields
+                    else:
+                        if "names" in res:
+                            del res["names"]
+                        for k in list(res.keys()):
+                            try:
+                                res[k] = np.array(res[k], dtype=float) * var
+                            except (TypeError, ValueError):
+                                continue
+
         else:
-            reference_df_duplicated = None
-        y_array = np.array(
-            aggregate_time_series(
-                results_2d, agg_method, agg_method_kwarg, reference_df_duplicated
+            results_2d = pd.concat(
+                [s_res[2][indicator] for s_res in self.sample_results], axis=1
             )
-        )
-
-        if self.method.value in ["SOBOL", "FAST"]:
-            self.sensitivity_results = analyser.analyze(
-                problem=self._salib_problem, Y=y_array, **sensitivity_method_kwargs
-            )
-        elif self.method.value in ["MORRIS", "RBD_FAST"]:
-            self.sensitivity_results = analyser.analyze(
-                problem=self._salib_problem,
-                X=self.sample.to_numpy(),
-                Y=y_array,
-                **sensitivity_method_kwargs,
+            if reference_df is not None:
+                reference_df_duplicated = pd.concat(
+                    [reference_df] * len(results_2d.columns), axis=1
+                )
+            else:
+                reference_df_duplicated = None
+            y_array = np.array(
+                aggregate_time_series(
+                    results_2d, agg_method, agg_method_kwarg, reference_df_duplicated
+                )
             )
 
-    def calculate_sensitivity_indicators(self):
+            if self.method.value in ["SOBOL", "FAST"]:
+                self.sensitivity_results = analyser.analyze(
+                    problem=self._salib_problem, Y=y_array, **sensitivity_method_kwargs
+                )
+            elif self.method.value in ["MORRIS", "RBD_FAST"]:
+                self.sensitivity_results = analyser.analyze(
+                    problem=self._salib_problem,
+                    X=self.sample.to_numpy(),
+                    Y=y_array,
+                    **sensitivity_method_kwargs,
+                )
+
+    def calculate_sensitivity_indicators(self, static: bool = True):
         """
         Returns sensitivity indicators based on the method used.
 
@@ -262,6 +359,48 @@ class SAnalysis:
              relative measure of the variability induced by each input factor.
 
         """
+
+        def average_dynamic_index(index_name):
+            df = pd.DataFrame(
+                {
+                    t: res[index_name]
+                    for t, res in self.sensitivity_dynamic_results.items()
+                    if index_name in res
+                }
+            ).T
+            return df.mean()
+
+        if not static:
+            if not self.sensitivity_dynamic_results:
+                raise ValueError("No dynamic sensitivity results found.")
+
+            if self.method in [Method.SOBOL, Method.FAST]:
+                st_mean = average_dynamic_index("ST")
+                s1_mean = (
+                    average_dynamic_index("S1")
+                    if "S1" in next(iter(self.sensitivity_dynamic_results.values()))
+                    else None
+                )
+                return {
+                    "ST": st_mean,
+                    "S1": s1_mean,
+                }
+
+            elif self.method == Method.RBD_FAST:
+                s1_mean = average_dynamic_index("S1")
+                return {"S1": s1_mean}
+
+            elif self.method == Method.MORRIS:
+                raise NotImplementedError(
+                    "Dynamic MORRIS indicators not supported yet."
+                )
+
+            else:
+                raise ValueError("Unknown method for dynamic sensitivity.")
+
+        if self.sensitivity_results is None:
+            raise ValueError("No static sensitivity results available.")
+
         if self.method == Method.FAST:
             sum_st = sum(self.sensitivity_results["ST"])
             conf = self.sensitivity_results["ST_conf"]
@@ -315,11 +454,68 @@ class SAnalysis:
 
 
 def plot_sobol_st_bar(salib_res):
+    """
+    Plot Sobol total sensitivity indices (ST) as a bar chart or a dynamic line chart.
+
+    This function automatically detects whether the input is a static or dynamic result,
+    and adjusts the plot accordingly. For dynamic results, it also detects if the indices
+    are absolute (i.e., multiplied by output variance) and adapts the y-axis label.
+
+    Parameters
+    ----------
+    salib_res : SALib.analyze._results.SobolResults | dict
+        The result object returned by a SALib Sobol analysis.
+        - For static analysis: a SobolResults object (e.g., `sanalysis.sensitivity_results`)
+        - For dynamic analysis: a dictionary of time-indexed results (e.g., `sanalysis.sensitivity_dynamic_results`),
+          where each value must contain keys "ST" and "names", and optionally "_absolute" to indicate absolute mode.
+
+    """
+
+    if isinstance(salib_res, dict) and isinstance(next(iter(salib_res.values())), dict):
+        try:
+            df_to_plot = pd.DataFrame(
+                {
+                    t: pd.Series(res["ST"], index=res["names"])
+                    for t, res in salib_res.items()
+                }
+            ).T
+        except KeyError:
+            raise ValueError(
+                "ST index not found in dynamic results. Use indicator_name='S1' if needed."
+            )
+        absolute = "_absolute" in next(iter(salib_res.values()))
+
+        df_to_plot.index.name = "Time"
+        df_to_plot.columns.name = "Parameter"
+
+        fig = go.Figure()
+        for param in df_to_plot.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=df_to_plot.index,
+                    y=df_to_plot[param],
+                    name=param,
+                    mode="lines",
+                    stackgroup="one",
+                )
+            )
+
+        fig.update_layout(
+            title="Sobol ST indices (dynamic)",
+            xaxis_title="Time",
+            yaxis_title="Absolute Sobol contribution"
+            if absolute
+            else "Sobol total index value [0-1]",
+        )
+        return fig
+
     sobol_ind = salib_res.to_df()[0]
     sobol_ind.sort_values(by="ST", ascending=True, inplace=True)
 
-    figure = go.Figure()
-    figure.add_trace(
+    absolute = sobol_ind.ST.max() > 1.0
+
+    fig = go.Figure()
+    fig.add_trace(
         go.Bar(
             x=sobol_ind.index,
             y=sobol_ind.ST,
@@ -330,13 +526,15 @@ def plot_sobol_st_bar(salib_res):
         )
     )
 
-    figure.update_layout(
+    fig.update_layout(
         title="Sobol Total indices",
         xaxis_title="Parameters",
-        yaxis_title="Sobol total index value [0-1]",
+        yaxis_title="Absolute Sobol contribution"
+        if absolute
+        else "Sobol total index value [0-1]",
     )
 
-    return figure
+    return fig
 
 
 def plot_morris_st_bar(salib_res, distance_metric="normalized"):
