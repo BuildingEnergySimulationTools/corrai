@@ -165,6 +165,8 @@ class SAnalysis:
         agg_method_kwarg: dict = None,
         reference_df: pd.DataFrame = None,
         sensitivity_method_kwargs: dict = None,
+        freq: str = None,
+        absolute: bool = False,
     ):
         """
         Perform sensitivity analysis on the model outputs using the selected method
@@ -181,6 +183,7 @@ class SAnalysis:
         - sensitivity_method_kwargs (dict, optional): Additional keyword arguments for
             the sensitivity analysis method.
         """
+        self.sensitivity_dynamic_results = {}  # here so that it's emptied when reran for new frequencies
 
         if sensitivity_method_kwargs is None:
             sensitivity_method_kwargs = {}
@@ -201,32 +204,100 @@ class SAnalysis:
             raise ValueError("Specified indicator not in computed outputs")
 
         analyser = METHOD_SAMPLER_DICT[self.method]["method"]
-        results_2d = pd.concat(
-            [s_res[2][indicator] for s_res in self.sample_results], axis=1
-        )
-        if reference_df is not None:
-            reference_df_duplicated = pd.concat(
-                [reference_df] * len(results_2d.columns), axis=1
-            )
-        else:
-            reference_df_duplicated = None
-        y_array = np.array(
-            aggregate_time_series(
-                results_2d, agg_method, agg_method_kwarg, reference_df_duplicated
-            )
-        )
 
-        if self.method.value in ["SOBOL", "FAST"]:
-            self.sensitivity_results = analyser.analyze(
-                problem=self._salib_problem, Y=y_array, **sensitivity_method_kwargs
+        if freq is not None:
+            aggregated_list = []
+            for result in self.sample_results:
+                series = result[2][indicator]
+                grouped = series.groupby(pd.Grouper(freq=freq))
+
+                if reference_df is not None:
+                    ref_grouped = reference_df.groupby(pd.Grouper(freq=freq))
+                    vals = [
+                        agg_method(g, r, **agg_method_kwarg)
+                        for (_, g), (_, r) in zip(grouped, ref_grouped)
+                    ]
+                else:
+                    vals = [agg_method(g, **agg_method_kwarg) for _, g in grouped]
+
+                aggregated_list.append(pd.Series(vals, index=[i for i, _ in grouped]))
+
+            index = aggregated_list[0].index
+            numpy_res = np.array([s.values for s in aggregated_list]).T
+
+            for t_idx, values in zip(index, numpy_res):
+                if self.method.value in ["SOBOL", "FAST"]:
+                    res = analyser.analyze(
+                        problem=self._salib_problem,
+                        Y=values,
+                        **sensitivity_method_kwargs,
+                    )
+                else:
+                    res = analyser.analyze(
+                        problem=self._salib_problem,
+                        X=self.sample.to_numpy(),
+                        Y=values,
+                        **sensitivity_method_kwargs,
+                    )
+
+                res["names"] = self._salib_problem["names"]
+                if absolute:
+                    res["_absolute"] = True
+                self.sensitivity_dynamic_results[t_idx] = res
+
+            # Option "absolute"
+            if absolute:
+                var_t = np.var(numpy_res, axis=1)
+
+                for key, res, var in zip(
+                    self.sensitivity_dynamic_results.keys(),
+                    self.sensitivity_dynamic_results.values(),
+                    var_t,
+                ):
+                    if self.method.value in ["SOBOL", "FAST"]:
+                        for k in list(res.keys()):
+                            if k == "names":
+                                continue
+                            try:
+                                res[k] = np.array(res[k], dtype=float) * var
+                            except (TypeError, ValueError):
+                                continue  # ignore non-numeric fields
+                    else:
+                        if "names" in res:
+                            del res["names"]
+                        for k in list(res.keys()):
+                            try:
+                                res[k] = np.array(res[k], dtype=float) * var
+                            except (TypeError, ValueError):
+                                continue
+
+        else:
+            results_2d = pd.concat(
+                [s_res[2][indicator] for s_res in self.sample_results], axis=1
             )
-        elif self.method.value in ["MORRIS", "RBD_FAST"]:
-            self.sensitivity_results = analyser.analyze(
-                problem=self._salib_problem,
-                X=self.sample.to_numpy(),
-                Y=y_array,
-                **sensitivity_method_kwargs,
+            if reference_df is not None:
+                reference_df_duplicated = pd.concat(
+                    [reference_df] * len(results_2d.columns), axis=1
+                )
+            else:
+                reference_df_duplicated = None
+            y_array = np.array(
+                aggregate_time_series(
+                    results_2d, agg_method, agg_method_kwarg, reference_df_duplicated
+                )
             )
+
+            if self.method.value in ["SOBOL", "FAST"]:
+                self.sensitivity_results = analyser.analyze(
+                    problem=self._salib_problem, Y=y_array, **sensitivity_method_kwargs
+                )
+            elif self.method.value in ["MORRIS", "RBD_FAST"]:
+                self.sensitivity_results = analyser.analyze(
+                    problem=self._salib_problem,
+                    X=self.sample.to_numpy(),
+                    Y=y_array,
+                    **sensitivity_method_kwargs,
+                )
 
     def calculate_sensitivity_indicators(self):
         """
