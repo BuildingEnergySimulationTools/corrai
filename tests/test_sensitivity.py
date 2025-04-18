@@ -125,6 +125,55 @@ class TestSensitivity:
         # Problem is highly non linear and result do not converge.
         # We are just checking the execution
 
+    def test_dynamic_analysis_and_absolute(self):
+        model = Ishigami()
+
+        sa_analysis = SAnalysis(parameters_list=PARAMETER_LIST, method=Method.SOBOL)
+
+        sa_analysis.draw_sample(
+            100, sampling_kwargs={"calc_second_order": False, "seed": 42}
+        )
+
+        sa_analysis.evaluate(
+            model=model, simulation_options=SIMULATION_OPTIONS, n_cpu=1
+        )
+
+        sa_analysis.analyze(
+            indicator="res",
+            freq="3h",
+            absolute=True,
+            sensitivity_method_kwargs={"calc_second_order": False},
+        )
+
+        assert isinstance(sa_analysis.sensitivity_dynamic_results, dict)
+        assert len(sa_analysis.sensitivity_dynamic_results) > 0
+
+        for key, result in sa_analysis.sensitivity_dynamic_results.items():
+            assert "ST" in result
+            assert "names" in result
+            assert "_absolute" in result
+
+        indicators = sa_analysis.calculate_sensitivity_indicators(static=False)
+        assert "ST" in indicators
+        assert isinstance(indicators["ST"], pd.Series)
+
+        expected_st = {
+            pd.Timestamp("2009-01-01 00:00:00"): np.array(
+                [8.5377964, 6.88499214, 3.90531498]
+            ),
+            pd.Timestamp("2009-01-01 03:00:00"): np.array(
+                [8.5377964, 6.88499214, 3.90531498]
+            ),
+        }
+
+        for timestamp, expected in expected_st.items():
+            assert timestamp in sa_analysis.sensitivity_dynamic_results
+            result = sa_analysis.sensitivity_dynamic_results[timestamp]["ST"]
+            np.testing.assert_allclose(result, expected, rtol=0.05)
+
+        fig = plot_sobol_st_bar(sa_analysis.sensitivity_dynamic_results)
+        assert fig.layout.title.text == "Sobol ST indices (dynamic)"
+
     # @patch("plotly.graph_objects.Figure.show")
     def test_plot_sobol_st_bar(self):
         res = sobol_res_mock()

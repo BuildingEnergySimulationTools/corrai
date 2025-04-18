@@ -507,8 +507,7 @@ def plot_sobol_st_bar(salib_res):
             if absolute
             else "Sobol total index value [0-1]",
         )
-        fig.show()
-        return
+        return fig
 
     sobol_ind = salib_res.to_df()[0]
     sobol_ind.sort_values(by="ST", ascending=True, inplace=True)
@@ -535,7 +534,7 @@ def plot_sobol_st_bar(salib_res):
         else "Sobol total index value [0-1]",
     )
 
-    fig.show()
+    return fig
 
 
 def plot_morris_st_bar(salib_res, distance_metric="normalized"):
