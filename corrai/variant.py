@@ -93,6 +93,7 @@ def simulate_variants(
     custom_combinations=None,
     save_dir: Path = None,
     file_extension: str = ".txt",
+    parameter_dict: dict = None,
     simulate_kwargs: dict = None,
 ):
     """
@@ -135,6 +136,8 @@ def simulate_variants(
     """
     simulate_kwargs = {} if simulate_kwargs is None else simulate_kwargs
     model_list = []
+    param_dicts = []
+
     if custom_combinations is not None:
         combined_variants = custom_combinations
     else:
@@ -152,10 +155,15 @@ def simulate_variants(
                     **variant_dict[variant][VariantKeys.ARGUMENTS],
                 )
         model_list.append(working_model)
+        param_dicts.append(parameter_dict)
 
         if save_dir:
             working_model.save((save_dir / f"Model_{idx}").with_suffix(file_extension))
 
     return run_list_of_models_in_parallel(
-        model_list, simulation_options, n_cpu, simulate_kwargs
+        models_list=model_list,
+        simulation_options=simulation_options,
+        parameter_dicts=param_dicts,
+        n_cpu=n_cpu,
+        simulate_kwargs=simulate_kwargs,
     )

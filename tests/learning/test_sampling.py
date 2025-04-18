@@ -1,14 +1,24 @@
 import itertools
 from pathlib import Path
-from corrai.base.model import Model
 import numpy as np
 import pandas as pd
-from corrai.learning.sampling import ModelSampler
+
+from corrai.base.model import Model
 from corrai.base.parameter import Parameter
-from corrai.learning.sampling import VariantSubSampler
-from corrai.variant import VariantKeys, get_combined_variants
+from corrai.learning.sampling import (
+    VariantSubSampler,
+    expand_parameter_dict,
+    ModelSampler,
+    plot_pcp,
+    get_mapped_bounds,
+)
+from corrai.variant import VariantKeys, get_combined_variants, get_modifier_dict
+
 from tests.resources.pymodels import VariantModel
 import pytest
+
+import plotly.graph_objects as go
+
 
 FILES_PATH = Path(__file__).parent / "resources"
 
@@ -31,18 +41,166 @@ parameters = [
     },
 ]
 
+parameters_to_expand = [
+    {
+        Parameter.NAME: "options_expanded",
+        Parameter.INTERVAL: [2, 6],
+        Parameter.TYPE: "Choice",
+    },
+    {
+        Parameter.NAME: "Parameter3",
+        Parameter.INTERVAL: [0.5, 0.7],
+        Parameter.TYPE: "Choice",
+    },
+    {
+        Parameter.NAME: "options_expanded_bis",
+        Parameter.INTERVAL: ["bad", "good"],
+        Parameter.TYPE: "Choice",
+    },
+]
+
+discrete_parameters = [
+    {
+        Parameter.NAME: "discrete1",
+        Parameter.INTERVAL: (0, 2),
+        Parameter.TYPE: "Choice",
+    },
+    {
+        Parameter.NAME: "discrete2",
+        Parameter.INTERVAL: (1, 2),
+        Parameter.TYPE: "Choice",
+    },
+    {
+        Parameter.NAME: "discrete3",
+        Parameter.INTERVAL: (4, 6),
+        Parameter.TYPE: "Choice",
+    },
+    {
+        Parameter.NAME: "discrete4",
+        Parameter.INTERVAL: (0, 1),
+        Parameter.TYPE: "Choice",
+    },
+]
+
+params_mappings = {
+    "options_expanded": [
+        "Parameter1",
+        "Parameter2",
+    ],
+    "options_expanded_bis": {
+        "bad": {
+            "Parameter4": 25,
+        },
+        "good": {
+            "Parameter4": 3,
+        },
+    },
+}
+
 SIMULATION_OPTIONS = {
     "start": "2009-01-01 00:00:00",
     "end": "2009-01-01 00:00:00",
     "timestep": "h",
 }
 
+simulation_options_for_param = {
+    "start": "2025-01-01 00:00:00",
+    "end": "2025-01-01 23:00:00",
+    "timestep": "h",
+}
+
+
+def test_expand_parameter_dict():
+    parameters_to_expand_dict = {
+        "options_expanded": 6,
+        "options_expanded_bis": "bad",
+    }
+    expanded_dict = expand_parameter_dict(parameters_to_expand_dict, params_mappings)
+
+    expected_dict = {
+        "Parameter1": 6,
+        "Parameter2": 6,
+        "Parameter4": 25,
+    }
+    assert expanded_dict == expected_dict
+
+
+def test_get_mapped_bounds():
+    param_list = [
+        {
+            Parameter.NAME: "SHGC",
+            Parameter.INTERVAL: [0.2, 0.6],
+            Parameter.TYPE: "Real",
+        },
+        {
+            Parameter.NAME: "UFactor",
+            Parameter.INTERVAL: [1.2, 2.4],
+            Parameter.TYPE: "Real",
+        },
+    ]
+
+    param_mapping = {
+        "SHGC": [
+            "idf.WindowMaterial:SimpleGlazingSystem.GLAZING_1.Solar_Heat_Gain_Coefficient",
+            "idf.WindowMaterial:SimpleGlazingSystem.GLAZING_2.Solar_Heat_Gain_Coefficient",
+        ],
+        "UFactor": [
+            "idf.WindowMaterial:SimpleGlazingSystem.GLAZING_1.UFactor",
+            "idf.WindowMaterial:SimpleGlazingSystem.GLAZING_2.UFactor",
+        ],
+    }
+
+    bounds = get_mapped_bounds(param_list, param_mapping)
+
+    expected_bounds = [
+        (0.2, 0.6),
+        (0.2, 0.6),
+        (1.2, 2.4),
+        (1.2, 2.4),
+    ]
+
+    assert bounds == expected_bounds
+
+
+class ModelVariant(Model):
+    def __init__(self):
+        self.y1 = 1
+        self.z1 = 2
+        self.multiplier = 1
+
+    def simulate(
+        self, parameter_dict: dict = None, simulation_options: dict = None
+    ) -> pd.DataFrame:
+        if parameter_dict is None:
+            parameter_dict = {"discrete1": 1, "discrete2": 2}
+
+        result = (
+            self.y1 * parameter_dict["discrete1"]
+            + self.z1 * parameter_dict["discrete2"]
+        ) * self.multiplier
+
+        df = pd.DataFrame(
+            {"result": [result]},
+            index=pd.date_range(
+                simulation_options["start"],
+                simulation_options["end"],
+                freq=simulation_options["timestep"],
+            ),
+        )
+
+        return df
+
+    def save(self, file_path: Path):
+        pass
+
 
 class Simul(Model):
     def simulate(
         self, parameter_dict: dict = None, simulation_options: dict = None
     ) -> pd.DataFrame:
-        Parameter1, Parameter2, Parameter3, Parameter4 = parameter_dict.values()
+        Parameter1, Parameter2, Parameter3, Parameter4 = map(
+            float, parameter_dict.values()
+        )
         df = Parameter1 + Parameter2 - Parameter3 + 2 * Parameter4
         df_out = pd.DataFrame({"df": [df]})
         return df_out
@@ -95,16 +253,63 @@ class TestVariantSubSampler:
                 VariantKeys.DESCRIPTION: {"z1": 40},
             },
         }
+
         self.combinations = get_combined_variants(self.variant_dict)
         self.mod_map = {"mod1": modifier_1, "mod1_bis": modifier_1, "mod2": modifier_2}
 
         self.sampler = VariantSubSampler(
             model=VariantModel(),
-            combinations=self.combinations,
+            custom_combination=self.combinations,
             variant_dict=self.variant_dict,
             modifier_map=self.mod_map,
             simulation_options=SIMULATION_OPTIONS,
         )
+
+        self.sampler_no_custom = VariantSubSampler(
+            model=VariantModel(),
+            variant_dict=self.variant_dict,
+            modifier_map=self.mod_map,
+            simulation_options=SIMULATION_OPTIONS,
+        )
+
+        self.variant_dict_for_param = {
+            "Variant_1": {
+                VariantKeys.MODIFIER: "mod1",
+                VariantKeys.DESCRIPTION: {"y1": 20},
+                VariantKeys.ARGUMENTS: {"multiplier": 2},
+            },
+            "Variant_2": {
+                VariantKeys.MODIFIER: "mod2",
+                VariantKeys.DESCRIPTION: {"z1": 40},
+                VariantKeys.ARGUMENTS: {},
+            },
+            "Variant_3": {
+                VariantKeys.MODIFIER: "mod1",
+                VariantKeys.DESCRIPTION: {"y1": 10},
+                VariantKeys.ARGUMENTS: {"multiplier": 3},
+            },
+        }
+
+        self.modifier_map_for_param = {
+            "mod1": modifier_1,
+            "mod2": modifier_2,
+        }
+
+    def test_add_sample_with_no_custom_combinations(self):
+        initial_sample_size = 10
+        self.sampler_no_custom.add_sample(
+            initial_sample_size,
+            n_cpu=1,
+        )
+
+        assert len(self.sampler_no_custom.sample_results) > 0
+
+        expected_list = [5, 81, 34, 110, 5, 81, 68, 220]
+        actual_results = []
+        for df in self.sampler_no_custom.sample_results:
+            actual_results.extend(df["res"].tolist())
+
+        assert set(actual_results) == set(expected_list)
 
     def test_add_sample_with_simulation(self):
         initial_sample_size = 10
@@ -130,10 +335,16 @@ class TestVariantSubSampler:
         assert len(self.sampler.not_simulated_combinations) == 0
 
     def test_dump_sample(self):
-        self.sampler.add_sample(1, simulate=True, ensure_full_coverage=True, n_cpu=1)
-        self.sampler.add_sample(1, simulate=False, ensure_full_coverage=False, n_cpu=1)
+        n_sim = 1
+        n_non_sim = 4
+        self.sampler.add_sample(
+            n_sim, simulate=True, ensure_full_coverage=False, n_cpu=1
+        )
+        self.sampler.draw_sample(n_non_sim)
+        assert len(self.sampler.sample) == n_sim + n_non_sim
+        assert len(self.sampler.simulated_samples) == n_sim
         self.sampler.dump_sample()
-        assert len(self.sampler.sample) > 0
+        assert len(self.sampler.sample) == n_sim
         assert len(self.sampler.not_simulated_combinations) == 0
 
     def test_draw_sample(self):
@@ -170,7 +381,6 @@ class TestVariantSubSampler:
     def test_warning_errors(self):
         sampler_warning = VariantSubSampler(
             model=VariantModel(),
-            combinations=self.combinations,
             variant_dict=self.variant_dict,
             modifier_map=self.mod_map,
         )
@@ -183,10 +393,10 @@ class TestVariantSubSampler:
 
     def test_seed_consistency(self):
         sampler1 = VariantSubSampler(
-            model=Simul(), simulation_options={}, combinations=self.combinations
+            model=Simul(), simulation_options={}, custom_combination=self.combinations
         )
         sampler2 = VariantSubSampler(
-            model=Simul(), simulation_options={}, combinations=self.combinations
+            model=Simul(), simulation_options={}, custom_combination=self.combinations
         )
         seed = 42
         sample_size = 2
@@ -221,8 +431,79 @@ class TestVariantSubSampler:
         assert covered_variants == all_variants
         assert len(self.sampler.sample) >= n_sample
 
+    def test_simulate_combined_variants_with_custom_combi(self):
+        custom_combinations = [("Variant_1", "Variant_2"), ("Variant_3", "Variant_2")]
+        sampler = VariantSubSampler(
+            model=ModelVariant(),
+            variant_dict=self.variant_dict_for_param,
+            modifier_map=self.modifier_map_for_param,
+            custom_combination=custom_combinations,
+            simulation_options=simulation_options_for_param,
+        )
+
+        sampler.simulate_all_variants_and_parameters(
+            parameter=discrete_parameters, param_mapping=params_mappings
+        )
+
+        expected_number_of_simulations = pow(2, len(discrete_parameters)) * len(
+            custom_combinations
+        )
+        assert len(sampler.sample_results) == expected_number_of_simulations
+
+        expected_first_result = (
+            20 * 0 + 40 * 1
+        ) * 2  # y1×discrete1+z1×discrete2)×multiplier
+
+        first_result = sampler.sample_results[0].iloc[0, 0]
+        assert first_result == expected_first_result
+
+    def test_simulate_combined_variants(self):
+        sampler = VariantSubSampler(
+            model=ModelVariant(),
+            variant_dict=self.variant_dict_for_param,
+            modifier_map=self.modifier_map_for_param,
+            simulation_options=simulation_options_for_param,
+        )
+        sampler.simulate_all_variants_and_parameters(
+            parameter=discrete_parameters, param_mapping=params_mappings
+        )
+
+        mod_dict = get_modifier_dict(self.variant_dict_for_param)
+        total_combinations = 1
+        for key, values in mod_dict.items():
+            total_combinations *= len(values)
+        num_discrete_combinations = pow(2, len(discrete_parameters))
+        expected_number_of_simulations = num_discrete_combinations * total_combinations
+
+        assert len(sampler.sample_results) == expected_number_of_simulations
+
+        expected_first_result = (
+            20 * 0 + 40 * 1
+        ) * 2  # (y1 * discrete1 + z1 * discrete2) * multiplier
+
+        first_result = sampler.sample_results[0].iloc[0, 0]
+        assert first_result == expected_first_result
+
 
 class TestSimulationSampler:
+    def test_draw_sample_only(self):
+        Simulator = Simul()
+        sampler = ModelSampler(parameters, model=Simulator)
+        sampler.draw_sample(sample_size=5, seed=42)
+
+        assert sampler.sample.shape[0] >= 5
+        assert len(sampler.sample_results) == 0
+
+    def test_draw_sample_then_simulate_drawn_samples(self):
+        Simulator = Simul()
+        sampler = ModelSampler(parameters, model=Simulator)
+        sampler.draw_sample(sample_size=3, seed=0)
+
+        assert len(sampler.sample_results) == 0
+
+        sampler.simulate_drawn_samples()
+        assert len(sampler.sample_results) == sampler.sample.shape[0]
+
     def test_get_boundary_sample(self):
         sampler = ModelSampler(parameters, model=None)
 
@@ -293,3 +574,49 @@ class TestSimulationSampler:
         sampler.clear_sample()
 
         assert np.array_equal(sampler.sample, np.empty(shape=(0, len(parameters))))
+
+    def test_simulate_all_combinations(self):
+        sampler = ModelSampler(discrete_parameters, model=Simul())
+
+        sampler.simulate_all_combinations()
+
+        assert len(sampler.sample_results) == pow(2, len(discrete_parameters))
+
+
+class TestPlotPCP:
+    def setup_method(self):
+        self.sample_results = [
+            pd.DataFrame({"HEATING_Energy_[J]": [100, 200, 300]}),
+            pd.DataFrame({"HEATING_Energy_[J]": [150, 250, 350]}),
+        ]
+        self.param_sample = np.array([[0.5, "bad"], [0.3, "good"]])
+
+        self.parameters = [
+            {
+                Parameter.NAME: "param1",
+                Parameter.INTERVAL: [0, 1],
+                Parameter.TYPE: "Real",
+            },
+            {
+                Parameter.NAME: "param2",
+                Parameter.INTERVAL: ["bad", "good"],
+                Parameter.TYPE: "Real",
+            },
+        ]
+
+        self.indicators = ["HEATING_Energy_[J]"]
+
+    def test_plot_pcp(self):
+        fig = plot_pcp(
+            sample_results=self.sample_results,
+            param_sample=self.param_sample,
+            parameters=self.parameters,
+            indicators=self.indicators,
+        )
+
+        fig.show()
+
+        assert isinstance(fig, go.Figure)
+        assert len(fig.data[0].dimensions) == len(self.parameters) + len(
+            self.indicators
+        )

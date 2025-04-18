@@ -67,16 +67,18 @@ def df_to_combitimetable(df: pd.DataFrame, filename):
         file.write(df.to_csv(header=False, sep="\t", lineterminator="\n"))
 
 
-def get_start_stop_year_from_x(x: pd.DataFrame = None):
+def get_start_stop_year_tz_from_x(x: pd.DataFrame = None):
     if x is None:
         return None, None, None
     if isinstance(x.index, pd.DatetimeIndex):
         idx = datetime_index_to_seconds_index(x.index)
         year = x.index[0].year
+        tz = x.index.tz
     else:
         idx = x.index
         year = None
-    return idx.min(), idx.max(), year
+        tz = None
+    return idx.min(), idx.max(), year, tz
 
 
 class ModelicaFmuModel(Model):
@@ -150,6 +152,7 @@ class ModelicaFmuModel(Model):
         self.output_list = output_list
         self.parameters = {}
         self._begin_year = None
+        self._tz = None
         self.x_combitimetable_name = (
             x_combitimetable_name if x_combitimetable_name is not None else "Boundaries"
         )
@@ -166,10 +169,11 @@ class ModelicaFmuModel(Model):
             )
             self._x = df
 
-            start, stop, year = get_start_stop_year_from_x(df)
+            start, stop, year, tz = get_start_stop_year_tz_from_x(df)
             self.simulation_options["startTime"] = start
             self.simulation_options["stopTime"] = stop
             self._begin_year = year
+            self._tz = tz
 
     def _set_x_sim_options(
         self,
@@ -281,6 +285,8 @@ class ModelicaFmuModel(Model):
             df.index = seconds_index_to_datetime_index(df["time"], self._begin_year)
             # Weird solver behavior
             df.index = df.index.round("s")
+            df = df.tz_localize(self._tz)
+            df.index.freq = df.index.inferred_freq
         else:
             # solver can do funny things. Round time
             df.index = round(df["time"], 2)

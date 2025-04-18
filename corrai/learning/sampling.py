@@ -1,16 +1,109 @@
+from copy import deepcopy
+
 import numpy as np
 from pathlib import Path
 
 from corrai.base.parameter import Parameter
-from corrai.variant import simulate_variants
+from corrai.variant import simulate_variants, get_combined_variants
+
+import pandas as pd
+import plotly.io as pio
+import plotly.graph_objects as go
 
 from scipy.stats.qmc import LatinHypercube
 from fastprogress.fastprogress import force_console_behavior
 
 import random
 import itertools
+from itertools import product
 
 master_bar, progress_bar = force_console_behavior()
+
+
+def expand_parameter_dict(parameter_dict, param_mappings):
+    """
+    Expands a sampled parameter dictionary based on predefined mappings.
+
+    This method takes a dictionary of sampled parameters and expands it by applying
+    predefined mappings stored in `self.param_mappings`. The expansion process works
+    as follows:
+
+    1. **If the mapping for a parameter is a dictionary**:
+       - The method checks if the sampled value exists as a key in the mapping.
+       - If found, the corresponding mapped values are added to the expanded dictionary.
+
+    2. **If the mapping for a parameter is an iterable (non-dictionary)**:
+       - The method applies the sampled value to each key in the mapping and adds
+         these key-value pairs to the expanded dictionary.
+
+    3. **If a parameter has no predefined mapping**:
+       - The original parameter and its value are added directly to the expanded dictionary.
+
+    Parameters
+    ----------
+    parameter_dict : dict
+        The original parameter dictionary from the sample, with parameter names as keys
+        and sampled values as values.
+    param_mappings:  dict
+    A dictionary defining how sampled parameters should be expanded.
+
+    Returns
+    -------
+    dict
+        An expanded parameter dictionary containing the original parameters along with
+        additional key-value pairs derived from the predefined mappings.
+
+    """
+    expanded_dict = {}
+    for param_name, value in parameter_dict.items():
+        if param_name in param_mappings:
+            mapping = param_mappings[param_name]
+            if isinstance(mapping, dict):
+                if value in mapping:
+                    expanded_dict.update(mapping[value])
+            else:
+                expanded_dict.update({k: value for k in mapping})
+        else:
+            expanded_dict[param_name] = value
+    return expanded_dict
+
+
+def get_mapped_bounds(uncertain_param_list, param_mappings):
+    """
+    Return actual bounds (min, max) of all parameters after applying param_mappings.
+
+    Args:
+        uncertain_param_list (list): List of parameter dicts with NAME, INTERVAL, TYPE.
+        param_mappings (dict): Mapping rules to expand parameters.
+
+    Returns:
+        List[Tuple[float, float]]: List of bounds for each expanded parameter.
+    """
+    reverse_mapping = {}
+    for base_param, expanded_list in param_mappings.items():
+        for expanded_param in expanded_list:
+            reverse_mapping[expanded_param] = base_param
+
+    bounds_dict = {
+        param[Parameter.NAME]: tuple(param[Parameter.INTERVAL])
+        for param in uncertain_param_list
+    }
+
+    base_values = {name: bounds_dict[name][0] for name in bounds_dict}
+    expanded_dict = expand_parameter_dict(base_values, param_mappings)
+
+    bounds = []
+    for expanded_param in expanded_dict:
+        base_param = reverse_mapping.get(
+            expanded_param, expanded_param
+        )  # fall back to self
+        if base_param not in bounds_dict:
+            raise ValueError(
+                f"No matching bounds for parameter: {expanded_param} (base: {base_param})"
+            )
+        bounds.append(bounds_dict[base_param])
+
+    return bounds
 
 
 class VariantSubSampler:
@@ -21,10 +114,10 @@ class VariantSubSampler:
     def __init__(
         self,
         model,
-        combinations,
         add_existing=False,
         variant_dict=None,
         modifier_map=None,
+        custom_combination=None,
         simulation_options=None,
         save_dir=None,
         file_extension=".txt",
@@ -34,8 +127,9 @@ class VariantSubSampler:
 
         Args:
             model: The model to be used for simulations.
-            combinations: List of lists, each inner list
-            representing a combination of variants.
+            custom_combination: List of lists, each inner list
+            representing a custom combination of variants. Otherwise, all variants are automatically
+            deduced from variant_dict and modifier_map.
             add_existing: A boolean flag indicating whether to include existing
                 variant to each modifier.
                 If True, existing modifiers will be included;
@@ -52,15 +146,20 @@ class VariantSubSampler:
 
         """
         self.model = model
-        self.combinations = combinations
         self.add_existing = add_existing
         self.variant_dict = variant_dict
+        self.combinations = (
+            custom_combination
+            if custom_combination
+            else get_combined_variants(self.variant_dict)
+        )
         self.modifier_map = modifier_map
         self.simulation_options = simulation_options
         self.save_dir = save_dir
         self.file_extension = file_extension
         self.sample = []
-        self.all_variants = set(itertools.chain(*combinations))
+        self.simulated_samples = []
+        self.all_variants = set(itertools.chain(*self.combinations))
         self.sample_results = []
         self.not_simulated_combinations = []
         self.variant_coverage = {variant: False for variant in self.all_variants}
@@ -77,11 +176,11 @@ class VariantSubSampler:
         """
         Add a sample to the VariantSubSampler.
 
+            seed (optional): Seed for random number generation. Defaults to None.
         Args:
             sample_size: The size of the sample to be added.
             simulate (optional): Whether to perform simulation
             after adding the sample. Defaults to True.
-            seed (optional): Seed for random number generation. Defaults to None.
             ensure_full_coverage (optional): Whether to ensure
             full coverage of variants in the sample. Defaults to False.
             n_cpu (optional): Number of CPU cores to use for simulation. Defaults to -1.
@@ -137,7 +236,8 @@ class VariantSubSampler:
         if additional_needed > 0:
             print(
                 "Warning: Not enough unique combinations "
-                "to meet the additional requested sample size."
+                "to meet the additional requested sampl"
+                "e size."
             )
 
         if simulate:
@@ -210,7 +310,102 @@ class VariantSubSampler:
             )
 
             self.sample_results.extend(results)
+            self.simulated_samples.extend(self.not_simulated_combinations)
             self.not_simulated_combinations = []  # Clear the list after simulation
+
+    def simulate_all_variants_and_parameters(
+        self,
+        parameter,
+        param_mapping=None,
+        simulation_options=None,
+        n_cpu=1,
+    ):
+        """
+        Simulates all combinations of parameters and variants by applying parameter sets
+        and generating multiple model variants based on the provided variant dictionary.
+
+
+        Parameters
+        ----------
+
+        parameter : list
+            A list of parameters.
+
+        param_mapping : dict, optional
+            A dictionary defining how sampled parameters should be expanded into additional key-value pairs
+            before being applied to the model. Each key in `param_mapping` corresponds to a parameter name
+            in `parameter_dict`. The value can be:
+            - A dictionary: Maps discrete parameter values to new parameter sets.
+            - An iterable: Directly applies the sampled value to a set of keys.
+
+        simulation_options : dict, optional
+            Simulation options to override the default `self.simulation_options` set during instantiation.
+
+        n_cpu : int, optional
+            Number of CPU cores to use for parallel simulation. Defaults to 1 (for now, -1 not working with both parameters and variants variations).
+
+        Returns
+        -------
+        None
+            The method updates the `self.sample` and `self.sample_results` attributes with the parameter and variant
+            combinations used in each simulation and the corresponding simulation results.
+
+        Notes
+        -----
+        - The function expects that `self.parameters` contains parameters with the `Choice` type, which defines a discrete
+          set of possible values for each parameter.
+        - It generates parameter combinations using `itertools.product` to exhaustively cover all possible choices.
+        - The parameter and variant combinations are stored in `self.sample` using `np.vstack`.
+        - The function calls `simulate_variants` to generate and simulate each variant combination.
+        - The `self.param_mappings` attribute is used to dynamically expand the sampled parameters into additional
+          key-value pairs, which can modify how the model parameters are applied during simulations.
+        """
+        effective_simulation_options = (
+            simulation_options
+            if simulation_options is not None
+            else self.simulation_options
+        )
+
+        if not effective_simulation_options:
+            raise ValueError("Simulation options must be provided for the simulation.")
+
+        if not isinstance(self.sample, np.ndarray) or self.sample.size == 0:
+            self.sample = np.empty((0, len(parameter) + len(self.combinations[0])))
+
+        choice_parameters = [
+            param for param in parameter if param[Parameter.TYPE] == "Choice"
+        ]
+        param_names = [param[Parameter.NAME] for param in choice_parameters]
+        param_values = [param[Parameter.INTERVAL] for param in choice_parameters]
+
+        all_parameter_dicts = [
+            dict(zip(param_names, combination))
+            for combination in product(*param_values)
+        ]
+
+        for idx, param_dict in enumerate(all_parameter_dicts):
+            expanded_param_dict = expand_parameter_dict(param_dict, param_mapping)
+            print(f"Simulating combination {idx + 1}/{len(all_parameter_dicts)}...")
+
+            result = simulate_variants(
+                n_cpu=n_cpu,
+                add_existing=self.add_existing,
+                model=deepcopy(self.model),
+                variant_dict=self.variant_dict,
+                modifier_map=self.modifier_map,
+                simulation_options=effective_simulation_options,
+                custom_combinations=self.combinations,
+                parameter_dict=expanded_param_dict,
+            )
+
+            new_sample_value = np.array(
+                [
+                    list(param_dict.values()) + list(variant_tuple)
+                    for variant_tuple in self.combinations
+                ]
+            )
+            self.sample = np.vstack((self.sample, new_sample_value))
+            self.sample_results.extend(result)
 
     def clear_sample(self):
         """
@@ -227,6 +422,7 @@ class VariantSubSampler:
           return any value.
         """
         self.sample = []
+        self.simulated_samples = []
         self.sample_results = []
         self.not_simulated_combinations = []
 
@@ -241,9 +437,13 @@ class VariantSubSampler:
         - None: The method resets the internal state
         related to non-simulated samples.
         """
+        self.sample = [
+            comb for comb in self.sample if comb not in self.not_simulated_combinations
+        ]
         self.not_simulated_combinations = []
 
 
+## TODO issue with n_sample: when 1, makes 3 (2 boundaries +1)
 class ModelSampler:
     """
     A class for sampling parameter sets and running simulations using a simulator.
@@ -270,7 +470,14 @@ class ModelSampler:
     - add_sample(sample_size, seed=None): Adds a new sample of parameter sets.
     """
 
-    def __init__(self, parameters, model, sampling_method="LatinHypercube"):
+    def __init__(
+        self,
+        parameters,
+        model,
+        sampling_method="LatinHypercube",
+        simulation_options=None,
+        param_mappings=None,
+    ):
         """
         Initialize the SimulationSampler instance.
 
@@ -280,14 +487,113 @@ class ModelSampler:
             used for running simulations.
         :param sampling_method: The name of the sampling method
             to be used (default is "LatinHypercube").
+        :param simulation_options: A dictionary of options passed
+        to the model when running simulations.
+        :param param_mappings: A dictionary defining how
+        sampled parameters should be expanded.
+
+
         """
         self.parameters = parameters
         self.model = model
         self.sampling_method = sampling_method
         self.sample = np.empty(shape=(0, len(parameters)))
+        self.simulation_options = simulation_options
         self.sample_results = []
+        self.param_mappings = param_mappings or {}
+        self.not_simulated_samples = []
+
         if sampling_method == "LatinHypercube":
             self.sampling_method = LatinHypercube
+
+    def draw_sample(self, sample_size, seed=None):
+        """
+        Draw a sample of parameter sets without running simulations.
+
+        Args:
+            sample_size (int): Number of samples to draw.
+            seed (int, optional): Seed for reproducibility.
+        """
+        if seed is not None:
+            np.random.seed(seed)
+
+        sampler = LatinHypercube(d=len(self.parameters), seed=seed)
+        new_sample = sampler.random(n=sample_size)
+        new_sample_value = np.empty(shape=(0, len(self.parameters)))
+
+        for s in new_sample:
+            new_sample_value = np.vstack(
+                (
+                    new_sample_value,
+                    [
+                        self._sample_parameter(par, val)
+                        for par, val in zip(self.parameters, s)
+                    ],
+                )
+            )
+
+        if self.sample.size == 0:
+            bound_sample = self.get_boundary_sample()
+            new_sample_value = np.vstack((new_sample_value, bound_sample.T))
+
+        self.sample = np.vstack((self.sample, new_sample_value))
+        self.not_simulated_samples.extend(new_sample_value.tolist())
+
+    def simulate_drawn_samples(self):
+        """
+        Simulate all drawn samples that haven't been simulated yet.
+        Assumes that self.sample contains samples drawn via draw_sample.
+        """
+        start_idx = len(self.sample_results)
+        drawn_samples = self.sample[start_idx:]
+
+        if drawn_samples.size == 0:
+            print("No new samples to simulate.")
+            return
+
+        prog_bar = progress_bar(range(drawn_samples.shape[0]))
+
+        for i, sample_row in zip(prog_bar, drawn_samples):
+            sim_config = {
+                par[Parameter.NAME]: val
+                for par, val in zip(self.parameters, sample_row)
+            }
+            expanded_config = expand_parameter_dict(sim_config, self.param_mappings)
+            prog_bar.comment = f"Simulating {start_idx + i + 1}/{self.sample.shape[0]}"
+
+            result = self.model.simulate(
+                parameter_dict=expanded_config,
+                simulation_options=self.simulation_options,
+            )
+            self.sample_results.append(result)
+
+    def simulate_all_combinations(self):
+        choice_parameters = [
+            param for param in self.parameters if param[Parameter.TYPE] == "Choice"
+        ]
+        intervals = [param[Parameter.INTERVAL] for param in choice_parameters]
+        all_combinations = list(product(*intervals))
+        param_names = [param[Parameter.NAME] for param in choice_parameters]
+
+        prog_bar = progress_bar(range(len(all_combinations)))
+
+        applied_parameters = []
+        expanded_parameters = []
+
+        for idx, combination in zip(prog_bar, all_combinations):
+            param_dict = dict(zip(param_names, combination))
+            expanded_param_dict = expand_parameter_dict(param_dict, self.param_mappings)
+            prog_bar.comment = f"Simulation {idx + 1}/{len(all_combinations)}"
+            result = self.model.simulate(
+                parameter_dict=expanded_param_dict,
+                simulation_options=self.simulation_options,
+            )
+            self.sample_results.append(result)
+            applied_parameters.append(combination)
+            expanded_parameters.append(expanded_param_dict)
+
+        applied_parameters_array = np.array(applied_parameters)
+        self.sample = np.vstack((self.sample, applied_parameters_array))
 
     def get_boundary_sample(self):
         """
@@ -314,9 +620,6 @@ class ModelSampler:
     def add_sample(self, sample_size, seed=None):
         """
         Add a new sample of parameter sets.
-
-        :param sample_size: The size of the new sample.
-        :param seed: The seed for the random number generator (default is None).
         """
         if seed is not None:
             np.random.seed(seed)
@@ -343,9 +646,13 @@ class ModelSampler:
             sim_config = {
                 par[Parameter.NAME]: val for par, val in zip(self.parameters, simul)
             }
+            expanded_config = expand_parameter_dict(sim_config, self.param_mappings)
             prog_bar.comment = "Simulations"
 
-            results = self.model.simulate(parameter_dict=sim_config)
+            results = self.model.simulate(
+                parameter_dict=expanded_config,
+                simulation_options=self.simulation_options,
+            )
             self.sample_results.append(results)
 
         self.sample = np.vstack((self.sample, new_sample_value))
@@ -375,3 +682,73 @@ class ModelSampler:
         """
         self.sample = np.empty(shape=(0, len(self.parameters)))
         self.sample_results = []
+
+
+def plot_pcp(
+    sample_results,
+    param_sample,
+    parameters,
+    indicators,
+    aggregation_method=np.mean,
+    html_file_path=None,
+):
+    """
+    Plots a parallel coordinate plot for sensitivity analysis results.
+      Notes
+    -----
+    - The function handles categorical parameters by converting them to numerical
+      codes using `pandas.Categorical`. The tick values are shifted slightly to
+      improve readability.
+    - The first indicator in the list is used to color the lines in the plot.
+    - The function requires the Plotly library (`plotly.graph_objects`) to create
+      the interactive plot.
+    """
+    data_dict = [
+        {param[Parameter.NAME]: value for param, value in zip(parameters, sample)}
+        for sample in param_sample
+    ]
+
+    if isinstance(indicators, str):
+        indicators = [indicators]
+
+    for i, df in enumerate(sample_results):
+        for indicator in indicators:
+            if indicator in df.columns:
+                data_dict[i][indicator] = aggregation_method(df[indicator])
+
+    df_plot = pd.DataFrame(data_dict)
+    dim_list = []
+
+    for col in df_plot.select_dtypes(include="object").columns:
+        cat = pd.Categorical(df_plot[col])
+        df_plot[col] = cat.codes
+        dim_list.append(
+            dict(
+                range=[0, len(cat.categories) - 1],
+                label=col,
+                tickvals=list(set(cat.codes)),
+                ticktext=list(cat.categories),
+                values=df_plot[col].tolist(),
+            )
+        )
+
+    for col in indicators:
+        dim_list.append(dict(label=col, values=df_plot[col].tolist()))
+
+    color_indicator = indicators[0] if indicators else None
+
+    fig = go.Figure(
+        data=go.Parcoords(
+            line=dict(
+                color=df_plot[color_indicator],
+                colorscale="Plasma",
+                showscale=True,
+            ),
+            dimensions=dim_list,
+        )
+    )
+
+    if html_file_path:
+        pio.write_html(fig, html_file_path)
+
+    return fig
