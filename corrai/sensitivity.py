@@ -299,7 +299,7 @@ class SAnalysis:
                     **sensitivity_method_kwargs,
                 )
 
-    def calculate_sensitivity_indicators(self):
+    def calculate_sensitivity_indicators(self, static: bool = True):
         """
         Returns sensitivity indicators based on the method used.
 
@@ -333,6 +333,48 @@ class SAnalysis:
              relative measure of the variability induced by each input factor.
 
         """
+
+        def average_dynamic_index(index_name):
+            df = pd.DataFrame(
+                {
+                    t: res[index_name]
+                    for t, res in self.sensitivity_dynamic_results.items()
+                    if index_name in res
+                }
+            ).T
+            return df.mean()
+
+        if not static:
+            if not self.sensitivity_dynamic_results:
+                raise ValueError("No dynamic sensitivity results found.")
+
+            if self.method in [Method.SOBOL, Method.FAST]:
+                st_mean = average_dynamic_index("ST")
+                s1_mean = (
+                    average_dynamic_index("S1")
+                    if "S1" in next(iter(self.sensitivity_dynamic_results.values()))
+                    else None
+                )
+                return {
+                    "ST": st_mean,
+                    "S1": s1_mean,
+                }
+
+            elif self.method == Method.RBD_FAST:
+                s1_mean = average_dynamic_index("S1")
+                return {"S1": s1_mean}
+
+            elif self.method == Method.MORRIS:
+                raise NotImplementedError(
+                    "Dynamic MORRIS indicators not supported yet."
+                )
+
+            else:
+                raise ValueError("Unknown method for dynamic sensitivity.")
+
+        if self.sensitivity_results is None:
+            raise ValueError("No static sensitivity results available.")
+
         if self.method == Method.FAST:
             sum_st = sum(self.sensitivity_results["ST"])
             conf = self.sensitivity_results["ST_conf"]
