@@ -4,11 +4,13 @@ import itertools
 import numpy as np
 import pandas as pd
 from plotly import colors as colors, graph_objects as go
-from scipy.signal import argrelextrema
+from scipy.signal import find_peaks
 from sklearn.base import BaseEstimator, ClusterMixin
 from sklearn.neighbors import KernelDensity
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.utils.validation import check_is_fitted
+
 
 from corrai.transformers import PdSkTransformer
 from corrai.base.utils import (
@@ -60,7 +62,7 @@ def get_hours_switch(X, diff_filter_threshold=0, switch="positive"):
         )
     df["hour_since_beg_day"] = (df.index - df.start_day).dt.total_seconds() / 60 / 60
 
-    max_index = argrelextrema(df[data_col_name].to_numpy(), np.greater)[0]
+    max_index = find_peaks(df[data_col_name].to_numpy())[0]
     max_values = df[data_col_name].iloc[max_index]
     filt_max_values_index = max_values.loc[max_values > diff_filter_threshold].index
 
@@ -69,64 +71,95 @@ def get_hours_switch(X, diff_filter_threshold=0, switch="positive"):
     return float_to_hour(list(df.hour_since_beg_day.dropna()))
 
 
-class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
+class KdeSetPoint(BaseEstimator, ClusterMixin):
     """
-    KDE-based set point detection algorithm. The algorithm fits a Kernel Density
-    Estimate to the provided data and detects local maxima as set points. The
-    set points are then used as the basis for the clustering of new data points.
-    Clustering of new points is performed by labeling each new point with the
-    index of the nearest set point.
+    A KDE-based set point detection and clustering transformer.
+
+    This estimator uses Kernel Density Estimation (KDE) to identify statistically
+    significant "set points" in a univariate dataset. These set points correspond
+    to local maxima in the estimated probability density function. After detecting
+    the set points, the algorithm assigns labels to new data points based on their
+    proximity to the nearest set point.
 
     Parameters
     ----------
     bandwidth : float, default=0.1
-        The bandwidth parameter for the KDE estimator.
+        Bandwidth parameter for the kernel used in KDE. Controls the smoothness
+        of the estimated density.
 
     domain_tol : float, default=0.2
-        The tolerance parameter used for determining the range of values
-        to consider when estimating the probability density function.
+        Relative tolerance for extending the domain over which the KDE is evaluated.
+        The domain is computed by expanding the min/max range of the data by this
+        factor times the mean absolute value.
 
     domain_n_sample : int, default=1000
-        The number of samples to use when estimating the probability density
-        function.
+        Number of evenly spaced samples over the domain used to evaluate the KDE.
 
     lik_filter : float, default=1
-        The minimum likelihood threshold required for a set point to be
-        included in the model.
+        Minimum likelihood required for a peak to be accepted as a set point.
 
     cluster_tol : float, default=0.05
-        The tolerance parameter used for assigning data points to clusters.
+        Tolerance used when assigning labels. A point is assigned to the nearest
+        set point if the distance is below this value. Otherwise, it's labeled -1.
 
     Attributes
     ----------
     kde : sklearn.neighbors.KernelDensity
-        The KDE estimator used to estimate the probability density function.
+        The KDE estimator used to fit the probability density function.
 
     domain : ndarray of shape (n_samples,)
-        The array of samples used to estimate the probability density function.
+        The domain over which the KDE is evaluated.
 
-    set_points : ndarray of shape (n_set_points,)
-        The set points detected by the algorithm.
+    set_points_ : ndarray of shape (n_set_points,)
+        The set points identified as local maxima of the density function.
 
-    set_points_likelihood : ndarray of shape (n_set_points,)
-        The likelihoods associated with each set point.
+    set_points_likelihood_ : ndarray of shape (n_set_points,)
+        The likelihood values of the accepted set points.
+
+    labels_ : ndarray of shape (n_samples,)
+        The cluster labels assigned to the input data during `fit`.
 
     Methods
     -------
     fit(X, y=None)
-        Fit the model to the given data.
+        Fits the KDE model to the input data and identifies set points.
 
     predict(X)
-        Use the fitted model to cluster new data points.
+        Assigns each input sample to the nearest set point (cluster).
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> from corrai.learning.cluster import KdeSetPoint
+    >>> from corrai.learning.cluster import plot_kde_hist, plot_kde_predict
+
+    >>> data = pd.DataFrame({"data": [0,0,0,0,1,1,1,1,1,0,0,0,0,0,2,2,2,2]})
+    >>> kde_setpoint = KdeSetPoint(bandwidth=0.1, lik_filter=0.14)
+
+    >>> kde_setpoint.fit_predict(data)
+
+    >>> print(kde_setpoint.set_points_)
+    [-1.0010010e-04  9.9885441e-01  2.0001001e+00]
+
+    >>> print(kde_setpoint.labels_)
+    [0. 0. 0. 0. 1. 1. 1. 1. 1. 0. 0. 0. 0. 0. 2. 2. 2. 2.]
+
+    Notes
+    -----
+    - This transformer only supports 1D data (i.e., a single column).
+    - Clustering is performed based on the Euclidean distance to detected set points.
+    - Points that do not fall within `cluster_tol` of any set point are assigned -1.
+    - Useful for unsupervised clustering of time series values, especially for set point detection
+      in building operation data (e.g., thermostat settings, power modes).
     """
 
     def __init__(
         self,
-        bandwidth=0.1,
-        domain_tol=0.2,
-        domain_n_sample=1000,
-        lik_filter=1,
-        cluster_tol=0.05,
+        bandwidth: float = 0.1,
+        domain_tol: float = 0.2,
+        domain_n_sample: int = 1000,
+        lik_filter: float = 1.0,
+        cluster_tol: float = 0.05,
     ):
         self.bandwidth = bandwidth
         self.domain_tol = domain_tol
@@ -135,9 +168,6 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
         self.cluster_tol = cluster_tol
         self.kde = KernelDensity(bandwidth=bandwidth)
         self.domain = None
-        self.set_points = None
-        self.set_points_likelihood = None
-        self.labels_ = None
 
     def fit(self, X, y=None):
         X = as_1_column_dataframe(X)
@@ -153,28 +183,30 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
         self.kde.fit(X.to_numpy())
 
         like_domain = np.exp(self.kde.score_samples(self.domain))
-        max_index = argrelextrema(like_domain, np.greater)
-        self.set_points = self.domain[max_index[0]]
+        max_index = find_peaks(like_domain)
+        self.set_points_ = self.domain[max_index[0]]
 
         # Pass if perfectly flat (all values equal in the domain)
-        if self.set_points.shape[0] > 0:
-            set_points_likelihood = np.exp(self.kde.score_samples(self.set_points))
+        if self.set_points_.shape[0] > 0:
+            set_points_likelihood = np.exp(self.kde.score_samples(self.set_points_))
             like_mask = set_points_likelihood > self.lik_filter
 
-            self.set_points = self.set_points[like_mask].flatten()
-            self.set_points_likelihood = set_points_likelihood[like_mask]
+            self.set_points_ = self.set_points_[like_mask].flatten()
+            self.set_points_likelihood_ = set_points_likelihood[like_mask]
             self.labels_ = self.predict(X)
 
         return self
 
     def predict(self, X):
+        check_is_fitted(self, attributes=["set_points_", "set_points_likelihood_"])
+
         X = as_1_column_dataframe(X)
         X = X.to_numpy()
         X = _reshape_1d(X)
 
         x_cluster = np.empty(X.shape[0])
         x_cluster[:] = np.nan
-        for nb, sp in enumerate(self.set_points):
+        for nb, sp in enumerate(self.set_points_):
             mask = np.logical_and(
                 (X > (sp - self.cluster_tol)), (X < (sp + self.cluster_tol))
             )
@@ -183,9 +215,7 @@ class KdeSetPointIdentificator(BaseEstimator, ClusterMixin):
         return np.nan_to_num(x_cluster, nan=-1)
 
 
-def set_point_identifier(
-    X: pd.DataFrame | pd.Series, estimator: KdeSetPointIdentificator
-):
+def set_point_identifier(X: pd.DataFrame | pd.Series, estimator: KdeSetPoint):
     """
     Identifies set points in a time series data using kernel density estimation.
     Uses CorrAI KdeSetPointIdentificator combined with a transformer to scale the data.
@@ -232,7 +262,7 @@ def set_point_identifier(
     model = make_pipeline(PdSkTransformer(StandardScaler()), estimator)
 
     pd_scaler = model.named_steps["pdsktransformer"]
-    kde = model.named_steps["kdesetpointidentificator"]
+    kde = model.named_steps["kdesetpoint"]
 
     duration = X.index[-1] - X.index[-0]
 
@@ -246,7 +276,7 @@ def set_point_identifier(
     for col in X.columns:
         model.fit(X[[col]])
         try:
-            set_points = pd_scaler.inverse_transform(kde.set_points)
+            set_points = pd_scaler.inverse_transform(kde.set_points_)
         except ValueError:
             set_points = None
 
@@ -270,7 +300,7 @@ def moving_window_set_point_identifier(
     X: pd.DataFrame | pd.Series,
     window_size: dt.timedelta,
     slide_size: dt.timedelta,
-    estimator: KdeSetPointIdentificator,
+    estimator: KdeSetPoint,
 ):
     """
     Identify set points in a time series dataset using a moving window approach
@@ -288,7 +318,7 @@ def moving_window_set_point_identifier(
     slide_size : datetime.timedelta
         Size of the sliding step between consecutive windows.
 
-    estimator : KdeSetPointIdentificator
+    estimator : KdeSetPoint
         An instance of the CorrAI KdeSetPointIdentificator class used for set point
         identification.
 
@@ -331,44 +361,85 @@ def moving_window_set_point_identifier(
         return None
 
 
-def plot_kde_set_point(
+def plot_kde_predict(
     X: pd.DataFrame | pd.Series,
-    estimator: KdeSetPointIdentificator = None,
-    sk_scaler: bool = None,
+    bandwidth: float = 0.1,
+    domain_tol: float = 0.2,
+    domain_n_sample: int = 1000,
+    lik_filter: float = 1.0,
+    cluster_tol: float = 0.05,
+    estimator: KdeSetPoint = None,
     title="Clustered Timeseries",
     y_label="[-]",
 ):
     """
-    Plots a scatter plot of the input data with different colors representing the
-    clusters of the data points identified by the `KdeSetPointIdentificator` estimator.
+    Plot a clustered time series using KDE-based setpoint identification.
+
+    This function visualizes the time series data along with the output of a KDE-based
+    setpoint identification algorithm. Each cluster (setpoint or transient region)
+    is represented with a different color in the scatter plot.
 
     Parameters
     ----------
-        X : pandas.DataFrame | pandas.Series
-            The input data with shape (n_samples, 1).
-        estimator : corrai.learning.KdeSetPointIdentificator, optional
-            An instance of KdeSetPointIdentificator to use for clustering the data.
-            Defaults to `KdeSetPointIdentificator` with default values.
-        sk_scaler : object, optional
-            An instance of the scaler to use for preprocessing the
-            data. Defaults to `StandardScaler`.
-        title : str, optional
-            The title of the plot. Defaults to "Clustered Timeseries".
-        y_label : str
-            The label of the y-axis. Defaults to "[-]".
+    X : pandas.DataFrame or pandas.Series
+        Time series input data of shape (n_samples, 1). Must have a DateTimeIndex.
+    bandwidth : float, default=0.1
+        Bandwidth of the kernel used in the KDE estimation.
+    domain_tol : float, default=0.2
+        Tolerance to merge nearby domain samples when identifying setpoints.
+    domain_n_sample : int, default=1000
+        Number of points to evaluate in the KDE domain.
+    lik_filter : float, default=1.0
+        Minimum likelihood threshold for considering a domain sample as a valid setpoint.
+    cluster_tol : float, default=0.05
+        Tolerance for merging close likelihood peaks into a single setpoint.
+    estimator : KdeSetPoint, optional
+        Pre-configured instance of the KDE-based estimator. If None, a new instance is created
+        with the specified parameters.
+    title : str, default="Clustered Timeseries"
+        Title of the generated plot.
+    y_label : str, default="[-]"
+        Label for the y-axis of the plot.
+
+    Returns
+    -------
+    plotly.graph_objs._figure.Figure
+        A Plotly Figure object showing the clustered time series.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> from corrai.learning.cluster import plot_kde_predict
+
+    >>> # Create an example time series with some steady-state regions
+    >>> data = pd.DataFrame(
+    ... {"data": [0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 2, 2, 2, 2]},
+    ... index=pd.date_range("2009", periods=18, freq="h"))
+
+    >>> # Plot clustered data using default KDE parameters
+    >>> fig = plot_kde_predict(data, bandwidth=0.1, lik_filter=0.14)
+    >>> fig.show()
+
+    Notes
+    -----
+    - The input series must contain only one column and a DateTimeIndex.
+    - The function uses Plotly for visualization and colors each cluster distinctly.
+    - The first cluster (usually the transient or unclassified region) is shown first in the legend.
+    - The `KdeSetPoint` estimator is part of the corrai.learning module and encapsulates
+      the KDE and clustering logic.
+
+    See Also
+    --------
+    corrai.learning.KdeSetPoint : The KDE-based estimator used to classify setpoints.
     """
     X = as_1_column_dataframe(X)
 
-    if sk_scaler is None:
-        pd_scaler = PdSkTransformer(StandardScaler())
-    else:
-        pd_scaler = PdSkTransformer(sk_scaler)
-
     if estimator is None:
-        estimator = KdeSetPointIdentificator()
+        estimator = KdeSetPoint(
+            bandwidth, domain_tol, domain_n_sample, lik_filter, cluster_tol
+        )
 
-    model = make_pipeline(pd_scaler, estimator)
-    cluster_col = model.fit_predict(X)
+    cluster_col = estimator.fit_predict(X)
 
     color_dict = {
         key: value
@@ -419,48 +490,88 @@ def plot_kde_set_point(
     return fig
 
 
-def plot_time_series_kde(
+def plot_kde_hist(
     X: pd.DataFrame | pd.Series,
-    title: str = "Likelihood and data",
-    x_label: str = "",
-    scaled: bool = True,
     bandwidth: float = 0.1,
+    domain_tol: float = 0.2,
+    domain_n_sample: int = 1000,
     xbins: int = 100,
+    title="Clustered Timeseries",
+    x_label="",
 ):
     """
-    Plots the likelihood function and histogram of the input data as estimated by
-    kernel density estimation.
+    Plot a histogram and KDE likelihood curve of a univariate time series.
+
+    This function overlays a histogram of the input time series with the likelihood
+    function estimated using kernel density estimation (KDE). It is useful for
+    visualizing the distribution of the data, detecting likely setpoints, selecting
+    parameters for KdeSetpoint.
 
     Parameters
     ----------
-        X (pandas.DataFrame): The input data with shape (n_samples, n_features).
-        title (str): The title of the plot. Defaults to "Likelihood and data".
-        x_label (str): The label of the x-axis. Defaults to "".
-        scaled (bool): Whether to scale the input data using `StandardScaler`.
-            Defaults to True.
-        bandwidth (float): The bandwidth parameter for the kernel density estimator.
-            Defaults to 0.1.
-        xbins (int): The number of bins to use for the histogram. Defaults to 100.
+    X : pandas.DataFrame or pandas.Series
+        Input time series data of shape (n_samples, 1). Must have a DateTimeIndex.
+
+    bandwidth : float, default=0.1
+        Bandwidth of the kernel used in the KDE estimation.
+
+    domain_tol : float, default=0.2
+        Tolerance used to extend the KDE domain beyond the min/max of the data.
+
+    domain_n_sample : int, default=1000
+        Number of points in the domain over which the KDE likelihood is evaluated.
+
+    xbins : int, default=100
+        Number of bins to use for the histogram.
+
+    title : str, default="Clustered Timeseries"
+        Title for the plot.
+
+    x_label : str, default=""
+        Label for the x-axis.
+
+    Returns
+    -------
+    plotly.graph_objs._figure.Figure
+        A Plotly Figure object showing the histogram and KDE likelihood curve.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> from corrai.learning.cluster import plot_kde_hist
+
+    >>> data = pd.DataFrame(
+    ...     {"data": [0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 2, 2, 2, 2]},
+    ...     index=pd.date_range("2009", periods=18, freq="h")
+    ... )
+
+    >>> fig = plot_kde_hist(data)
+    >>> fig.show()
+
+    Notes
+    -----
+    - This function uses `sklearn.neighbors.KernelDensity` to estimate the density
+      function.
+    - The KDE domain is extended around the min and max of the data by `domain_tol`
+      times the average absolute value of the series.
+    - The histogram is normalized to form a probability density, making it directly
+      comparable to the KDE likelihood.
+    - This plot is helpful to visually identify potential steady states (setpoints)
+      and to configure the class KdeSetpoint.
     """
 
     X = as_1_column_dataframe(X)
 
-    X = X.dropna()
-
-    scaler = StandardScaler()
-    if scaled:
-        X = scaler.fit_transform(X)
-    else:
-        X = X.to_numpy()
+    tolerance = np.mean(np.abs(X), axis=0) * domain_tol
 
     domain = np.linspace(
-        np.min(X, axis=0) - (np.mean(np.abs(X), axis=0) * 0.15),
-        np.max(X, axis=0) + (np.mean(np.abs(X), axis=0) * 0.15),
-        1000,
+        np.min(X, axis=0) - tolerance,
+        np.max(X, axis=0) + tolerance,
+        domain_n_sample,
     )
 
     kde = KernelDensity(bandwidth=bandwidth)
-    kde.fit(X)
+    kde.fit(X.to_numpy())
 
     log_like_domain = np.exp(kde.score_samples(domain))
 
