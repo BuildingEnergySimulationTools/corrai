@@ -3,9 +3,9 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 
-from corrai.learning.cluster import KdeSetPointIdentificator
+from corrai.learning.cluster import KdeSetPoint
 from corrai.learning.cluster import get_hours_switch
-from corrai.learning.cluster import plot_kde_set_point, plot_time_series_kde
+from corrai.learning.cluster import plot_kde_predict, plot_kde_hist
 from corrai.learning.cluster import (
     set_point_identifier,
     moving_window_set_point_identifier,
@@ -28,20 +28,20 @@ class TestLearning:
             [
                 ("drop_na", ct.PdDropna()),
                 ("scaler", ct.PdSkTransformer(StandardScaler())),
-                ("kde_cluster", KdeSetPointIdentificator()),
+                ("kde_cluster", KdeSetPoint()),
             ]
         )
 
         pipe.fit(data)
 
         np.testing.assert_array_almost_equal(
-            pipe.named_steps["kde_cluster"].set_points,
+            pipe.named_steps["kde_cluster"].set_points_,
             np.array([-0.80092, 1.25735]),
             decimal=3,
         )
 
         np.testing.assert_array_almost_equal(
-            pipe.named_steps["kde_cluster"].set_points_likelihood,
+            pipe.named_steps["kde_cluster"].set_points_likelihood_,
             np.array([2.43101, 1.49684]),
             decimal=3,
         )
@@ -68,16 +68,16 @@ class TestLearning:
         # Generate test data
         x = pd.Series(np.random.randn(100), name="x")
 
-        estimator = KdeSetPointIdentificator()
+        estimator = KdeSetPoint()
         estimator.fit(x.to_frame())
 
         # Call the function with default arguments
-        plot_kde_set_point(x.to_frame(), estimator)
+        plot_kde_predict(x.to_frame())
 
         # Call the function with non-default arguments
-        plot_kde_set_point(
+        plot_kde_predict(
             x.to_frame(),
-            estimator,
+            estimator=estimator,
             title="Clustered Timeseries",
             y_label="test_lab",
         )
@@ -87,14 +87,13 @@ class TestLearning:
         x = pd.Series(np.random.randn(100), name="x")
 
         # Call the function with default arguments
-        plot_time_series_kde(x.to_frame())
+        plot_kde_hist(x.to_frame())
 
         # Call the function with non-default arguments
-        plot_time_series_kde(
+        plot_kde_hist(
             x.to_frame(),
             title="Likelihood and data",
             x_label="x",
-            scaled=False,
             bandwidth=0.2,
             xbins=200,
         )
@@ -106,7 +105,7 @@ class TestLearning:
 
         res = set_point_identifier(
             f_data,
-            estimator=KdeSetPointIdentificator(bandwidth=0.1, lik_filter=0.6),
+            estimator=KdeSetPoint(bandwidth=0.1, lik_filter=0.6),
         )
 
         ref = pd.DataFrame(
@@ -139,7 +138,7 @@ class TestLearning:
             f_data,
             window_size=dt.timedelta(hours=10),
             slide_size=dt.timedelta(hours=10),
-            estimator=KdeSetPointIdentificator(),
+            estimator=KdeSetPoint(),
         )
 
         ref = pd.DataFrame(
