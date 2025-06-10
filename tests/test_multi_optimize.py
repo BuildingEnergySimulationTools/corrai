@@ -32,13 +32,13 @@ class MyObjectBinhandKorn1:
         f1 = 4 * x["x"] ** 2 + 4 * x["y"] ** 2
         f2 = (x["x"] - 5) ** 2 + (x["y"] - 5) ** 2
         g1 = (x["x"] - 5) ** 2 + x["y"] ** 2 - 25
-        return pd.Series([f1, f2, g1], index=["f1", "f2", "g1"])
+        return {"f1": f1, "f2": f2, "g1": g1}
 
 
 class MyObjectBinhandKorn2:
     def function(self, x):
         g2 = 7.7 - (x["x"] - 8) ** 2 - (x["y"] + 3) ** 2
-        return pd.Series([g2], index=["g2"])
+        return {"g2": g2}
 
 
 class MyObjectMixed:
@@ -52,7 +52,7 @@ class MyObjectMixed:
         if x["x"] == "multiply":
             f2 = 10 * f2
 
-        return pd.Series([f1, f2], index=["f1", "f2"])
+        return {"f1": f1, "f2": f2}
 
 
 parameters = [
@@ -215,7 +215,7 @@ class TestMyProblem:
         )
 
         to_test = problem.evaluate(
-            [{"b": False, "x": "nothing", "y": -1, "z": -3.171895287195006}],
+            [[False, "nothing", -1, -3.171895287195006]],
             return_as_dictionary=True,
         )
 
