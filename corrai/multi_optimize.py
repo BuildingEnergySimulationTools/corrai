@@ -94,9 +94,10 @@ class MyProblem(ElementwiseProblem):
             param[Parameter.NAME]: val for param, val in zip(self.parameters, x)
         }
         res = pd.concat(
-            [m.function(current_param) for m in self.obj_func_list]
-            + [pyf(current_param) for pyf in self.func_list]
-        )
+            [pd.Series(m.function(current_param)) for m in self.obj_func_list]
+            + [pd.Series(pyf(current_param)) for pyf in self.func_list],
+            axis=0,
+        ).T
         out["F"] = list(res[self.function_names])
         out["G"] = list(res[self.constraint_names])
 
@@ -215,11 +216,16 @@ class MyMixedProblem(ElementwiseProblem):
             n_ieq_constr=len(constraint_names),
         )
 
-    def _evaluate(self, X, out, *args, **kwargs):
+    def _evaluate(self, x, out, *args, **kwargs):
+        current_param = {
+            param[Parameter.NAME]: val for param, val in zip(self.parameters, x)
+        }
+        print(current_param)
         res = pd.concat(
-            [m.function(X) for m in self.obj_func_list]
-            + [pyf(X) for pyf in self.func_list]
-        )
+            [pd.Series(m.function(current_param)) for m in self.obj_func_list]
+            + [pd.Series(pyf(current_param)) for pyf in self.func_list],
+            axis=0,
+        ).T
 
         out["F"] = list(res[self.function_names])
         out["G"] = list(res[self.constraint_names])
