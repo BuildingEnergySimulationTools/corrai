@@ -85,6 +85,7 @@ class SAnalysis:
         self.sample = None
         self.sensitivity_results = None
         self.sample_results = []
+        self.static = True  # Flag to indicate if the analysis is static or dynamic
 
     def set_parameters_list(self, parameters_list: list[dict[Parameter, Any]]):
         """
@@ -209,6 +210,7 @@ class SAnalysis:
             Stores results in `self.sensitivity_results` (static)
             or `self.sensitivity_dynamic_results` (dynamic).
         """
+        self.static = freq is None  # static becomes True if freq is given
         self.sensitivity_dynamic_results = {}  # here so that it's emptied when reran for new frequencies
 
         if sensitivity_method_kwargs is None:
@@ -325,7 +327,7 @@ class SAnalysis:
                     **sensitivity_method_kwargs,
                 )
 
-    def calculate_sensitivity_indicators(self, static: bool = True):
+    def calculate_sensitivity_indicators(self):
         """
         Returns sensitivity indicators based on the method used.
 
@@ -370,7 +372,7 @@ class SAnalysis:
             ).T
             return df.mean()
 
-        if not static:
+        if not self.static:
             if not self.sensitivity_dynamic_results:
                 raise ValueError("No dynamic sensitivity results found.")
 
@@ -453,7 +455,7 @@ class SAnalysis:
             raise ValueError("Invalid method")
 
 
-def plot_sobol_st_bar(salib_res):
+def plot_sobol_st_bar(salib_res, normalize_dynamic=False):
     """
     Plot Sobol total sensitivity indices (ST) as a bar chart or a dynamic line chart.
 
@@ -468,7 +470,8 @@ def plot_sobol_st_bar(salib_res):
         - For static analysis: a SobolResults object (e.g., `sanalysis.sensitivity_results`)
         - For dynamic analysis: a dictionary of time-indexed results (e.g., `sanalysis.sensitivity_dynamic_results`),
           where each value must contain keys "ST" and "names", and optionally "_absolute" to indicate absolute mode.
-
+    normalize_dynamic : bool, optional
+        If True, normalizes dynamic results to percentages and plots a cumulative graph (0 to 1).
     """
 
     if isinstance(salib_res, dict) and isinstance(next(iter(salib_res.values())), dict):
@@ -481,9 +484,12 @@ def plot_sobol_st_bar(salib_res):
             ).T
         except KeyError:
             raise ValueError(
-                "ST index not found in dynamic results. Use indicator_name='S1' if needed."
+                "ST index not found in dynamic results. Ensure 'ST' and 'names' are present."
             )
         absolute = "_absolute" in next(iter(salib_res.values()))
+
+        if normalize_dynamic:
+            df_to_plot = df_to_plot.div(df_to_plot.sum(axis=1), axis=0)
 
         df_to_plot.index.name = "Time"
         df_to_plot.columns.name = "Parameter"
@@ -496,16 +502,24 @@ def plot_sobol_st_bar(salib_res):
                     y=df_to_plot[param],
                     name=param,
                     mode="lines",
-                    stackgroup="one",
+                    stackgroup="one" if normalize_dynamic else None,
                 )
             )
+
+        yaxis_title = (
+            "Cumulative percentage [0-1]"
+            if normalize_dynamic
+            else (
+                "Absolute Sobol contribution"
+                if absolute
+                else "Sobol total index value [0-1]"
+            )
+        )
 
         fig.update_layout(
             title="Sobol ST indices (dynamic)",
             xaxis_title="Time",
-            yaxis_title="Absolute Sobol contribution"
-            if absolute
-            else "Sobol total index value [0-1]",
+            yaxis_title=yaxis_title,
         )
         return fig
 
