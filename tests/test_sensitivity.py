@@ -153,7 +153,9 @@ class TestSensitivity:
             assert "names" in result
             assert "_absolute" in result
 
-        indicators = sa_analysis.calculate_sensitivity_indicators(static=False)
+        indicators = sa_analysis.calculate_sensitivity_indicators()
+        assert sa_analysis.static is False
+
         assert "ST" in indicators
         assert isinstance(indicators["ST"], pd.Series)
 
@@ -173,6 +175,31 @@ class TestSensitivity:
 
         fig = plot_sobol_st_bar(sa_analysis.sensitivity_dynamic_results)
         assert fig.layout.title.text == "Sobol ST indices (dynamic)"
+
+    def test_sobol_st_bar_normalize(self):
+        sobol_dict_dynamic = {
+            "time1": {"ST": [0.5, 0.7, 0.15], "names": ["param1", "param2", "param3"]},
+            "time2": {"ST": [0.6, 0.8, 0.2], "names": ["param1", "param2", "param3"]},
+        }
+        fig = plot_sobol_st_bar(sobol_dict_dynamic, normalize_dynamic=True)
+        # fig.show()
+        assert fig.layout.yaxis.title.text == "Cumulative percentage [0-1]"
+        assert fig.layout.title.text == "Sobol ST indices (dynamic)"
+
+        df_to_plot = pd.DataFrame(
+            {
+                t: pd.Series(res["ST"], index=res["names"])
+                for t, res in sobol_dict_dynamic.items()
+            }
+        ).T
+        normalized_values = df_to_plot.div(df_to_plot.sum(axis=1), axis=0)
+
+        for bar in fig.data:
+            param_name = bar["name"]  # Récupère le nom du paramètre (ex: 'param1')
+            expected_values = normalized_values[
+                param_name
+            ]  # Récupère les valeurs normalisées pour ce paramètre
+            np.testing.assert_allclose(bar["y"], expected_values.values, rtol=0.05)
 
     # @patch("plotly.graph_objects.Figure.show")
     def test_plot_sobol_st_bar(self):
