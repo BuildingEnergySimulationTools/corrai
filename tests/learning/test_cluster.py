@@ -10,7 +10,6 @@ from corrai.learning.cluster import (
     set_point_identifier,
     moving_window_set_point_identifier,
 )
-import corrai.transformers as ct
 
 import datetime as dt
 from pathlib import Path
@@ -22,18 +21,16 @@ class TestLearning:
     def test_kde_set_point_identificator(self):
         data = pd.read_csv(
             FILES_PATH / "kde_test_dataset.csv", index_col=0, parse_dates=True
-        )
+        ).dropna()
 
         pipe = Pipeline(
             [
-                ("drop_na", ct.PdDropna()),
-                ("scaler", ct.PdSkTransformer(StandardScaler())),
+                ("scaler", StandardScaler().set_output(transform="pandas")),
                 ("kde_cluster", KdeSetPoint()),
             ]
         )
 
         pipe.fit(data)
-
         np.testing.assert_array_almost_equal(
             pipe.named_steps["kde_cluster"].set_points_,
             np.array([-0.80092, 1.25735]),
