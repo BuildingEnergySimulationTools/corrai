@@ -11,8 +11,6 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_is_fitted
 
-
-from corrai.transformers import PdSkTransformer
 from corrai.base.utils import (
     as_1_column_dataframe,
     check_datetime_index,
@@ -218,8 +216,8 @@ class KdeSetPoint(BaseEstimator, ClusterMixin):
 def set_point_identifier(X: pd.DataFrame | pd.Series, estimator: KdeSetPoint):
     """
     Identifies set points in a time series data using kernel density estimation.
-    Uses CorrAI KdeSetPointIdentificator combined with a transformer to scale the data.
-    If no scaler is provided, the function uses scikit learn StandardScaler
+    Uses CorrAI KdeSetPointIdentificator combined with a StandardScaler to scale
+    the data
 
     Parameters
     ----------
@@ -229,13 +227,6 @@ def set_point_identifier(X: pd.DataFrame | pd.Series, estimator: KdeSetPoint):
     estimator : object, optional
         A corrai KdeSetPointIdentificator. Default is None, which will use a
         `KdeSetPointIdentificator` object with default parameters values.
-    sk_scaler : object, optional
-        A scikit-learn scaler object that can transform data.
-        Default is None, which will use a `StandardScaler` object wrapped in a
-        corrai `PdSkTransformer` object.
-    cols : list, optional
-        The column names to identify set points in. Default is None, which will
-        identify set points in all columns.
 
     Returns
     -------
@@ -259,9 +250,9 @@ def set_point_identifier(X: pd.DataFrame | pd.Series, estimator: KdeSetPoint):
         X = as_1_column_dataframe(X)
     check_datetime_index(X)
 
-    model = make_pipeline(PdSkTransformer(StandardScaler()), estimator)
+    model = make_pipeline(StandardScaler().set_output(transform="pandas"), estimator)
 
-    pd_scaler = model.named_steps["pdsktransformer"]
+    pd_scaler = model.named_steps["standardscaler"]
     kde = model.named_steps["kdesetpoint"]
 
     duration = X.index[-1] - X.index[-0]
@@ -276,17 +267,17 @@ def set_point_identifier(X: pd.DataFrame | pd.Series, estimator: KdeSetPoint):
     for col in X.columns:
         model.fit(X[[col]])
         try:
-            set_points = pd_scaler.inverse_transform(kde.set_points_)
+            set_points = pd_scaler.inverse_transform([kde.set_points_])
         except ValueError:
             set_points = None
 
         if set_points is not None:
             index_tuple = [
-                (period, f"set_point_{i}") for i in range(set_points.shape[0])
+                (period, f"set_point_{i}") for i in range(set_points.shape[1])
             ]
             multiindex = pd.MultiIndex.from_tuples(index_tuple)
             set_points_series = pd.Series(
-                set_points.to_numpy().flatten(), index=multiindex, name=col
+                set_points.flatten(), index=multiindex, name=col
             )
             multi_series_list.append(set_points_series)
 
