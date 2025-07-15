@@ -9,6 +9,7 @@ def _reshape_1d(sample):
         return sample.squeeze()
     elif isinstance(sample, np.ndarray):
         return sample.flatten()
+    return None
 
 
 def as_1_column_dataframe(X):

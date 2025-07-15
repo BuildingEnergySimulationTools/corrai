@@ -2,9 +2,6 @@ import numpy as np
 import pandas as pd
 from sklearn.utils import check_consistent_length
 
-# from sklearn.metrics._regression import _check_reg_targets
-
-
 def nmbe(y_pred, y_true):
     """Normalized Mean Biased Error
 
