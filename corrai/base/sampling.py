@@ -1,71 +1,268 @@
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+
 from copy import deepcopy
+import random
+import itertools
+
+from pathlib import Path
+from itertools import product
 
 import numpy as np
-from pathlib import Path
-
-from corrai.base.parameter import Parameter
-from corrai.variant import simulate_variants, get_combined_variants
-
 import pandas as pd
 import plotly.io as pio
 import plotly.graph_objects as go
-
 from scipy.stats.qmc import LatinHypercube
-from fastprogress.fastprogress import force_console_behavior
 
-import random
-import itertools
-from itertools import product
-
-master_bar, progress_bar = force_console_behavior()
+from corrai.base.parameter import Parameter
+from corrai.base.model import Model
+from corrai.variant import simulate_variants, get_combined_variants
 
 
-def expand_parameter_dict(parameter_dict, param_mappings):
-    """
-    Expands a sampled parameter dictionary based on predefined mappings.
+@dataclass
+class Sample:
+    parameters: list[Parameter]
+    values: np.ndarray = field(init=False)
+    results: list[pd.DataFrame] = field(default_factory=list)
 
-    This method takes a dictionary of sampled parameters and expands it by applying
-    predefined mappings stored in `self.param_mappings`. The expansion process works
-    as follows:
+    def __post_init__(self):
+        self.values = np.empty((0, len(self.parameters)))
 
-    1. **If the mapping for a parameter is a dictionary**:
-       - The method checks if the sampled value exists as a key in the mapping.
-       - If found, the corresponding mapped values are added to the expanded dictionary.
+    def __len__(self):
+        return self.values.shape[0]
 
-    2. **If the mapping for a parameter is an iterable (non-dictionary)**:
-       - The method applies the sampled value to each key in the mapping and adds
-         these key-value pairs to the expanded dictionary.
+    def not_simulated_index(self):
+        return [df.empty for df in self.results]
 
-    3. **If a parameter has no predefined mapping**:
-       - The original parameter and its value are added directly to the expanded dictionary.
-
-    Parameters
-    ----------
-    parameter_dict : dict
-        The original parameter dictionary from the sample, with parameter names as keys
-        and sampled values as values.
-    param_mappings:  dict
-    A dictionary defining how sampled parameters should be expanded.
-
-    Returns
-    -------
-    dict
-        An expanded parameter dictionary containing the original parameters along with
-        additional key-value pairs derived from the predefined mappings.
-
-    """
-    expanded_dict = {}
-    for param_name, value in parameter_dict.items():
-        if param_name in param_mappings:
-            mapping = param_mappings[param_name]
-            if isinstance(mapping, dict):
-                if value in mapping:
-                    expanded_dict.update(mapping[value])
-            else:
-                expanded_dict.update({k: value for k in mapping})
+    def get_parameters_intervals(self):
+        if all([param.ptype == "Real" for param in self.parameters]):
+            return np.array([par.interval for par in self.parameters])
         else:
-            expanded_dict[param_name] = value
-    return expanded_dict
+            raise ValueError("All parameter must have an ptype = 'Real'")
+
+    def get_parameter_list_dict(self, idx: list | np.ndarray = None):
+        idx = slice(None) if idx is None else idx
+        return [
+            {par: val for par, val in zip(self.parameters, record)}
+            for record in self.values[idx, :]
+        ]
+
+    def add_samples(self, values: np.ndarray, results: list[pd.DataFrame]):
+        assert values.shape[0] == len(
+            results
+        ), "Mismatch between number of values and results"
+        assert values.shape[1] == len(
+            self.parameters
+        ), "Mismatch in number of parameters"
+
+        self.values = np.vstack([self.values, values])
+        self.results.extend(results)
+
+
+class RealSampler(ABC):
+    def __init__(
+        self,
+        parameters: list[Parameter],
+        model: Model,
+        simulation_options: dict = None,
+    ):
+        self.simulation_options = (
+            {} if simulation_options is None else simulation_options
+        )
+        self.parameters = parameters
+        self.model = model
+        self.sample = Sample(self.parameters)
+
+        if not all([par.ptype == "Real" for par in parameters]):
+            raise ValueError(
+                f"All parameters must have a ptype 'Real'"
+                f"Found {
+                [(par.name, par.ptype) for par in parameters if par.ptype != "Real"]}"
+            )
+
+    @abstractmethod
+    def add_sample(self, *args, **kwargs) -> np.ndarray:
+        pass
+
+    def _post_draw_sample(self, new_dimless_sample, simulate=True):
+        intervals = self.sample.get_parameters_intervals()
+        lower_bounds = intervals[:, 0]
+        upper_bounds = intervals[:, 1]
+        new_values = lower_bounds + new_dimless_sample * (upper_bounds - lower_bounds)
+
+        if simulate:
+            pass
+        else:
+            self.sample.add_samples(new_values, [pd.DataFrame()] * new_values.shape[0])
+
+
+class LHCSampler(RealSampler):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options)
+
+    def add_sample(self, n: int, rng: int = None, simulate=True, **lhs_kwargs):
+        lhc = LatinHypercube(d=len(self.parameters), rng=rng, **lhs_kwargs)
+        new_dimless_sample = lhc.random(n=n)
+        self._post_draw_sample(new_dimless_sample, simulate)
+
+
+class SobolSampler(RealSampler):
+    def __init__(self, parameters: list[Parameter], model: Model):
+        super().__init__(parameters, model)
+
+    def add_sample(self, ni, custom_par, simulate=True):
+        new_sample = draw_sobol(ni, custom_par)
+        self._add_sample_post(new_sample, simulate)
+
+        # def simulate_drawn_samples(self):
+        #     """
+        #     Simulate all drawn samples that haven't been simulated yet.
+        #     Assumes that self.sample contains samples drawn via draw_sample.
+        #     """
+        #     start_idx = len(self.sample_results)
+        #     drawn_samples = self.sample[start_idx:]
+        #
+        #     if drawn_samples.size == 0:
+        #         print("No new samples to simulate.")
+        #         return
+        #
+        #     prog_bar = progress_bar(range(drawn_samples.shape[0]))
+        #
+        #     for i, sample_row in zip(prog_bar, drawn_samples):
+        #         sim_config = {
+        #             par[Parameter.NAME]: val
+        #             for par, val in zip(self.parameters, sample_row)
+        #         }
+        #         expanded_config = expand_parameter_dict(sim_config, self.param_mappings)
+        #         prog_bar.comment = (
+        #             f"Simulating {start_idx + i + 1}/{self.sample.shape[0]}"
+        #         )
+        #
+        #         result = self.model.simulate(
+        #             parameter_dict=expanded_config,
+        #             simulation_options=self.simulation_options,
+        #         )
+        #         self.sample_results.append(result)
+        #
+        # def simulate_all_combinations(self):
+        #     choice_parameters = [
+        #         param for param in self.parameters if param[Parameter.TYPE] == "Choice"
+        #     ]
+        #     intervals = [param[Parameter.INTERVAL] for param in choice_parameters]
+        #     all_combinations = list(product(*intervals))
+        #     param_names = [param[Parameter.NAME] for param in choice_parameters]
+        #
+        #     prog_bar = progress_bar(range(len(all_combinations)))
+        #
+        #     applied_parameters = []
+        #     expanded_parameters = []
+        #
+        #     for idx, combination in zip(prog_bar, all_combinations):
+        #         param_dict = dict(zip(param_names, combination))
+        #         expanded_param_dict = expand_parameter_dict(
+        #             param_dict, self.param_mappings
+        #         )
+        #         prog_bar.comment = f"Simulation {idx + 1}/{len(all_combinations)}"
+        #         result = self.model.simulate(
+        #             parameter_dict=expanded_param_dict,
+        #             simulation_options=self.simulation_options,
+        #         )
+        #         self.sample_results.append(result)
+        #         applied_parameters.append(combination)
+        #         expanded_parameters.append(expanded_param_dict)
+        #
+        #     applied_parameters_array = np.array(applied_parameters)
+        #     self.sample = np.vstack((self.sample, applied_parameters_array))
+        #
+        # def get_boundary_sample(self):
+        #     """
+        #     Generate a sample covering the parameter space boundaries.
+        #
+        #     :return: A numpy array containing the boundary sample.
+        #     """
+        #     boundary_sample = []
+        #     for par in self.parameters:
+        #         interval = par[Parameter.INTERVAL]
+        #         param_type = par.get(Parameter.TYPE, "Real")  # Default type is Real
+        #
+        #         if param_type == "Real" or param_type == "Integer":
+        #             boundary_sample.append([interval[0], interval[1]])
+        #
+        #         elif param_type == "Choice":
+        #             boundary_sample.append([min(interval), max(interval)])
+        #
+        #         elif param_type == "Binary":
+        #             boundary_sample.append([0, 1])
+        #
+        #     return np.array(boundary_sample)
+        #
+        # def add_sample(self, sample_size, seed=None):
+        #     """
+        #     Add a new sample of parameter sets.
+        #     """
+        #     if seed is not None:
+        #         np.random.seed(seed)
+        #
+        #     sampler = LatinHypercube(d=len(self.parameters), seed=seed)
+        #     new_sample = sampler.random(n=sample_size)
+        #     new_sample_value = np.empty(shape=(0, len(self.parameters)))
+        #     for s in new_sample:
+        #         new_sample_value = np.vstack(
+        #             (
+        #                 new_sample_value,
+        #                 [
+        #                     self._sample_parameter(par, val)
+        #                     for par, val in zip(self.parameters, s)
+        #                 ],
+        #             )
+        #         )
+        #     if self.sample.size == 0:
+        #         bound_sample = self.get_boundary_sample()
+        #         new_sample_value = np.vstack((new_sample_value, bound_sample.T))
+        #
+        #     prog_bar = progress_bar(range(new_sample_value.shape[0]))
+        #     for _, simul in zip(prog_bar, new_sample_value):
+        #         sim_config = {
+        #             par[Parameter.NAME]: val for par, val in zip(self.parameters, simul)
+        #         }
+        #         expanded_config = expand_parameter_dict(sim_config, self.param_mappings)
+        #         prog_bar.comment = "Simulations"
+        #
+        #         results = self.model.simulate(
+        #             parameter_dict=expanded_config,
+        #             simulation_options=self.simulation_options,
+        #         )
+        #         self.sample_results.append(results)
+        #
+        #     self.sample = np.vstack((self.sample, new_sample_value))
+        #
+        # def _sample_parameter(self, parameter, value):
+        #     """
+        #     Sample a parameter based on its type.
+        #
+        #     :param parameter: The parameter dictionary.
+        #     :param value: The sampled value.
+        #     :return: The adjusted sampled value based on the parameter type.
+        #     """
+        #     interval = parameter[Parameter.INTERVAL]
+        #     if parameter[Parameter.TYPE] == "Integer":
+        #         return int(interval[0] + value * (interval[1] - interval[0]))
+        #     elif parameter[Parameter.TYPE] == "Choice":
+        #         return np.random.choice(interval)
+        #     elif parameter[Parameter.TYPE] == "Binary":
+        #         return np.random.randint(0, 2)
+        #     else:
+        #         return interval[0] + value * (interval[1] - interval[0])
+        #
+        # def clear_sample(self):
+        #     """
+        #     Clear the current sample set.
+        #     And current results.
+        #     """
+        #     self.sample = np.empty(shape=(0, len(self.parameters)))
+        #     self.sample_results = []
 
 
 def get_mapped_bounds(uncertain_param_list, param_mappings):
@@ -441,247 +638,6 @@ class VariantSubSampler:
             comb for comb in self.sample if comb not in self.not_simulated_combinations
         ]
         self.not_simulated_combinations = []
-
-
-## TODO issue with n_sample: when 1, makes 3 (2 boundaries +1)
-class ModelSampler:
-    """
-    A class for sampling parameter sets and running simulations using a simulator.
-
-    Parameters:
-    - parameters (list): A list of dictionaries describing the parameters to be sampled.
-        Each dictionary should contain keys 'NAME', 'INTERVAL', and 'TYPE' to define
-        the parameter name, its range (interval), and its data type
-    (Integer, Real, etc.).
-    - model: An instance of the model used for running simulations.
-    - sampling_method (str): The name of the sampling method to be used.
-
-    Attributes:
-    - parameters (list): List of parameter dictionaries.
-    - model: Instance of the model.
-    - sampling_method (str): Name of the sampling method.
-    - sample (numpy.ndarray): An array containing the sampled
-        parameter sets.
-    - sample_results (list): A list containing the results of
-        simulations for each sampled parameter set.
-
-    Methods:
-    - get_boundary_sample(): Generates a sample covering the parameter space boundaries.
-    - add_sample(sample_size, seed=None): Adds a new sample of parameter sets.
-    """
-
-    def __init__(
-        self,
-        parameters,
-        model,
-        sampling_method="LatinHypercube",
-        simulation_options=None,
-        param_mappings=None,
-    ):
-        """
-        Initialize the SimulationSampler instance.
-
-        :param parameters: A list of dictionaries describing
-            the parameters to be sampled.
-        :param model: An instance of the simulator
-            used for running simulations.
-        :param sampling_method: The name of the sampling method
-            to be used (default is "LatinHypercube").
-        :param simulation_options: A dictionary of options passed
-        to the model when running simulations.
-        :param param_mappings: A dictionary defining how
-        sampled parameters should be expanded.
-
-
-        """
-        self.parameters = parameters
-        self.model = model
-        self.sampling_method = sampling_method
-        self.sample = np.empty(shape=(0, len(parameters)))
-        self.simulation_options = simulation_options
-        self.sample_results = []
-        self.param_mappings = param_mappings or {}
-        self.not_simulated_samples = []
-
-        if sampling_method == "LatinHypercube":
-            self.sampling_method = LatinHypercube
-
-    def draw_sample(self, sample_size, seed=None):
-        """
-        Draw a sample of parameter sets without running simulations.
-
-        Args:
-            sample_size (int): Number of samples to draw.
-            seed (int, optional): Seed for reproducibility.
-        """
-        if seed is not None:
-            np.random.seed(seed)
-
-        sampler = LatinHypercube(d=len(self.parameters), seed=seed)
-        new_sample = sampler.random(n=sample_size)
-        new_sample_value = np.empty(shape=(0, len(self.parameters)))
-
-        for s in new_sample:
-            new_sample_value = np.vstack(
-                (
-                    new_sample_value,
-                    [
-                        self._sample_parameter(par, val)
-                        for par, val in zip(self.parameters, s)
-                    ],
-                )
-            )
-
-        if self.sample.size == 0:
-            bound_sample = self.get_boundary_sample()
-            new_sample_value = np.vstack((new_sample_value, bound_sample.T))
-
-        self.sample = np.vstack((self.sample, new_sample_value))
-        self.not_simulated_samples.extend(new_sample_value.tolist())
-
-    def simulate_drawn_samples(self):
-        """
-        Simulate all drawn samples that haven't been simulated yet.
-        Assumes that self.sample contains samples drawn via draw_sample.
-        """
-        start_idx = len(self.sample_results)
-        drawn_samples = self.sample[start_idx:]
-
-        if drawn_samples.size == 0:
-            print("No new samples to simulate.")
-            return
-
-        prog_bar = progress_bar(range(drawn_samples.shape[0]))
-
-        for i, sample_row in zip(prog_bar, drawn_samples):
-            sim_config = {
-                par[Parameter.NAME]: val
-                for par, val in zip(self.parameters, sample_row)
-            }
-            expanded_config = expand_parameter_dict(sim_config, self.param_mappings)
-            prog_bar.comment = f"Simulating {start_idx + i + 1}/{self.sample.shape[0]}"
-
-            result = self.model.simulate(
-                parameter_dict=expanded_config,
-                simulation_options=self.simulation_options,
-            )
-            self.sample_results.append(result)
-
-    def simulate_all_combinations(self):
-        choice_parameters = [
-            param for param in self.parameters if param[Parameter.TYPE] == "Choice"
-        ]
-        intervals = [param[Parameter.INTERVAL] for param in choice_parameters]
-        all_combinations = list(product(*intervals))
-        param_names = [param[Parameter.NAME] for param in choice_parameters]
-
-        prog_bar = progress_bar(range(len(all_combinations)))
-
-        applied_parameters = []
-        expanded_parameters = []
-
-        for idx, combination in zip(prog_bar, all_combinations):
-            param_dict = dict(zip(param_names, combination))
-            expanded_param_dict = expand_parameter_dict(param_dict, self.param_mappings)
-            prog_bar.comment = f"Simulation {idx + 1}/{len(all_combinations)}"
-            result = self.model.simulate(
-                parameter_dict=expanded_param_dict,
-                simulation_options=self.simulation_options,
-            )
-            self.sample_results.append(result)
-            applied_parameters.append(combination)
-            expanded_parameters.append(expanded_param_dict)
-
-        applied_parameters_array = np.array(applied_parameters)
-        self.sample = np.vstack((self.sample, applied_parameters_array))
-
-    def get_boundary_sample(self):
-        """
-        Generate a sample covering the parameter space boundaries.
-
-        :return: A numpy array containing the boundary sample.
-        """
-        boundary_sample = []
-        for par in self.parameters:
-            interval = par[Parameter.INTERVAL]
-            param_type = par.get(Parameter.TYPE, "Real")  # Default type is Real
-
-            if param_type == "Real" or param_type == "Integer":
-                boundary_sample.append([interval[0], interval[1]])
-
-            elif param_type == "Choice":
-                boundary_sample.append([min(interval), max(interval)])
-
-            elif param_type == "Binary":
-                boundary_sample.append([0, 1])
-
-        return np.array(boundary_sample)
-
-    def add_sample(self, sample_size, seed=None):
-        """
-        Add a new sample of parameter sets.
-        """
-        if seed is not None:
-            np.random.seed(seed)
-
-        sampler = LatinHypercube(d=len(self.parameters), seed=seed)
-        new_sample = sampler.random(n=sample_size)
-        new_sample_value = np.empty(shape=(0, len(self.parameters)))
-        for s in new_sample:
-            new_sample_value = np.vstack(
-                (
-                    new_sample_value,
-                    [
-                        self._sample_parameter(par, val)
-                        for par, val in zip(self.parameters, s)
-                    ],
-                )
-            )
-        if self.sample.size == 0:
-            bound_sample = self.get_boundary_sample()
-            new_sample_value = np.vstack((new_sample_value, bound_sample.T))
-
-        prog_bar = progress_bar(range(new_sample_value.shape[0]))
-        for _, simul in zip(prog_bar, new_sample_value):
-            sim_config = {
-                par[Parameter.NAME]: val for par, val in zip(self.parameters, simul)
-            }
-            expanded_config = expand_parameter_dict(sim_config, self.param_mappings)
-            prog_bar.comment = "Simulations"
-
-            results = self.model.simulate(
-                parameter_dict=expanded_config,
-                simulation_options=self.simulation_options,
-            )
-            self.sample_results.append(results)
-
-        self.sample = np.vstack((self.sample, new_sample_value))
-
-    def _sample_parameter(self, parameter, value):
-        """
-        Sample a parameter based on its type.
-
-        :param parameter: The parameter dictionary.
-        :param value: The sampled value.
-        :return: The adjusted sampled value based on the parameter type.
-        """
-        interval = parameter[Parameter.INTERVAL]
-        if parameter[Parameter.TYPE] == "Integer":
-            return int(interval[0] + value * (interval[1] - interval[0]))
-        elif parameter[Parameter.TYPE] == "Choice":
-            return np.random.choice(interval)
-        elif parameter[Parameter.TYPE] == "Binary":
-            return np.random.randint(0, 2)
-        else:
-            return interval[0] + value * (interval[1] - interval[0])
-
-    def clear_sample(self):
-        """
-        Clear the current sample set.
-        And current results.
-        """
-        self.sample = np.empty(shape=(0, len(self.parameters)))
-        self.sample_results = []
 
 
 def plot_pcp(

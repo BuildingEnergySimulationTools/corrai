@@ -5,12 +5,13 @@ import pandas as pd
 
 from corrai.base.model import Model
 from corrai.base.parameter import Parameter
-from corrai.learning.sampling import (
+from corrai.base.sampling import (
     VariantSubSampler,
-    expand_parameter_dict,
-    ModelSampler,
+    RealSampler,
     plot_pcp,
     get_mapped_bounds,
+    LHCSampler,
+    Sample,
 )
 from corrai.variant import VariantKeys, get_combined_variants, get_modifier_dict
 
@@ -22,92 +23,143 @@ import plotly.graph_objects as go
 
 FILES_PATH = Path(__file__).parent / "resources"
 
-parameters = [
-    {Parameter.NAME: "Parameter1", Parameter.INTERVAL: (0, 6), Parameter.TYPE: "Real"},
-    {
-        Parameter.NAME: "Parameter2",
-        Parameter.INTERVAL: (1, 4),
-        Parameter.TYPE: "Integer",
-    },
-    {
-        Parameter.NAME: "Parameter3",
-        Parameter.INTERVAL: (0.02, 0.04, 0.2),
-        Parameter.TYPE: "Choice",
-    },
-    {
-        Parameter.NAME: "Parameter4",
-        Parameter.INTERVAL: (0, 1),
-        Parameter.TYPE: "Binary",
-    },
+# parameters = [
+#     {Parameter.NAME: "Parameter1", Parameter.INTERVAL: (0, 6), Parameter.TYPE: "Real"},
+#     {
+#         Parameter.NAME: "Parameter2",
+#         Parameter.INTERVAL: (1, 4),
+#         Parameter.TYPE: "Integer",
+#     },
+#     {
+#         Parameter.NAME: "Parameter3",
+#         Parameter.INTERVAL: (0.02, 0.04, 0.2),
+#         Parameter.TYPE: "Choice",
+#     },
+#     {
+#         Parameter.NAME: "Parameter4",
+#         Parameter.INTERVAL: (0, 1),
+#         Parameter.TYPE: "Binary",
+#     },
+# ]
+#
+# parameters_to_expand = [
+#     {
+#         Parameter.NAME: "options_expanded",
+#         Parameter.INTERVAL: [2, 6],
+#         Parameter.TYPE: "Choice",
+#     },
+#     {
+#         Parameter.NAME: "Parameter3",
+#         Parameter.INTERVAL: [0.5, 0.7],
+#         Parameter.TYPE: "Choice",
+#     },
+#     {
+#         Parameter.NAME: "options_expanded_bis",
+#         Parameter.INTERVAL: ["bad", "good"],
+#         Parameter.TYPE: "Choice",
+#     },
+# ]
+#
+# discrete_parameters = [
+#     {
+#         Parameter.NAME: "discrete1",
+#         Parameter.INTERVAL: (0, 2),
+#         Parameter.TYPE: "Choice",
+#     },
+#     {
+#         Parameter.NAME: "discrete2",
+#         Parameter.INTERVAL: (1, 2),
+#         Parameter.TYPE: "Choice",
+#     },
+#     {
+#         Parameter.NAME: "discrete3",
+#         Parameter.INTERVAL: (4, 6),
+#         Parameter.TYPE: "Choice",
+#     },
+#     {
+#         Parameter.NAME: "discrete4",
+#         Parameter.INTERVAL: (0, 1),
+#         Parameter.TYPE: "Choice",
+#     },
+# ]
+#
+# params_mappings = {
+#     "options_expanded": [
+#         "Parameter1",
+#         "Parameter2",
+#     ],
+#     "options_expanded_bis": {
+#         "bad": {
+#             "Parameter4": 25,
+#         },
+#         "good": {
+#             "Parameter4": 3,
+#         },
+#     },
+# }
+#
+# SIMULATION_OPTIONS = {
+#     "start": "2009-01-01 00:00:00",
+#     "end": "2009-01-01 00:00:00",
+#     "timestep": "h",
+# }
+#
+# simulation_options_for_param = {
+#     "start": "2025-01-01 00:00:00",
+#     "end": "2025-01-01 23:00:00",
+#     "timestep": "h",
+# }
+
+REAL_PARAM = [
+    Parameter("param_1", (0, 10), relabs="Absolute"),
+    Parameter("param_2", (0.8, 1.2), relabs="Relative"),
+    Parameter("param_3", (0, 100), relabs="Absolute"),
 ]
 
-parameters_to_expand = [
-    {
-        Parameter.NAME: "options_expanded",
-        Parameter.INTERVAL: [2, 6],
-        Parameter.TYPE: "Choice",
-    },
-    {
-        Parameter.NAME: "Parameter3",
-        Parameter.INTERVAL: [0.5, 0.7],
-        Parameter.TYPE: "Choice",
-    },
-    {
-        Parameter.NAME: "options_expanded_bis",
-        Parameter.INTERVAL: ["bad", "good"],
-        Parameter.TYPE: "Choice",
-    },
-]
 
-discrete_parameters = [
-    {
-        Parameter.NAME: "discrete1",
-        Parameter.INTERVAL: (0, 2),
-        Parameter.TYPE: "Choice",
-    },
-    {
-        Parameter.NAME: "discrete2",
-        Parameter.INTERVAL: (1, 2),
-        Parameter.TYPE: "Choice",
-    },
-    {
-        Parameter.NAME: "discrete3",
-        Parameter.INTERVAL: (4, 6),
-        Parameter.TYPE: "Choice",
-    },
-    {
-        Parameter.NAME: "discrete4",
-        Parameter.INTERVAL: (0, 1),
-        Parameter.TYPE: "Choice",
-    },
-]
+def test_sample():
+    sample = Sample(REAL_PARAM)
+    assert sample.values.shape == (0, 3)
+    assert sample.results == []
 
-params_mappings = {
-    "options_expanded": [
-        "Parameter1",
-        "Parameter2",
-    ],
-    "options_expanded_bis": {
-        "bad": {
-            "Parameter4": 25,
-        },
-        "good": {
-            "Parameter4": 3,
-        },
-    },
-}
+    sample.add_samples(
+        np.array([[1, 0.9, 10], [3, 0.85, 20]]),
+        [
+            pd.DataFrame(),
+            pd.DataFrame(
+                {"res": [1, 2]}, index=pd.date_range("2009", freq="h", periods=2)
+            ),
+        ],
+    )
 
-SIMULATION_OPTIONS = {
-    "start": "2009-01-01 00:00:00",
-    "end": "2009-01-01 00:00:00",
-    "timestep": "h",
-}
+    assert sample.not_simulated_index() == [True, False]
+    assert sample.values.tolist() == [[1.0, 0.9, 10.0], [3.0, 0.85, 20.0]]
+    assert sample.get_parameters_intervals().tolist() == [
+        [0.0, 10.0],
+        [0.8, 1.2],
+        [0.0, 100.0],
+    ]
+    assert sample.get_parameter_list_dict(sample.not_simulated_index()) == [
+        {REAL_PARAM[0]: 1.0, REAL_PARAM[1]: 0.9, REAL_PARAM[2]: 10.0},
+    ]
 
-simulation_options_for_param = {
-    "start": "2025-01-01 00:00:00",
-    "end": "2025-01-01 23:00:00",
-    "timestep": "h",
-}
+    assert len(sample) == 2
+
+
+def test_lhc_sampler():
+    sampler = LHCSampler(parameters=REAL_PARAM, model=None)
+    sampler.add_sample(3, 42, False)
+    np.testing.assert_allclose(
+        sampler.sample.values,
+        np.array(
+            [
+                [6.9441, 1.0785, 70.7802],
+                [5.6356, 0.9393, 27.4968],
+                [0.0112, 0.8330, 61.6539],
+            ]
+        ),
+        rtol=0.01,
+    )
 
 
 def test_expand_parameter_dict():
@@ -169,14 +221,13 @@ class ModelVariant(Model):
         self.multiplier = 1
 
     def simulate(
-        self, parameter_dict: dict = None, simulation_options: dict = None
+        self, property_dict: dict = None, simulation_options: dict = None
     ) -> pd.DataFrame:
-        if parameter_dict is None:
-            parameter_dict = {"discrete1": 1, "discrete2": 2}
+        if property_dict is None:
+            property_dict = {"discrete1": 1, "discrete2": 2}
 
         result = (
-            self.y1 * parameter_dict["discrete1"]
-            + self.z1 * parameter_dict["discrete2"]
+            self.y1 * property_dict["discrete1"] + self.z1 * property_dict["discrete2"]
         ) * self.multiplier
 
         df = pd.DataFrame(
@@ -196,10 +247,10 @@ class ModelVariant(Model):
 
 class Simul(Model):
     def simulate(
-        self, parameter_dict: dict = None, simulation_options: dict = None
+        self, property_dict: dict = None, simulation_options: dict = None
     ) -> pd.DataFrame:
         Parameter1, Parameter2, Parameter3, Parameter4 = map(
-            float, parameter_dict.values()
+            float, property_dict.values()
         )
         df = Parameter1 + Parameter2 - Parameter3 + 2 * Parameter4
         df_out = pd.DataFrame({"df": [df]})
@@ -488,7 +539,7 @@ class TestVariantSubSampler:
 class TestSimulationSampler:
     def test_draw_sample_only(self):
         Simulator = Simul()
-        sampler = ModelSampler(parameters, model=Simulator)
+        sampler = RealSampler(parameters, model=Simulator)
         sampler.draw_sample(sample_size=5, seed=42)
 
         assert sampler.sample.shape[0] >= 5
@@ -496,7 +547,7 @@ class TestSimulationSampler:
 
     def test_draw_sample_then_simulate_drawn_samples(self):
         Simulator = Simul()
-        sampler = ModelSampler(parameters, model=Simulator)
+        sampler = RealSampler(parameters, model=Simulator)
         sampler.draw_sample(sample_size=3, seed=0)
 
         assert len(sampler.sample_results) == 0
@@ -505,7 +556,7 @@ class TestSimulationSampler:
         assert len(sampler.sample_results) == sampler.sample.shape[0]
 
     def test_get_boundary_sample(self):
-        sampler = ModelSampler(parameters, model=None)
+        sampler = RealSampler(parameters, model=None)
 
         boundary_sample = sampler.get_boundary_sample()
 
@@ -524,7 +575,7 @@ class TestSimulationSampler:
 
     def test_add_sample(self):
         Simulator = Simul()
-        sampler = ModelSampler(parameters, model=Simulator)
+        sampler = RealSampler(parameters, model=Simulator)
         sample_size = 10
         sampler.add_sample(sample_size)
 
@@ -569,14 +620,14 @@ class TestSimulationSampler:
 
     def test_clear_sample(self):
         Simulator = Simul()
-        sampler = ModelSampler(parameters, model=Simulator)
+        sampler = RealSampler(parameters, model=Simulator)
         sampler.add_sample(1)
         sampler.clear_sample()
 
         assert np.array_equal(sampler.sample, np.empty(shape=(0, len(parameters))))
 
     def test_simulate_all_combinations(self):
-        sampler = ModelSampler(discrete_parameters, model=Simul())
+        sampler = RealSampler(discrete_parameters, model=Simul())
 
         sampler.simulate_all_combinations()
 
