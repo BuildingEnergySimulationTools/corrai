@@ -16,7 +16,7 @@ class Pymodel(Model):
 
     def simulate(
         self,
-        property_dict: dict = None,
+        property_dict: dict[str, str | int | float] = None,
         simulation_options: dict = None,
         simulation_kwargs: dict = None,
     ) -> pd.DataFrame:
@@ -36,7 +36,10 @@ class Pymodel(Model):
 
 class Ishigami(Model):
     def simulate(
-        self, property_dict: dict = None, simulation_options: dict = None
+        self,
+        property_dict: dict[str, str | int | float] = None,
+        simulation_options: dict = None,
+        simulation_kwargs: dict = None,
     ) -> pd.DataFrame:
         def equation(x):
             return (
@@ -53,9 +56,6 @@ class Ishigami(Model):
                 freq=simulation_options["timestep"],
             ),
         )
-
-    def save(self, file_path: Path, extension: str = None):
-        pass
 
 
 class VariantModel(Model):
