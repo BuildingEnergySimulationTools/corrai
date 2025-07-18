@@ -15,7 +15,7 @@ from corrai.base.sampling import (
 )
 from corrai.variant import VariantKeys, get_combined_variants, get_modifier_dict
 
-from tests.resources.pymodels import VariantModel
+from tests.resources.pymodels import VariantModel, Pymodel
 import pytest
 
 import plotly.graph_objects as go
@@ -98,11 +98,11 @@ FILES_PATH = Path(__file__).parent / "resources"
 #     },
 # }
 #
-# SIMULATION_OPTIONS = {
-#     "start": "2009-01-01 00:00:00",
-#     "end": "2009-01-01 00:00:00",
-#     "timestep": "h",
-# }
+SIMULATION_OPTIONS = {
+    "start": "2009-01-01 00:00:00",
+    "end": "2009-01-01 00:00:00",
+    "timestep": "h",
+}
 #
 # simulation_options_for_param = {
 #     "start": "2025-01-01 00:00:00",
@@ -111,16 +111,16 @@ FILES_PATH = Path(__file__).parent / "resources"
 # }
 
 REAL_PARAM = [
-    Parameter("param_1", (0, 10), relabs="Absolute"),
-    Parameter("param_2", (0.8, 1.2), relabs="Relative"),
-    Parameter("param_3", (0, 100), relabs="Absolute"),
+    Parameter("param_1", (0, 10), relabs="Absolute", model_property="prop_1"),
+    Parameter("param_2", (0.8, 1.2), relabs="Relative", model_property="prop_2"),
+    Parameter("param_3", (0, 100), relabs="Absolute", model_property="prop_3"),
 ]
 
 
 def test_sample():
     sample = Sample(REAL_PARAM)
     assert sample.values.shape == (0, 3)
-    assert sample.results == []
+    pd.testing.assert_series_equal(sample.results, pd.Series())
 
     sample.add_samples(
         np.array([[1, 0.9, 10], [3, 0.85, 20]]),
@@ -132,22 +132,42 @@ def test_sample():
         ],
     )
 
-    assert sample.not_simulated_index() == [True, False]
+    assert sample.get_unsimulated_index().tolist() == [True, False]
     assert sample.values.tolist() == [[1.0, 0.9, 10.0], [3.0, 0.85, 20.0]]
     assert sample.get_parameters_intervals().tolist() == [
         [0.0, 10.0],
         [0.8, 1.2],
         [0.0, 100.0],
     ]
-    assert sample.get_parameter_list_dict(sample.not_simulated_index()) == [
+    assert sample.get_parameter_list_dict(sample.get_unsimulated_index()) == [
         {REAL_PARAM[0]: 1.0, REAL_PARAM[1]: 0.9, REAL_PARAM[2]: 10.0},
     ]
 
     assert len(sample) == 2
 
+    item = sample[1]
+    assert isinstance(item, dict)
+    assert np.allclose(item["values"], [3.0, 0.85, 20.0])
+    pd.testing.assert_frame_equal(item["results"], sample.results.iloc[1])
+
+    new_result = pd.DataFrame({"res": [42]}, index=pd.date_range("2009", periods=1))
+    sample[1] = {"results": new_result}
+    pd.testing.assert_frame_equal(sample.results.iloc[1], new_result)
+
+    sample[0] = {
+        "values": np.array([9.9, 1.1, 88]),
+        "results": pd.DataFrame({"res": [123]}, index=[pd.Timestamp("2009-01-01")]),
+    }
+    np.testing.assert_allclose(sample.values[0], [9.9, 1.1, 88])
+    assert not sample.results.iloc[0].empty
+
+    sample._validate()
+
 
 def test_lhc_sampler():
-    sampler = LHCSampler(parameters=REAL_PARAM, model=None)
+    sampler = LHCSampler(
+        parameters=REAL_PARAM, model=Pymodel(), simulation_options=SIMULATION_OPTIONS
+    )
     sampler.add_sample(3, 42, False)
     np.testing.assert_allclose(
         sampler.sample.values,
@@ -160,6 +180,30 @@ def test_lhc_sampler():
         ),
         rtol=0.01,
     )
+
+    sampler.run_unsimulated_sample()
+
+    sampler.add_sample(3, simulate=False)
+
+    sampler.run_simulation_sample_index(4)
+
+    sampler.run_simulation_sample_index([3, 5])
+
+    sampler.add_sample(3, simulate=False)
+
+    sampler.run_simulation_sample_index(slice(4, 7))
+
+    sampler.add_sample(3, simulate=False)
+
+    sampler.run_simulation_sample_index(slice(10, None))
+
+    sampler.add_sample(3)
+
+
+
+
+
+    assert True
 
 
 def test_expand_parameter_dict():

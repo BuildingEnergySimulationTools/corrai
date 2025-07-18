@@ -16,6 +16,7 @@ from scipy.stats.qmc import LatinHypercube
 
 from corrai.base.parameter import Parameter
 from corrai.base.model import Model
+from corrai.base.simulate import run_simulations
 from corrai.variant import simulate_variants, get_combined_variants
 
 
@@ -23,7 +24,7 @@ from corrai.variant import simulate_variants, get_combined_variants
 class Sample:
     parameters: list[Parameter]
     values: np.ndarray = field(init=False)
-    results: list[pd.DataFrame] = field(default_factory=list)
+    results: pd.Series = field(default_factory=lambda: pd.Series(dtype=object))
 
     def __post_init__(self):
         self.values = np.empty((0, len(self.parameters)))
@@ -31,35 +32,71 @@ class Sample:
     def __len__(self):
         return self.values.shape[0]
 
-    def not_simulated_index(self):
-        return [df.empty for df in self.results]
+    def __getitem__(self, idx):
+        if isinstance(idx, (int, slice, list, np.ndarray)):
+            return {"values": self.values[idx], "results": self.results[idx]}
+        raise TypeError(f"Unsupported index type: {type(idx)}")
+
+    def __setitem__(self, idx, item: dict):
+        if "values" in item:
+            self.values[idx] = item["values"]
+        if "results" in item:
+            if isinstance(idx, int):
+                self.results.iloc[idx] = item["results"]
+            else:
+                self.results.iloc[idx] = pd.Series(
+                    item["results"], index=self.results.index[idx]
+                )
+
+        self._validate()
+
+    def _validate(self):
+        assert len(self.results) == len(
+            self.values
+        ), f"Mismatch: {len(self.values)} values vs {len(self.results)} results"
+
+    def get_unsimulated_index(self) -> np.ndarray:
+        return self.results.apply(lambda df: df.empty).values
 
     def get_parameters_intervals(self):
-        if all([param.ptype == "Real" for param in self.parameters]):
+        if all(param.ptype == "Real" for param in self.parameters):
             return np.array([par.interval for par in self.parameters])
-        elif any([param.ptype == "Integer" for param in self.parameters]):
+        elif any(param.ptype == "Integer" for param in self.parameters):
             raise NotImplementedError(
-                "get_param_interval is not yet implemented for integer parameters")
+                "get_param_interval is not yet implemented for integer parameters"
+            )
         else:
             raise ValueError("All parameter must have an ptype = 'Real'")
 
-    def get_parameter_list_dict(self, idx: list | np.ndarray = None):
+    def get_parameter_list_dict(self, idx: int | list[int] | np.ndarray | slice = None):
         idx = slice(None) if idx is None else idx
+
+        if isinstance(idx, int) or (isinstance(idx, list) and all(isinstance(x, bool) for x in idx)):
+            idx = np.array(idx)
+
+        selected_values = self.values[idx]
+
+        if selected_values.ndim == 1:
+            selected_values = selected_values[np.newaxis, :]
+
         return [
-            {par: val for par, val in zip(self.parameters, record)}
-            for record in self.values[idx, :]
+            {par: val for par, val in zip(self.parameters, row)}
+            for row in selected_values
         ]
 
-    def add_samples(self, values: np.ndarray, results: list[pd.DataFrame]):
-        assert values.shape[0] == len(
-            results
-        ), "Mismatch between number of values and results"
-        assert values.shape[1] == len(
-            self.parameters
-        ), "Mismatch in number of parameters"
+    def add_samples(self, values: np.ndarray, results: list[pd.DataFrame] = None):
+        n_samples, n_params = values.shape
+        assert n_params == len(self.parameters), "Mismatch in number of parameters"
 
         self.values = np.vstack([self.values, values])
-        self.results.extend(results)
+
+        if results is None:
+            new_results = pd.Series([pd.DataFrame()] * n_samples, dtype=object)
+        else:
+            assert len(results) == n_samples, "Mismatch between values and results"
+            new_results = pd.Series(results, dtype=object)
+
+        self.results = pd.concat([self.results, new_results], ignore_index=True)
 
 
 class RealSampler(ABC):
@@ -76,7 +113,7 @@ class RealSampler(ABC):
         self.model = model
         self.sample = Sample(self.parameters)
 
-        if not all([par.ptype == "Real" for par in parameters]):
+        if not all(par.ptype == "Real" for par in parameters):
             raise ValueError(
                 f"All parameters must have a ptype 'Real'"
                 f"Found {
@@ -87,16 +124,49 @@ class RealSampler(ABC):
     def add_sample(self, *args, **kwargs) -> np.ndarray:
         pass
 
-    def _post_draw_sample(self, new_dimless_sample, simulate=True):
+    def _post_draw_sample(
+        self,
+        new_dimless_sample,
+        simulate=True,
+        n_cpu: int = 1,
+        simulation_kwargs: dict = None,
+    ):
         intervals = self.sample.get_parameters_intervals()
         lower_bounds = intervals[:, 0]
         upper_bounds = intervals[:, 1]
         new_values = lower_bounds + new_dimless_sample * (upper_bounds - lower_bounds)
 
+        self.sample.add_samples(new_values)
+
         if simulate:
-            pass
+            sample_starts = len(self.sample) - new_values.shape[0]
+            sample_ends = len(self.sample)
+            self.run_simulation_sample_index(
+                slice(sample_starts, sample_ends), n_cpu, simulation_kwargs
+            )
+
+    def run_simulation_sample_index(
+        self,
+        idx: int | list[int] | np.ndarray | slice = None,
+        n_cpu: int = 1,
+        simulation_kwargs=None,
+    ):
+        param_dict = self.sample.get_parameter_list_dict(idx)
+        res = run_simulations(
+            self.model,
+            param_dict,
+            self.simulation_options,
+            n_cpu,
+            simulation_kwargs,
+        )
+        if isinstance(idx, int):
+            self.sample[idx] = {"results": res[0][1]}
         else:
-            self.sample.add_samples(new_values, [pd.DataFrame()] * new_values.shape[0])
+            self.sample[idx] = {"results": [r[1] for r in res]}
+
+    def run_unsimulated_sample(self, n_cpu:int = 1, simulation_kwargs:dict = None):
+        unsimulated_idx = self.sample.get_unsimulated_index()
+        self.run_simulation_sample_index(unsimulated_idx, n_cpu, simulation_kwargs)
 
 
 class LHCSampler(RealSampler):
