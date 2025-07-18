@@ -37,6 +37,9 @@ class Sample:
     def get_parameters_intervals(self):
         if all([param.ptype == "Real" for param in self.parameters]):
             return np.array([par.interval for par in self.parameters])
+        elif any([param.ptype == "Integer" for param in self.parameters]):
+            raise NotImplementedError(
+                "get_param_interval is not yet implemented for integer parameters")
         else:
             raise ValueError("All parameter must have an ptype = 'Real'")
 
