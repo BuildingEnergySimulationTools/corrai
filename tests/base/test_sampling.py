@@ -132,15 +132,15 @@ def test_sample():
         ],
     )
 
-    assert sample.get_unsimulated_index().tolist() == [True, False]
+    assert sample.get_pending_index().tolist() == [True, False]
     assert sample.values.tolist() == [[1.0, 0.9, 10.0], [3.0, 0.85, 20.0]]
     assert sample.get_parameters_intervals().tolist() == [
         [0.0, 10.0],
         [0.8, 1.2],
         [0.0, 100.0],
     ]
-    assert sample.get_parameter_list_dict(sample.get_unsimulated_index()) == [
-        {REAL_PARAM[0]: 1.0, REAL_PARAM[1]: 0.9, REAL_PARAM[2]: 10.0},
+    assert sample.get_list_parameter_value_pairs(sample.get_pending_index()) == [
+        [(REAL_PARAM[0], 1.0), (REAL_PARAM[1], 0.9), (REAL_PARAM[2], 10.0)],
     ]
 
     assert len(sample) == 2
@@ -181,29 +181,39 @@ def test_lhc_sampler():
         rtol=0.01,
     )
 
-    sampler.run_unsimulated_sample()
+    sampler.simulate_pending()
+
+    assert {k: i.values.tolist() for k, i in sampler.results.items()} == {
+        0: [[85.75934698790918]],
+        1: [[38.08478803524709]],
+        2: [[61.67268698504139]],
+    }
+
+    sampler.add_sample(3, rng=42, simulate=False)
+    assert sampler.values.shape == (6, 3)
+    assert all(df.empty for df in sampler.results[-3:].values)
+
+    sampler.simulate_at(4)
+    assert [df.empty for df in sampler.results[-3:].values] == [True, False, True]
+
+    sampler.simulate_at([3, 5])
+    assert {k: i.values.tolist() for k, i in sampler.results[-3:].items()} == {
+        3: [[85.75934698790918]],
+        4: [[38.08478803524709]],
+        5: [[61.67268698504139]],
+    }
+
+    sampler.add_sample(3, rng=42, simulate=False)
+
+    sampler.simulate_at(slice(4, 7))
+    assert [df.empty for df in sampler.results[-3:].values] == [False, True, True]
 
     sampler.add_sample(3, simulate=False)
+    sampler.simulate_at(slice(10, None))
+    assert [df.empty for df in sampler.results[-3:].values] == [True, False, False]
 
-    sampler.run_simulation_sample_index(4)
-
-    sampler.run_simulation_sample_index([3, 5])
-
-    sampler.add_sample(3, simulate=False)
-
-    sampler.run_simulation_sample_index(slice(4, 7))
-
-    sampler.add_sample(3, simulate=False)
-
-    sampler.run_simulation_sample_index(slice(10, None))
-
-    sampler.add_sample(3)
-
-
-
-
-
-    assert True
+    sampler.add_sample(3, simulate=True)
+    assert all(not df.empty for df in sampler.results[-3:])
 
 
 def test_expand_parameter_dict():

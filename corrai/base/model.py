@@ -7,18 +7,21 @@ from corrai.base.parameter import Parameter
 
 class Model(ABC):
     def get_property_from_param(
-        self, parameter_dict: dict[Parameter, str | float | int]
+        self,
+        parameter_value_pairs: list[tuple[Parameter, str | int | float]],
     ) -> dict[str, int | float | str]:
         property_dict = {}
-        for param, value in parameter_dict.items():
+        for param, value in parameter_value_pairs:
             props = (
                 param.model_property
                 if isinstance(param.model_property, tuple)
                 else [param.model_property]
             )
             if param.relabs == "Relative":
-                props_nominal_values = self.get_property_values(props)
-                values = [nom_val * value for nom_val in props_nominal_values]
+                if param.init_value is None:
+                    param.init_value = self.get_property_values(props)
+
+                values = [nom_val * value for nom_val in param.init_value]
             else:
                 values = [value] * len(props)
             for prop, val in zip(props, values):
@@ -28,7 +31,7 @@ class Model(ABC):
     @abstractmethod
     def simulate(
         self,
-        property_dict: dict = None,
+        property_dict: dict[str, str | int | float] = None,
         simulation_options: dict = None,
         simulation_kwargs: dict = None,
     ) -> pd.DataFrame:
@@ -41,20 +44,21 @@ class Model(ABC):
 
     def simulate_parameter(
         self,
-        parameter_dict: dict[Parameter, str|int|float] = None,
+        parameter_value_pairs: list[tuple[Parameter, str | int | float]],
         simulation_options: dict = None,
         simulation_kwargs: dict = None,
     ) -> pd.DataFrame:
         return self.simulate(
-            self.get_property_from_param(parameter_dict),
+            self.get_property_from_param(parameter_value_pairs),
             simulation_options,
-            simulation_kwargs
+            simulation_kwargs,
         )
 
-    def get_property_values(self, property_list: list):
+    def get_property_values(self, property_list: list) -> list[str | int | float]:
         raise NotImplementedError(
             "No get_property_values method was defined for this model."
-            "If you use Relative values for parameters, consider switching to absolute"
+            "If you use Relative values for parameters, consider switching to absolute,"
+            " or specify the init values for the properties in the parameters"
         )
 
     def save(self, file_path: Path):

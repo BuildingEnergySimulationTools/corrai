@@ -55,12 +55,12 @@ class Sample:
             self.values
         ), f"Mismatch: {len(self.values)} values vs {len(self.results)} results"
 
-    def get_unsimulated_index(self) -> np.ndarray:
+    def get_pending_index(self) -> np.ndarray:
         return self.results.apply(lambda df: df.empty).values
 
     def get_parameters_intervals(self):
         if all(param.ptype == "Real" for param in self.parameters):
-            return np.array([par.interval for par in self.parameters])
+            return np.array([param.interval for param in self.parameters])
         elif any(param.ptype == "Integer" for param in self.parameters):
             raise NotImplementedError(
                 "get_param_interval is not yet implemented for integer parameters"
@@ -68,10 +68,14 @@ class Sample:
         else:
             raise ValueError("All parameter must have an ptype = 'Real'")
 
-    def get_parameter_list_dict(self, idx: int | list[int] | np.ndarray | slice = None):
+    def get_list_parameter_value_pairs(
+        self, idx: int | list[int] | np.ndarray | slice = None
+    ):
         idx = slice(None) if idx is None else idx
 
-        if isinstance(idx, int) or (isinstance(idx, list) and all(isinstance(x, bool) for x in idx)):
+        if isinstance(idx, int) or (
+            isinstance(idx, list) and all(isinstance(x, bool) for x in idx)
+        ):
             idx = np.array(idx)
 
         selected_values = self.values[idx]
@@ -80,7 +84,7 @@ class Sample:
             selected_values = selected_values[np.newaxis, :]
 
         return [
-            {par: val for par, val in zip(self.parameters, row)}
+            [(par, val) for par, val in zip(self.parameters, row)]
             for row in selected_values
         ]
 
@@ -113,12 +117,20 @@ class RealSampler(ABC):
         self.model = model
         self.sample = Sample(self.parameters)
 
-        if not all(par.ptype == "Real" for par in parameters):
+        if not all(param.ptype == "Real" for param in parameters):
             raise ValueError(
                 f"All parameters must have a ptype 'Real'"
                 f"Found {
                 [(par.name, par.ptype) for par in parameters if par.ptype != "Real"]}"
             )
+
+    @property
+    def values(self):
+        return self.sample.values
+
+    @property
+    def results(self):
+        return self.sample.results
 
     @abstractmethod
     def add_sample(self, *args, **kwargs) -> np.ndarray:
@@ -141,32 +153,32 @@ class RealSampler(ABC):
         if simulate:
             sample_starts = len(self.sample) - new_values.shape[0]
             sample_ends = len(self.sample)
-            self.run_simulation_sample_index(
+            self.simulate_at(
                 slice(sample_starts, sample_ends), n_cpu, simulation_kwargs
             )
 
-    def run_simulation_sample_index(
+    def simulate_at(
         self,
         idx: int | list[int] | np.ndarray | slice = None,
         n_cpu: int = 1,
         simulation_kwargs=None,
     ):
-        param_dict = self.sample.get_parameter_list_dict(idx)
+        list_param_value_pairs = self.sample.get_list_parameter_value_pairs(idx)
         res = run_simulations(
             self.model,
-            param_dict,
+            list_param_value_pairs,
             self.simulation_options,
             n_cpu,
             simulation_kwargs,
         )
         if isinstance(idx, int):
-            self.sample[idx] = {"results": res[0][1]}
+            self.sample[idx] = {"results": res[0]}
         else:
-            self.sample[idx] = {"results": [r[1] for r in res]}
+            self.sample[idx] = {"results": [r for r in res]}
 
-    def run_unsimulated_sample(self, n_cpu:int = 1, simulation_kwargs:dict = None):
-        unsimulated_idx = self.sample.get_unsimulated_index()
-        self.run_simulation_sample_index(unsimulated_idx, n_cpu, simulation_kwargs)
+    def simulate_pending(self, n_cpu: int = 1, simulation_kwargs: dict = None):
+        unsimulated_idx = self.sample.get_pending_index()
+        self.simulate_at(unsimulated_idx, n_cpu, simulation_kwargs)
 
 
 class LHCSampler(RealSampler):

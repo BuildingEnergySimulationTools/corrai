@@ -16,9 +16,9 @@ PARAM_LIST = [
     Parameter("x3", (0.0, 3.0), model_property="x3"),
 ]
 
-PARAMETER_DICT_LIST = [
-    {PARAM_LIST[0]: 1.0, PARAM_LIST[1]: 1.0, PARAM_LIST[2]: 1.0},
-    {PARAM_LIST[0]: 2.0, PARAM_LIST[1]: 2.0, PARAM_LIST[2]: 2.0},
+PARAMETER_PAIRS = [
+    [(PARAM_LIST[0], 1.0), (PARAM_LIST[1], 1.0), (PARAM_LIST[2], 1.0)],
+    [(PARAM_LIST[0], 2.0), (PARAM_LIST[1], 2.0), (PARAM_LIST[2], 2.0)],
 ]
 
 
@@ -26,13 +26,11 @@ class TestSimulate:
     def test_run_models_in_parallel(self):
         model = Ishigami()
 
-        res = run_simulations(model, PARAMETER_DICT_LIST, SIMULATION_OPTIONS, n_cpu=1)
+        res = run_simulations(model, PARAMETER_PAIRS, SIMULATION_OPTIONS, n_cpu=1)
 
         assert len(res) == 2
-        assert res[0][0] == PARAMETER_DICT_LIST[0]
-        assert res[1][0] == PARAMETER_DICT_LIST[1]
         pd.testing.assert_frame_equal(
-            res[0][1],
+            res[0],
             pd.DataFrame(
                 {"res": [5.882132011203685, 5.882132011203685, 5.882132011203685]},
                 index=pd.date_range(
@@ -41,13 +39,11 @@ class TestSimulate:
             ),
         )
 
-        res = run_simulations(model, PARAMETER_DICT_LIST, SIMULATION_OPTIONS, n_cpu=-1)
+        res = run_simulations(model, PARAMETER_PAIRS, SIMULATION_OPTIONS, n_cpu=-1)
 
         assert len(res) == 2
-        assert res[0][0] == PARAMETER_DICT_LIST[0]
-        assert res[1][0] == PARAMETER_DICT_LIST[1]
         pd.testing.assert_frame_equal(
-            res[0][1],
+            res[0],
             pd.DataFrame(
                 {"res": [5.882132011203685, 5.882132011203685, 5.882132011203685]},
                 index=pd.date_range(

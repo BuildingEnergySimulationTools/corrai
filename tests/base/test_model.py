@@ -21,14 +21,16 @@ class TestModel:
         res = mod.simulate(simulation_options=SIMULATION_OPTIONS)
 
         assert res.values.tolist() == [[5], [5], [5], [5], [5], [5]]
-        assert mod.get_property_from_param({PARAM_LIST[0]: 1, PARAM_LIST[1]: 0.5}) == {
+        assert mod.get_property_from_param(
+            [(PARAM_LIST[0], 1), (PARAM_LIST[1], 0.5)]
+        ) == {
             "prop_1": 1,
             "prop_2": 1,
             "prop_3": 1.5,
         }
 
         res = mod.simulate_parameter(
-            {PARAM_LIST[0]: 1, PARAM_LIST[1]: 0.5},
+            [(PARAM_LIST[0], 1), (PARAM_LIST[1], 0.5)],
             SIMULATION_OPTIONS,
         )
 

@@ -65,33 +65,35 @@ class Parameter:
     >>> # Example using an interval
     >>> p = Parameter(
     ...     name="Conductivity",
-    ...     model_property=[
+    ...     model_property=(
     ...         "building.wall.insulation.conductivity",
     ...         "building.roof.insulation.conductivity",
-    ...     ],
+    ...     ),
     ...     interval=(0.032, 0.040),
     ...     ptype="Real",
-    ...     init_value=0.035
+    ...     init_value=(0.035, 0.039)
     ... )
 
     >>> # Example using discrete values
     >>> p = Parameter(
-    ...     name="Model",
+    ...     name="ThermalCapacity",
     ...     model_property="simulation.algorithm",
-    ...     values=["TARP", "DOE"],
+    ...     values=("TARP", "DOE"),
     ...     ptype="Choice",
     ...     init_value="TARP"
     ... )
     """
 
     name: str
-    model_property: str | list[str]
     interval: tuple[int | float, int | float] | None = None
-    values: list[str | int | float] | None = None
+    values: tuple[str | int | float, ...] | None = None
     ptype: str = "Real"
     relabs: str = "Absolute"
-    init_value: str | int | float | None = None
-    min_max_interval: tuple[int | float, int | float] | None = None
+    init_value: str | int | float | tuple[str | int | float] | None = None
+    min_max_interval: (
+        tuple[int | float, int | float] | list[tuple[int | float, int | float]] | None
+    ) = None
+    model_property: str | tuple[str, ...] = None
 
     def __post_init__(self):
         if self.interval is not None and self.values is not None:
@@ -109,15 +111,20 @@ class Parameter:
             )
 
         if self.init_value is not None:
+            list_to_test = (
+                self.init_value
+                if isinstance(self.init_value, list)
+                else [self.init_value]
+            )
             if self.interval is not None:
                 lo, hi = self.interval
-                if not (lo <= self.init_value <= hi):
+                if not all(lo <= i_value <= hi for i_value in list_to_test):
                     raise ValueError(
                         f"init_value {self.init_value} "
                         f"not in interval {self.interval}"
                     )
             elif self.values is not None:
-                if self.init_value not in self.values:
+                if not all(i_value in self.values for i_value in list_to_test):
                     raise ValueError(
                         f"init_value {self.init_value} " f"not in values {self.values}"
                     )

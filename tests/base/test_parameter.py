@@ -20,7 +20,7 @@ class TestParameter:
         param = Parameter(
             name="mode",
             model_property="m.mode",
-            values=["A", "B"],
+            values=("A", "B"),
             ptype="Choice",
             init_value="A",
         )
@@ -34,7 +34,7 @@ class TestParameter:
                 name="bad",
                 model_property="m.bad",
                 interval=(0, 1),
-                values=[0, 1],
+                values=(0, 1),
                 ptype="Binary",
             )
 
@@ -68,6 +68,6 @@ class TestParameter:
             Parameter(
                 name="choice",
                 model_property="m.choice",
-                values=["A", "B", "C"],
+                values=("A", "B", "C"),
                 init_value="D",
             )

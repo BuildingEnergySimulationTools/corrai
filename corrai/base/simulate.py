@@ -9,7 +9,7 @@ from corrai.base.parameter import Parameter
 
 def run_simulations(
     model: Model,
-    parameter_dict_list: list[dict[Parameter, str | int | float]],
+    list_parameter_value_pairs: list[list[tuple[Parameter, str | int | float]]],
     simulation_options: dict,
     n_cpu: int = -1,
     simulation_kwargs: dict = None,
@@ -19,7 +19,7 @@ def run_simulations(
     if n_cpu <= 0:
         n_cpu = max(1, cpu_count() + n_cpu)
 
-    bar = progress_bar(parameter_dict_list)
+    bar = progress_bar(list_parameter_value_pairs)
 
     results = Parallel(n_jobs=n_cpu)(
         delayed(
@@ -30,7 +30,7 @@ def run_simulations(
         for param in bar
     )
 
-    return list(zip(parameter_dict_list, results))
+    return results
 
 
 def run_list_of_models_in_parallel(
