@@ -7,7 +7,7 @@ from corrai.base.model import Model
 from corrai.base.parameter import Parameter
 from corrai.base.sampling import (
     VariantSubSampler,
-    RealSampler,
+    Sampler,
     plot_pcp,
     get_mapped_bounds,
     LHCSampler,
@@ -593,7 +593,7 @@ class TestVariantSubSampler:
 class TestSimulationSampler:
     def test_draw_sample_only(self):
         Simulator = Simul()
-        sampler = RealSampler(parameters, model=Simulator)
+        sampler = Sampler(parameters, model=Simulator)
         sampler.draw_sample(sample_size=5, seed=42)
 
         assert sampler.sample.shape[0] >= 5
@@ -601,7 +601,7 @@ class TestSimulationSampler:
 
     def test_draw_sample_then_simulate_drawn_samples(self):
         Simulator = Simul()
-        sampler = RealSampler(parameters, model=Simulator)
+        sampler = Sampler(parameters, model=Simulator)
         sampler.draw_sample(sample_size=3, seed=0)
 
         assert len(sampler.sample_results) == 0
@@ -610,7 +610,7 @@ class TestSimulationSampler:
         assert len(sampler.sample_results) == sampler.sample.shape[0]
 
     def test_get_boundary_sample(self):
-        sampler = RealSampler(parameters, model=None)
+        sampler = Sampler(parameters, model=None)
 
         boundary_sample = sampler.get_boundary_sample()
 
@@ -629,7 +629,7 @@ class TestSimulationSampler:
 
     def test_add_sample(self):
         Simulator = Simul()
-        sampler = RealSampler(parameters, model=Simulator)
+        sampler = Sampler(parameters, model=Simulator)
         sample_size = 10
         sampler.add_sample(sample_size)
 
@@ -674,14 +674,14 @@ class TestSimulationSampler:
 
     def test_clear_sample(self):
         Simulator = Simul()
-        sampler = RealSampler(parameters, model=Simulator)
+        sampler = Sampler(parameters, model=Simulator)
         sampler.add_sample(1)
         sampler.clear_sample()
 
         assert np.array_equal(sampler.sample, np.empty(shape=(0, len(parameters))))
 
     def test_simulate_all_combinations(self):
-        sampler = RealSampler(discrete_parameters, model=Simul())
+        sampler = Sampler(discrete_parameters, model=Simul())
 
         sampler.simulate_all_combinations()
 
