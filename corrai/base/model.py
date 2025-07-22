@@ -15,7 +15,7 @@ class Model(ABC):
             props = (
                 param.model_property
                 if isinstance(param.model_property, tuple)
-                else [param.model_property]
+                else (param.model_property, )
             )
             if param.relabs == "Relative":
                 if param.init_value is None:
@@ -54,7 +54,9 @@ class Model(ABC):
             simulation_kwargs,
         )
 
-    def get_property_values(self, property_list: list) -> list[str | int | float]:
+    def get_property_values(
+        self, property_list: tuple[str, ...]
+    ) -> list[str | int | float]:
         raise NotImplementedError(
             "No get_property_values method was defined for this model."
             "If you use Relative values for parameters, consider switching to absolute,"
