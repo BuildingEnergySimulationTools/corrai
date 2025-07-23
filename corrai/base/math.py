@@ -1,11 +1,13 @@
+import datetime as dt
+
 import pandas as pd
 import numpy as np
 
-from pandas import DataFrame, Series
+from fastprogress.fastprogress import progress_bar
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 from corrai.base.utils import check_datetime_index
 from corrai.metrics import nmbe, cv_rmse
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 METHODS = {
     "mean": np.mean,
@@ -18,13 +20,14 @@ METHODS = {
 
 
 def aggregate_time_series(
-    results: Series,
+    results: pd.Series,
     indicator: str,
     method: str = "mean",
     agg_method_kwarg: dict = None,
     reference_time_series: pd.Series = None,
+    freq: str | pd.Timedelta | dt.timedelta = None,
     prefix: str = "aggregated",
-) -> pd.Series:
+) -> pd.DataFrame:
     """
     Aggregate time series data using a specified statistical or error metric.
 
@@ -101,27 +104,60 @@ def aggregate_time_series(
 
     for df in results:
         check_datetime_index(df)
-
     agg_df = pd.concat([df[indicator].rename(i) for i, df in results.items()], axis=1)
 
     if reference_time_series is not None:
         check_datetime_index(reference_time_series)
-        if not results.shape == reference_time_series.shape:
+        if not agg_df.shape[0] == reference_time_series.shape[0]:
             raise ValueError(
-                "Cannot perform aggregation, results_df and "
+                "Cannot perform aggregation, Dataframes in results and "
                 "reference_time_series have inconsistent shapes"
             )
-        res = pd.Series(
-            {
-                col: method(
-                    y_true=reference_time_series, y_pred=agg_df[col], **agg_method_kwarg
-                )
-                for col in agg_df.columns
-            }
-        )
-    else:
-        res = agg_df.apply(method, **agg_method_kwarg)
 
-    res.index = results.index
-    res.name = f"{prefix}_{indicator}"
-    return res
+    if freq is not None:
+        grouped_results = agg_df.groupby(pd.Grouper(freq=freq))
+        len_grouped = len(grouped_results)
+        val = []
+        if reference_time_series is not None:
+            ref_grouped = reference_time_series.groupby(pd.Grouper(freq=freq))
+            for (gr_tstamp, gr_res), (_, gr_ref) in progress_bar(
+                zip(grouped_results, ref_grouped), total=len_grouped
+            ):
+                val.append(
+                    pd.Series(
+                        {
+                            col: method(
+                                y_true=gr_ref,
+                                y_pred=gr_res[col],
+                                **agg_method_kwarg,
+                            )
+                            for col in gr_res.columns
+                        },
+                        name=gr_tstamp,
+                    )
+                )
+        else:
+            for (gr_tstamp, gr_res) in progress_bar(grouped_results):
+                ts_res = gr_res.apply(method, **agg_method_kwarg)
+                ts_res.name = gr_tstamp
+                val.append(ts_res)
+
+        return pd.concat(val, axis=1)
+    else:
+        if reference_time_series is not None:
+            res = pd.Series(
+                {
+                    col: method(
+                        y_true=reference_time_series,
+                        y_pred=agg_df[col],
+                        **agg_method_kwarg,
+                    )
+                    for col in agg_df.columns
+                }
+            )
+        else:
+            res = agg_df.apply(method, **agg_method_kwarg)
+
+        res.index = results.index
+        res.name = f"{prefix}_{indicator}"
+        return res.to_frame()
