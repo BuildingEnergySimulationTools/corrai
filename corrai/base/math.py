@@ -37,6 +37,9 @@ def aggregate_time_series(
     time series is provided, metrics that require ground truth
     (e.g., mean_absolute_error) are supported.
 
+    If `freq` is provided, the aggregation is done over time bins, producing a
+    table of simulation runs versus time periods.
+
     Parameters
     ----------
     results : pandas.Series of pandas.DataFrame
@@ -62,14 +65,26 @@ def aggregate_time_series(
     reference_time_series : pandas.Series, optional
         Reference series (`y_true`) to compare each simulation against.
         Required for error-based methods such as "mean_absolute_error".
+        Must have the same datetime index and length as the individual simulation
+        results.
+
+    freq : str or pandas.Timedelta or datetime.timedelta, optional
+        If provided, aggregate the time series within bins of this frequency
+        (e.g., "d" for daily, "h" for hourly).
+        The result will be a DataFrame where each row corresponds to a simulation and
+        each column to a time bin.
 
     prefix : str, default="aggregated"
-        Prefix to use for naming the output Series.
+        Prefix to use for naming the output column when `freq` is not specified.
 
     Returns
     -------
-    pandas.Series
-        A Series containing the aggregated metric per simulation, indexed by the same index as `results`.
+    pandas.DataFrame
+        If `freq` is not provided, returns a one-column DataFrame containing the
+        aggregated metric per simulation, indexed by the same index as `results`.
+
+        If `freq` is provided, returns a DataFrame indexed by simulation IDs
+        (same as `results.index`), with columns representing each aggregated time bin.
 
     Raises
     ------
@@ -88,15 +103,17 @@ def aggregate_time_series(
 
     >>> ref = pd.Series([1, 1], index=pd.date_range("2009-01-01", freq="h", periods=2))
 
+    >>> # No frequency aggregation: one aggregated value per simulation
     >>> aggregate_time_series(sim_res, indicator="a")
     101    1.5
     102    3.5
     Name: aggregated_a, dtype: float64
 
-    >>> aggregate_time_series(sim_res, indicator="a", method="mean_absolute_error", reference_time_series=ref)
-    101    0.5
-    102    2.5
-    Name: aggregated_a, dtype: float64
+    >>> # With frequency aggregation: one value per time bin per simulation
+    >>> aggregate_time_series(sim_res, indicator="a", method="mean_absolute_error", reference_time_series=ref, freq="h")
+         2009-01-01 00:00:00  2009-01-01 01:00:00
+    101                  0.0                  1.0
+    102                  2.0                  3.0
     """
 
     agg_method_kwarg = {} if agg_method_kwarg is None else agg_method_kwarg
@@ -137,7 +154,7 @@ def aggregate_time_series(
                     )
                 )
         else:
-            for (gr_tstamp, gr_res) in progress_bar(grouped_results):
+            for gr_tstamp, gr_res in progress_bar(grouped_results):
                 ts_res = gr_res.apply(method, **agg_method_kwarg)
                 ts_res.name = gr_tstamp
                 val.append(ts_res)
