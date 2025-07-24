@@ -2,6 +2,7 @@ import enum
 from abc import ABC, abstractmethod
 from typing import Any, Callable
 
+import datetime as dt
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -50,6 +51,18 @@ class Sanalysis(ABC):
         self.sampler = self._set_sampler(parameters, model, simulation_options)
         self.analyser = self._set_analyser()
 
+    @property
+    def parameters(self):
+        return self.sampler.parameters
+
+    @property
+    def values(self):
+        return self.sampler.values
+
+    @property
+    def results(self):
+        return self.sampler.results
+
     @abstractmethod
     def _set_sampler(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
@@ -67,7 +80,7 @@ class Sanalysis(ABC):
         n_cpu: int = 1,
         **sample_kwargs,
     ):
-        self.sampler.add_sample(simulate, n_cpu, **sample_kwargs)
+        self.sampler.add_sample(simulate=simulate, n_cpu=n_cpu, **sample_kwargs)
 
     def analyze(
         self,
@@ -97,7 +110,6 @@ class Sanalysis(ABC):
                     )
                 }
             )
-
         else:
             return pd.Series(
                 {
@@ -125,6 +137,7 @@ class SobolSanalysis(Sanalysis):
     def _set_analyser(self):
         return sobol
 
+    # noinspection PyMethodOverriding
     def add_sample(
         self,
         N: int,
@@ -136,8 +149,11 @@ class SobolSanalysis(Sanalysis):
         **sample_kwargs,
     ):
         super().add_sample(
+            N=N,
             simulate=simulate,
             n_cpu=n_cpu,
+            calc_second_order=calc_second_order,
+            scramble=scramble,
             **sample_kwargs,
         )
 
@@ -147,19 +163,21 @@ class SobolSanalysis(Sanalysis):
         method: str = "mean",
         agg_method_kwarg: dict = None,
         reference_time_series: pd.Series = None,
-        freq: str = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
         calc_second_order: bool = True,
         **analyse_kwargs,
     ):
-        super().analyze(
-            indicator,
-            method,
-            agg_method_kwarg,
-            reference_time_series,
-            freq,
+        return super().analyze(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
             calc_second_order=calc_second_order,
             **analyse_kwargs,
         )
+
+
 #
 #
 # class SobolSanalysis:

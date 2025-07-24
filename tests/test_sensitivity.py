@@ -90,32 +90,26 @@ class TestSensitivity:
 
         sobol_analysis.add_sample(N=1, n_cpu=1, calc_second_order=True, seed=42)
 
-        sobol_analysis.analyze(
-            "res", sensitivity_method_kwargs={"calc_second_order": True}
+        res = sobol_analysis.analyze("res", calc_second_order=True)
+        np.testing.assert_almost_equal(
+            res["mean_res"]["S1"], np.array([1.02156668, 2.22878092, -1.41228784])
         )
 
-        sobol_analysis.analyze(
-            "res", freq="h", sensitivity_method_kwargs={"calc_second_order": True}
-        )
+        res = sobol_analysis.analyze("res", freq="h", calc_second_order=True)
+        assert res.index.tolist() == [
+            pd.Timestamp("2009-01-01 00:00:00"),
+            pd.Timestamp("2009-01-01 01:00:00"),
+            pd.Timestamp("2009-01-01 02:00:00"),
+            pd.Timestamp("2009-01-01 03:00:00"),
+            pd.Timestamp("2009-01-01 04:00:00"),
+            pd.Timestamp("2009-01-01 05:00:00"),
+        ]
 
         np.testing.assert_almost_equal(
-            sa_analysis.sensitivity_results["S1"],
-            np.array([1.022, 2.229, -1.412]),
+            res["2009-01-01 00:00:00"]["S1"],
+            np.array([1.02156668, 2.22878092, -1.41228784]),
             decimal=3,
         )
-
-        sa_analysis = SAnalysisLegacy(
-            parameters_list=PARAMETER_LIST, method=Method.MORRIS
-        )
-
-        sa_analysis.draw_sample(15)
-
-        sa_analysis.evaluate(model, SIMULATION_OPTIONS, n_cpu=4)
-
-        sa_analysis.analyze(indicator="res")
-
-        # Problem is highly non linear and result do not converge.
-        # We are just checking the execution
 
     def test_dynamic_analysis_and_absolute(self):
         model = Ishigami()
