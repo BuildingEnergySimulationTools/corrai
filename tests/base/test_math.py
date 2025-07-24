@@ -33,10 +33,12 @@ class TestMath:
 
         pd.testing.assert_frame_equal(
             res,
-            pd.DataFrame({
-                pd.Timestamp("2009-01-01 00:00:00"): {2: 0.0, 3: 2.0},
-                pd.Timestamp("2009-01-01 01:00:00"): {2: 2.0, 3: 3.0},
-            }),
+            pd.DataFrame(
+                {
+                    pd.Timestamp("2009-01-01 00:00:00"): {2: 0.0, 3: 2.0},
+                    pd.Timestamp("2009-01-01 01:00:00"): {2: 2.0, 3: 3.0},
+                }
+            ),
         )
 
         res = aggregate_time_series(
@@ -47,16 +49,17 @@ class TestMath:
 
         pd.testing.assert_frame_equal(
             res,
-            pd.DataFrame({
-                pd.Timestamp("2009-01-01 00:00:00"): {2: 1.0, 3: 3.0},
-                pd.Timestamp("2009-01-01 01:00:00"): {2: 2.0, 3: 4.0},
-            }),
+            pd.DataFrame(
+                {
+                    pd.Timestamp("2009-01-01 00:00:00"): {2: 1.0, 3: 3.0},
+                    pd.Timestamp("2009-01-01 01:00:00"): {2: 2.0, 3: 4.0},
+                }
+            ),
         )
 
         res = aggregate_time_series(sim_res, "a")
         pd.testing.assert_frame_equal(
-            res,
-            pd.Series([1.5, 3.5], index=[2, 3], name="aggregated_a").to_frame()
+            res, pd.Series([1.5, 3.5], index=[2, 3], name="aggregated_a").to_frame()
         )
 
         res = aggregate_time_series(
@@ -66,6 +69,5 @@ class TestMath:
             reference_time_series=ref_df["a"],
         )
         pd.testing.assert_frame_equal(
-            res,
-            pd.Series([0.5, 2.5], index=[2, 3], name="aggregated_a").to_frame()
+            res, pd.Series([0.5, 2.5], index=[2, 3], name="aggregated_a").to_frame()
         )
