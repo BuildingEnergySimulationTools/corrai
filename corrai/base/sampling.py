@@ -1,10 +1,9 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-
-from copy import deepcopy
 import random
 import itertools
 
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from copy import deepcopy
 from pathlib import Path
 from itertools import product
 
@@ -12,10 +11,15 @@ import numpy as np
 import pandas as pd
 import plotly.io as pio
 import plotly.graph_objects as go
+import datetime as dt
+
 from scipy.stats.qmc import LatinHypercube
+from SALib.sample import morris as morris_sampler
+from SALib.sample import sobol as sobol_sampler
 
 from corrai.base.parameter import Parameter
 from corrai.base.model import Model
+from corrai.base.math import aggregate_time_series
 from corrai.base.simulate import run_simulations
 from corrai.variant import simulate_variants, get_combined_variants
 
@@ -113,9 +117,12 @@ class Sampler(ABC):
         self.simulation_options = (
             {} if simulation_options is None else simulation_options
         )
-        self.parameters = parameters
         self.model = model
-        self.sample = Sample(self.parameters)
+        self.sample = Sample(parameters)
+
+    @property
+    def parameters(self):
+        return self.sample.parameters
 
     @property
     def values(self):
@@ -177,10 +184,33 @@ class Sampler(ABC):
         unsimulated_idx = self.sample.get_pending_index()
         self.simulate_at(unsimulated_idx, n_cpu, simulation_kwargs)
 
+    def get_aggregate_time_series(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        prefix: str = "aggregated",
+    ) -> pd.DataFrame:
+        return aggregate_time_series(
+            self.results,
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq,
+            prefix,
+        )
+
+
 class RealSampler(Sampler, ABC):
-    def __init__(self, parameters: list[Parameter],
+    def __init__(
+        self,
+        parameters: list[Parameter],
         model: Model,
-        simulation_options: dict = None,):
+        simulation_options: dict = None,
+    ):
         super().__init__(parameters, model, simulation_options)
 
         if not all(param.ptype == "Real" for param in parameters):
@@ -189,6 +219,33 @@ class RealSampler(Sampler, ABC):
                 f"Found {
                 [(par.name, par.ptype) for par in parameters if par.ptype != "Real"]}"
             )
+
+    def get_salib_problem(self):
+        return {
+            "num_vars": len(self.parameters),
+            "names": [p.name for p in self.parameters],
+            "bounds": [p.interval for p in self.parameters],
+        }
+
+
+class MorrisSampler(RealSampler):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options)
+
+    def add_sample(
+        self,
+        N: int,
+        num_levels: int = 4,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        **morris_kwargs,
+    ):
+        morris_sample = morris_sampler.sample(
+            self.get_salib_problem(), N, num_levels, **morris_kwargs
+        )
+        self._post_draw_sample(morris_sample, simulate, n_cpu)
 
 
 class LHCSampler(RealSampler):
@@ -203,13 +260,31 @@ class LHCSampler(RealSampler):
         self._post_draw_sample(new_dimless_sample, simulate, sample_is_dimless=True)
 
 
-class SobolSampler(Sampler):
-    def __init__(self, parameters: list[Parameter], model: Model):
-        super().__init__(parameters, model)
+class SobolSampler(RealSampler):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options)
 
-    def add_sample(self, ni, custom_par, simulate=True):
-        new_sample = draw_sobol(ni, custom_par)
-        self._add_sample_post(new_sample, simulate)
+    def add_sample(
+        self,
+        N: int,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        *,
+        calc_second_order: bool = True,
+        scramble: bool = True,
+        **sobol_kwargs,
+    ):
+        new_sample = sobol_sampler.sample(
+            problem=self.get_salib_problem(),
+            N=N,
+            calc_second_order=calc_second_order,
+            scramble=scramble,
+            **sobol_kwargs,
+        )
+
+        self._post_draw_sample(new_sample, simulate, n_cpu)
 
 
 def get_mapped_bounds(uncertain_param_list, param_mappings):

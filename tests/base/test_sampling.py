@@ -11,11 +11,13 @@ from corrai.base.sampling import (
     plot_pcp,
     get_mapped_bounds,
     LHCSampler,
+    MorrisSampler,
+    SobolSampler,
     Sample,
 )
 from corrai.variant import VariantKeys, get_combined_variants, get_modifier_dict
 
-from tests.resources.pymodels import VariantModel, Pymodel
+from tests.resources.pymodels import VariantModel, Pymodel, Ishigami
 import pytest
 
 import plotly.graph_objects as go
@@ -116,6 +118,12 @@ REAL_PARAM = [
     Parameter("param_3", (0, 100), relabs="Absolute", model_property="prop_3"),
 ]
 
+ISHIGAMI_PARAMETERS = [
+    Parameter("par_x1", (-3.14159265359, 3.14159265359), model_property="x1"),
+    Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
+    Parameter("par_x3", (-3.14159265359, 3.14159265359), model_property="x3"),
+]
+
 
 def test_sample():
     sample = Sample(REAL_PARAM)
@@ -214,6 +222,52 @@ def test_lhc_sampler():
 
     sampler.add_sample(3, simulate=True)
     assert all(not df.empty for df in sampler.results[-3:])
+
+
+def test_morris_sampler():
+    sampler = MorrisSampler(
+        parameters=ISHIGAMI_PARAMETERS,
+        model=Ishigami(),
+        simulation_options=SIMULATION_OPTIONS,
+    )
+
+    sampler.add_sample(N=1, **{"seed": 42})
+    np.testing.assert_allclose(
+        sampler.values,
+        np.array(
+            [
+                [3.14159265, 1.04719755, 1.04719755],
+                [-1.04719755, 1.04719755, 1.04719755],
+                [-1.04719755, -3.14159265, 1.04719755],
+                [-1.04719755, -3.14159265, -3.14159265],
+            ]
+        ),
+    )
+
+
+def test_sobol_sampler():
+    sampler = SobolSampler(
+        parameters=ISHIGAMI_PARAMETERS,
+        model=Ishigami(),
+        simulation_options=SIMULATION_OPTIONS,
+    )
+
+    sampler.add_sample(N=1, **{"seed": 42})
+    np.testing.assert_allclose(
+        sampler.values,
+        np.array(
+            [
+                [-0.43335459, 1.97523222, 1.92524819],
+                [-2.8057144, 1.97523222, 1.92524819],
+                [-0.43335459, -1.26958525, 1.92524819],
+                [-0.43335459, 1.97523222, 2.13551644],
+                [-0.43335459, -1.26958525, 2.13551644],
+                [-2.8057144, 1.97523222, 2.13551644],
+                [-2.8057144, -1.26958525, 1.92524819],
+                [-2.8057144, -1.26958525, 2.13551644],
+            ]
+        ),
+    )
 
 
 def test_expand_parameter_dict():
