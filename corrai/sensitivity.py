@@ -1,4 +1,5 @@
 import enum
+from abc import ABC, abstractmethod
 from typing import Any, Callable
 
 import numpy as np
@@ -11,6 +12,7 @@ from SALib.sample import fast_sampler, latin
 from SALib.sample import morris as morris_sampler
 
 from corrai.base.parameter import Parameter
+from corrai.base.sampling import SobolSampler
 from corrai.base.model import Model
 from corrai.base.simulate import run_simulations
 from corrai.base.math import aggregate_time_series
@@ -41,7 +43,193 @@ METHOD_SAMPLER_DICT = {
 }
 
 
-class SAnalysis:
+class Sanalysis(ABC):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        self.sampler = self._set_sampler(parameters, model, simulation_options)
+        self.analyser = self._set_analyser()
+
+    @abstractmethod
+    def _set_sampler(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        """Return a method-specific sampler."""
+        pass
+
+    @abstractmethod
+    def _set_analyser(self):
+        pass
+
+    def add_sample(
+        self,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        **sample_kwargs,
+    ):
+        self.sampler.add_sample(simulate, n_cpu, **sample_kwargs)
+
+    def analyze(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str = None,
+        **analyse_kwargs,
+    ):
+        agg_result = self.sampler.get_aggregate_time_series(
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq,
+            prefix=method,
+        )
+
+        if freq is None:
+            return pd.Series(
+                {
+                    f"{method}_{indicator}": self.analyser.analyze(
+                        problem=self.sampler.get_salib_problem(),
+                        Y=agg_result.to_numpy().flatten(),
+                        **analyse_kwargs,
+                    )
+                }
+            )
+
+        else:
+            return pd.Series(
+                {
+                    tstamp: self.analyser.analyze(
+                        problem=self.sampler.get_salib_problem(),
+                        Y=agg_result[tstamp].to_numpy().flatten(),
+                        **analyse_kwargs,
+                    )
+                    for tstamp in agg_result
+                }
+            )
+
+
+class SobolSanalysis(Sanalysis):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options)
+
+    def _set_sampler(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        return SobolSampler(parameters, model, simulation_options)
+
+    def _set_analyser(self):
+        return sobol
+
+    def add_sample(
+        self,
+        N: int,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        *,
+        calc_second_order: bool = True,
+        scramble: bool = True,
+        **sample_kwargs,
+    ):
+        super().add_sample(
+            simulate=simulate,
+            n_cpu=n_cpu,
+            **sample_kwargs,
+        )
+
+    def analyze(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str = None,
+        calc_second_order: bool = True,
+        **analyse_kwargs,
+    ):
+        super().analyze(
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq,
+            calc_second_order=calc_second_order,
+            **analyse_kwargs,
+        )
+#
+#
+# class SobolSanalysis:
+#     def __init__(
+#         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+#     ):
+#         self.sampler = SobolSampler(parameters, model, simulation_options)
+#
+#     def add_sample(
+#         self,
+#         N: int,
+#         simulate: bool = True,
+#         n_cpu: int = 1,
+#         *,
+#         calc_second_order: bool = True,
+#         scramble: bool = True,
+#         **sobol_kwargs,
+#     ):
+#         self.sampler.add_sample(
+#             N,
+#             simulate,
+#             n_cpu,
+#             calc_second_order=calc_second_order,
+#             scramble=scramble,
+#             **sobol_kwargs,
+#         )
+#
+#     def analyze(
+#         self,
+#         indicator: str,
+#         method: str = "mean",
+#         agg_method_kwarg: dict = None,
+#         reference_time_series: pd.Series = None,
+#         sensitivity_method_kwargs: dict = None,
+#         freq: str = None,
+#     ):
+#         agg_result = self.sampler.get_aggregate_time_series(
+#             indicator,
+#             method,
+#             agg_method_kwarg,
+#             reference_time_series,
+#             freq,
+#             prefix=method,
+#         )
+#
+#         if freq is None:
+#             return pd.Series(
+#                 {
+#                     f"{method}_{indicator}": sobol.analyze(
+#                         problem=self.sampler.get_salib_problem(),
+#                         Y=agg_result.to_numpy().flatten(),
+#                         **sensitivity_method_kwargs,
+#                     )
+#                 }
+#             )
+#
+#         else:
+#             return pd.Series(
+#                 {
+#                     tstamp: sobol.analyze(
+#                         problem=self.sampler.get_salib_problem(),
+#                         Y=agg_result[tstamp].to_numpy().flatten(),
+#                         **sensitivity_method_kwargs,
+#                     )
+#                     for tstamp in agg_result
+#                 }
+#             )
+
+
+class SAnalysisLegacy:
     """
     This class is designed to perform sensitivity analysis on a given model using
     various sensitivity methods,  Global Sensitivity Analysis (GSA) methods such as
@@ -156,7 +344,7 @@ class SAnalysis:
             parameter_samples=self.sample,
             simulation_options=simulation_options,
             n_cpu=n_cpu,
-            simulate_kwargs=simulate_kwargs,
+            simulation_kwargs=simulate_kwargs,
         )
 
     def analyze(

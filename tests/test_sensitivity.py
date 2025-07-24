@@ -7,9 +7,9 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 from corrai.base.model import Model
 from corrai.base.parameter import Parameter
-from corrai.sensitivity import Method
+from corrai.sensitivity import Method, SobolSanalysis
 from corrai.sensitivity import ObjectiveFunction
-from corrai.sensitivity import SAnalysis
+from corrai.sensitivity import SAnalysisLegacy
 from corrai.sensitivity import (
     plot_sobol_st_bar,
     plot_morris_st_bar,
@@ -26,21 +26,9 @@ SIMULATION_OPTIONS = {
 }
 
 PARAMETER_LIST = [
-    {
-        Parameter.NAME: "x1",
-        Parameter.INTERVAL: (-3.14159265359, 3.14159265359),
-        Parameter.TYPE: "Real",
-    },
-    {
-        Parameter.NAME: "x2",
-        Parameter.INTERVAL: (-3.14159265359, 3.14159265359),
-        Parameter.TYPE: "Real",
-    },
-    {
-        Parameter.NAME: "x3",
-        Parameter.INTERVAL: (-3.14159265359, 3.14159265359),
-        Parameter.TYPE: "Real",
-    },
+    Parameter("par_x1", (-3.14159265359, 3.14159265359), model_property="x1"),
+    Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
+    Parameter("par_x3", (-3.14159265359, 3.14159265359), model_property="x3"),
 ]
 
 
@@ -94,18 +82,20 @@ def morris_res_mock():
 
 class TestSensitivity:
     def test_sanalysis(self):
-        model = Ishigami()
-
-        sa_analysis = SAnalysis(parameters_list=PARAMETER_LIST, method=Method.SOBOL)
-
-        sa_analysis.draw_sample(
-            1, sampling_kwargs={"calc_second_order": True, "seed": 42}
+        sobol_analysis = SobolSanalysis(
+            parameters=PARAMETER_LIST,
+            model=Ishigami(),
+            simulation_options=SIMULATION_OPTIONS,
         )
 
-        sa_analysis.evaluate(model, SIMULATION_OPTIONS, n_cpu=4)
+        sobol_analysis.add_sample(N=1, n_cpu=1, calc_second_order=True, seed=42)
 
-        sa_analysis.analyze(
+        sobol_analysis.analyze(
             "res", sensitivity_method_kwargs={"calc_second_order": True}
+        )
+
+        sobol_analysis.analyze(
+            "res", freq="h", sensitivity_method_kwargs={"calc_second_order": True}
         )
 
         np.testing.assert_almost_equal(
@@ -114,7 +104,9 @@ class TestSensitivity:
             decimal=3,
         )
 
-        sa_analysis = SAnalysis(parameters_list=PARAMETER_LIST, method=Method.MORRIS)
+        sa_analysis = SAnalysisLegacy(
+            parameters_list=PARAMETER_LIST, method=Method.MORRIS
+        )
 
         sa_analysis.draw_sample(15)
 
@@ -128,7 +120,9 @@ class TestSensitivity:
     def test_dynamic_analysis_and_absolute(self):
         model = Ishigami()
 
-        sa_analysis = SAnalysis(parameters_list=PARAMETER_LIST, method=Method.SOBOL)
+        sa_analysis = SAnalysisLegacy(
+            parameters_list=PARAMETER_LIST, method=Method.SOBOL
+        )
 
         sa_analysis.draw_sample(
             100, sampling_kwargs={"calc_second_order": False, "seed": 42}
@@ -253,7 +247,7 @@ class TestSensitivity:
 
 
 class IshigamiTwoOutputs(Model):
-    def simulate(self, parameter_dict, simulation_options):
+    def simulate(self, property_dict, simulation_options):
         A1 = 7.0
         B1 = 0.1
         A2 = 5.0
@@ -265,7 +259,7 @@ class IshigamiTwoOutputs(Model):
             "z": 1,
         }
 
-        parameters = {**default_parameters, **parameter_dict}
+        parameters = {**default_parameters, **property_dict}
 
         x = parameters["x"]
         y = parameters["y"]
@@ -295,13 +289,13 @@ class IshigamiTwoOutputs(Model):
 
 
 class RosenModel(Model):
-    def simulate(self, parameter_dict, simulation_options):
+    def simulate(self, property_dict, simulation_options):
         default_parameters = {
             "x": 1,
             "y": 1,
         }
 
-        parameters = {**default_parameters, **parameter_dict}
+        parameters = {**default_parameters, **property_dict}
 
         x = parameters["x"]
         y = parameters["y"]
@@ -326,10 +320,10 @@ class RosenModel(Model):
         pass
 
 
-PARAMETERS = [
-    {Parameter.NAME: "x", Parameter.INTERVAL: (0.0, 3.0), Parameter.INIT_VALUE: 2.0},
-    {Parameter.NAME: "y", Parameter.INTERVAL: (0.0, 3.0), Parameter.INIT_VALUE: 2.0},
-]
+# PARAMETERS = [
+#     {Parameter.NAME: "x", Parameter.INTERVAL: (0.0, 3.0), Parameter.INIT_VALUE: 2.0},
+#     {Parameter.NAME: "y", Parameter.INTERVAL: (0.0, 3.0), Parameter.INIT_VALUE: 2.0},
+# ]
 
 
 X_DICT = {"x": 2, "y": 2}
