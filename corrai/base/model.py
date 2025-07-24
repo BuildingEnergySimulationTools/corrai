@@ -15,7 +15,7 @@ class Model(ABC):
             props = (
                 param.model_property
                 if isinstance(param.model_property, tuple)
-                else (param.model_property, )
+                else (param.model_property,)
             )
             if param.relabs == "Relative":
                 if param.init_value is None:

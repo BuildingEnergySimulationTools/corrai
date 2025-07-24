@@ -1,4 +1,3 @@
-from corrai.base.model import Model
 from corrai.base.parameter import Parameter
 from ..resources.pymodels import Pymodel
 
