@@ -6,3 +6,6 @@ plotly==5.3.1
 pymoo==0.6.0.1
 scikit-learn==1.2.2
 fmpy==0.3.6
+SALib==1.5.1
+fastprogress==1.0.3
+setuptools~=80.9.0
