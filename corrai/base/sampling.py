@@ -696,6 +696,35 @@ def plot_sample(
     alpha: float = 0.5,
     show_legends: bool = False,
 ) -> go.Figure:
+    """
+    Plot all available simulation results from a series of sample outputs.
+
+    Parameters
+    ----------
+    results : pd.Series
+        A pandas Series where each element is either:
+        - A pandas DataFrame (typically one column per indicator), or
+        - A pandas Series representing a single indicator over time.
+        Empty elements (e.g., unsimulated samples) are ignored.
+
+    indicator : str, optional
+        The name of the indicator column to plot when elements of `results`
+        are DataFrames with multiple columns. If `None` and each DataFrame
+        has exactly one column, that column is used automatically.
+
+    reference_timeseries : pd.Series, optional
+        A reference time series to plot alongside the simulations.
+
+    alpha : float, default 0.5
+        Opacity of the markers for the simulation samples.
+
+    show_legends : bool, default False
+        Whether to show a separate legend entry for each sample trace.
+
+    Returns
+    -------
+    go.Figure
+    """
     if not isinstance(results, pd.Series):
         raise ValueError("`results` must be a pandas Series.")
     if results.empty:
@@ -718,12 +747,12 @@ def plot_sample(
 
     fig = go.Figure()
 
-    # in case of pending simulations, we will not plot them
+    # In case of pending simulations
     count = 0
     for i, sample in enumerate(results):
         s = _to_series(sample, indicator)
         if s is None or s.empty:
-            continue  # ignorer si pas de données
+            continue
         fig.add_trace(
             go.Scattergl(
                 name=f"sample {i}" if show_legends else "Simulations",
