@@ -6,10 +6,11 @@ import pandas as pd
 from corrai.base.model import Model
 from corrai.base.parameter import Parameter
 from corrai.base.sampling import (
-    VariantSubSampler,
+    # VariantSubSampler,
     Sampler,
+    plot_sample,
     plot_pcp,
-    get_mapped_bounds,
+    # get_mapped_bounds,
     LHCSampler,
     MorrisSampler,
     SobolSampler,
@@ -123,6 +124,74 @@ ISHIGAMI_PARAMETERS = [
     Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
     Parameter("par_x3", (-3.14159265359, 3.14159265359), model_property="x3"),
 ]
+
+
+def test_plot_sample():
+    t = pd.date_range("2025-01-01 00:00:00", periods=2, freq="h")
+    df1 = pd.DataFrame({"res": [1.0, 2.0]}, index=t)
+    df2 = pd.DataFrame({"res": [3.0, 4.0]}, index=t)
+    df3 = pd.DataFrame({"res": [5.0, 6.0]}, index=t)
+    results = pd.Series([df1, df2, df3])
+    ref = pd.Series([2.0, 2.0], index=t)
+
+    param_names = ["p1", "p2"]
+    param_values = np.array([[1.1, 2.2], [3.3, 4.4], [5.5, 6.6]])
+
+    fig = plot_sample(
+        results=results,
+        reference_timeseries=ref,
+        title="test",
+        x_label="time",
+        y_label="value",
+        alpha=0.3,
+        show_legends=True,
+        parameter_values=param_values,
+        parameter_names=param_names,
+    )
+    assert isinstance(fig, go.Figure)
+    assert len(fig.data) == 4
+    np.testing.assert_allclose(fig.data[0]["y"], df1["res"].to_numpy())
+    np.testing.assert_allclose(fig.data[-1]["y"], ref.to_numpy())
+
+    assert fig.data[0].name == "p1: 1.1, p2: 2.2"
+    assert fig.data[1].name == "p1: 3.3, p2: 4.4"
+    assert fig.data[2].name == "p1: 5.5, p2: 6.6"
+    fig.show()
+
+    df_multi = pd.concat(
+        [df1.rename(columns={"res": "a"}), df2.rename(columns={"res": "b"})], axis=1
+    )
+    results_multi = pd.Series([df_multi])
+    with pytest.raises(ValueError, match="Provide `indicator`: multiple columns"):
+        plot_sample(results=results_multi)
+    fig_a = plot_sample(results=results_multi, indicator="a")
+    y_values = np.array(fig_a.data[0].y)
+    np.testing.assert_allclose(y_values, df_multi["a"].to_numpy())
+
+    # empty Series
+    with pytest.raises(ValueError):
+        plot_sample(results=pd.Series(dtype=object))
+
+    # Partial simulation
+    empty_df = pd.DataFrame({"res": []})
+    results_partial = pd.Series([empty_df, df1, empty_df])
+    fig_partial = plot_sample(results=results_partial, indicator="res")
+
+    # Only 1 non-empty sample
+    assert len(fig_partial.data) == 1
+    np.testing.assert_allclose(fig_partial.data[0]["y"], df1["res"].to_numpy())
+
+    # All results empty and no reference
+    results_all_empty = pd.Series([empty_df, empty_df])
+    with pytest.raises(ValueError, match="No simulated data available to plot."):
+        plot_sample(results_all_empty, indicator="res")
+
+    # All results empty but with reference
+    fig_ref_only = plot_sample(
+        results_all_empty, indicator="res", reference_timeseries=ref
+    )
+    assert len(fig_ref_only.data) == 1
+    np.testing.assert_allclose(fig_ref_only.data[0]["y"], ref.to_numpy())
 
 
 def test_sample():
