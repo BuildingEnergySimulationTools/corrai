@@ -6,11 +6,11 @@ import pandas as pd
 from corrai.base.model import Model
 from corrai.base.parameter import Parameter
 from corrai.base.sampling import (
-    VariantSubSampler,
+    # VariantSubSampler,
     Sampler,
     plot_sample,
     plot_pcp,
-    get_mapped_bounds,
+    # get_mapped_bounds,
     LHCSampler,
     MorrisSampler,
     SobolSampler,
@@ -134,6 +134,9 @@ def test_plot_sample():
     results = pd.Series([df1, df2, df3])
     ref = pd.Series([2.0, 2.0], index=t)
 
+    param_names = ["p1", "p2"]
+    param_values = np.array([[1.1, 2.2], [3.3, 4.4], [5.5, 6.6]])
+
     fig = plot_sample(
         results=results,
         reference_timeseries=ref,
@@ -142,11 +145,18 @@ def test_plot_sample():
         y_label="value",
         alpha=0.3,
         show_legends=True,
+        parameter_values=param_values,
+        parameter_names=param_names,
     )
     assert isinstance(fig, go.Figure)
     assert len(fig.data) == 4
     np.testing.assert_allclose(fig.data[0]["y"], df1["res"].to_numpy())
     np.testing.assert_allclose(fig.data[-1]["y"], ref.to_numpy())
+
+    assert fig.data[0].name == "p1: 1.1, p2: 2.2"
+    assert fig.data[1].name == "p1: 3.3, p2: 4.4"
+    assert fig.data[2].name == "p1: 5.5, p2: 6.6"
+    fig.show()
 
     df_multi = pd.concat(
         [df1.rename(columns={"res": "a"}), df2.rename(columns={"res": "b"})], axis=1
