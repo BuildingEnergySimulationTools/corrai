@@ -212,6 +212,7 @@ class Sampler(ABC):
         x_label: str | None = None,
         alpha: float = 0.5,
         show_legends: bool = False,
+        round_ndigits: int = 2,
     ) -> go.Figure:
         if self.results is None:
             raise ValueError("No results available to plot. Run a simulation first.")
@@ -225,6 +226,9 @@ class Sampler(ABC):
             x_label=x_label,
             alpha=alpha,
             show_legends=show_legends,
+            parameter_values=self.values,
+            parameter_names=[p.name for p in self.parameters],
+            round_ndigits=round_ndigits,
         )
 
 
@@ -687,7 +691,7 @@ class SobolSampler(RealSampler):
 
 
 def plot_sample(
-    results: pd.Series,
+    results: pd.Series,  # Series d'objets (Series ou DataFrame)
     indicator: str | None = None,
     reference_timeseries: pd.Series | None = None,
     title: str | None = None,
@@ -695,67 +699,83 @@ def plot_sample(
     x_label: str | None = None,
     alpha: float = 0.5,
     show_legends: bool = False,
+    parameter_values: np.ndarray | None = None,
+    parameter_names: list[str] | None = None,
+    round_ndigits: int = 2,
 ) -> go.Figure:
     """
-    Plot all available simulation results from a series of sample outputs.
+    Plot all available (non-empty) simulation results contained in a Series, optionally
+    annotating each trace legend with the corresponding parameter values.
 
     Parameters
     ----------
     results : pd.Series
-        A pandas Series where each element is either:
-        - A pandas DataFrame (typically one column per indicator), or
-        - A pandas Series representing a single indicator over time.
-        Empty elements (e.g., unsimulated samples) are ignored.
-
+        A pandas Series where each element is either a pandas Series or a pandas DataFrame
+        (typically 1 column per indicator). Empty elements are ignored.
     indicator : str, optional
-        The name of the indicator column to plot when elements of `results`
-        are DataFrames with multiple columns. If `None` and each DataFrame
-        has exactly one column, that column is used automatically.
-
+        Column name to use if inner elements are DataFrames with multiple columns.
+        If None and the DataFrame has exactly one column, that column is used.
     reference_timeseries : pd.Series, optional
-        A reference time series to plot alongside the simulations.
-
+        A reference time series to plot alongside simulations.
+    title, y_label, x_label : str, optional
+        Plot title and axis labels.
     alpha : float, default 0.5
-        Opacity of the markers for the simulation samples.
-
+        Opacity for the markers.
     show_legends : bool, default False
-        Whether to show a separate legend entry for each sample trace.
+        Whether to show a legend per sample trace.
+    parameter_values : np.ndarray, optional
+        Array of shape (n_samples, n_params) with the parameter values used per sample.
+        Only used to build legend strings when `show_legends=True`.
+    parameter_names : list[str], optional
+        Names of the parameters (same order as in `parameter_values`).
+    round_ndigits : int, default 2
+        Number of digits for rounding parameter values in legend strings.
 
     Returns
     -------
     go.Figure
     """
+
     if not isinstance(results, pd.Series):
         raise ValueError("`results` must be a pandas Series.")
     if results.empty:
         raise ValueError("`results` is empty. Simulate samples first.")
 
-    def _to_series(obj, indicator):
+    def _to_series(obj, indicator_):
         if isinstance(obj, pd.Series):
             return obj
         if isinstance(obj, pd.DataFrame):
             if obj.empty:
                 return None
-            if indicator is None:
+            if indicator_ is None:
                 if obj.shape[1] != 1:
                     raise ValueError(
                         "Provide `indicator`: multiple columns in the sample DataFrame."
                     )
                 return obj.iloc[:, 0]
-            return obj[indicator]
+            return obj[indicator_]
         return None
 
-    fig = go.Figure()
+    def _legend_for(i: int) -> str:
+        if not show_legends:
+            return "Simulations"
+        if parameter_values is None or parameter_names is None:
+            return f"sample {i}"
+        vals = parameter_values[i]
+        return ", ".join(
+            f"{n}: {round(v, round_ndigits)}" for n, v in zip(parameter_names, vals)
+        )
 
-    # In case of pending simulations
-    count = 0
+    fig = go.Figure()
+    plotted = 0
+
     for i, sample in enumerate(results):
         s = _to_series(sample, indicator)
         if s is None or s.empty:
             continue
         fig.add_trace(
             go.Scattergl(
-                name=f"sample {i}" if show_legends else "Simulations",
+                name=_legend_for(i),
                 mode="markers",
                 x=s.index,
                 y=s.to_numpy(),
@@ -763,9 +783,9 @@ def plot_sample(
                 showlegend=show_legends,
             )
         )
-        count += 1
+        plotted += 1
 
-    if count == 0 and reference_timeseries is None:
+    if plotted == 0 and reference_timeseries is None:
         raise ValueError("No simulated data available to plot.")
 
     if reference_timeseries is not None:
