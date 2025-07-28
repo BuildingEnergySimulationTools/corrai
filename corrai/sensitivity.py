@@ -187,6 +187,7 @@ class MorrisSanalysis(Sanalysis):
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
     ):
         super().__init__(parameters, model, simulation_options)
+        self._analysis_cache = {}
 
     def _set_sampler(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
@@ -229,6 +230,33 @@ class MorrisSanalysis(Sanalysis):
             reference_time_series=reference_time_series,
             freq=freq,
             **analyse_kwargs,
+        )
+
+    def plot_scatter(
+        self,
+        indicator: str = "res",
+        method: str = "mean",
+        title: str = "Morris Sensitivity Analysis",
+        unit: str = "",
+        scaler: float = 100,
+        autosize: bool = True,
+        **analyse_kwargs,
+    ):
+        cache_key = (indicator, method, "None")
+        if cache_key in self._analysis_cache:
+            result = self._analysis_cache[cache_key][f"{method}_{indicator}"]
+        else:
+            result = self.analyze(indicator=indicator, method=method, **analyse_kwargs)[
+                f"{method}_{indicator}"
+            ]
+            self._analysis_cache[cache_key] = {f"{method}_{indicator}": result}
+
+        return plot_morris_scatter(
+            result,
+            title=title,
+            unit=unit,
+            scaler=scaler,
+            autosize=autosize,
         )
 
 
@@ -856,105 +884,96 @@ def plot_morris_st_bar(salib_res, distance_metric="normalized"):
 
 
 def plot_morris_scatter(
-    salib_res,
-    title: str = None,
+    morris_result,
+    title: str = "Morris Sensitivity Analysis",
     unit: str = "",
-    scaler: int = 100,
+    scaler: float = 100,
     autosize: bool = True,
-):
+) -> go.Figure:
     """
-    This function generates a scatter plot for Morris sensitivity analysis results.
-    It displays the mean of elementary effects (μ*) on the x-axis and the standard
-    deviation of elementary effects (σ) on the y-axis.
-    Marker sizes and colors represent the 'distance' to the origin.
+    Plot a Morris sensitivity analysis scatter plot using μ* and σ.
 
-    Parameters:
-    - salib_res (pandas DataFrame): DataFrame containing sensitivity analysis results.
-    - title (str, optional): Title for the plot. If not provided, a default title
-    is used.
-    - unit (str, optional): Unit for the axes labels.
-    - scaler (int, optional): A scaling factor for marker sizes in the plot.
-    - autosize (bool, optional): Whether to automatically adjust the y-axis range.
-
+    Parameters
+    ----------
+    morris_result : MorrisResult or pd.DataFrame
+        Result from a Morris analysis (SALib or internal format).
+    title : str, optional
+        Plot title.
+    unit : str, optional
+        Unit for axis labels.
+    scaler : float, optional
+        Scaling factor for marker size.
+    autosize : bool, optional
+        Whether to autoscale y-axis (True: based on σ, False: based on μ*).
     """
-    morris_res = salib_res.to_df()
-    morris_res["distance"] = np.sqrt(morris_res.mu_star**2 + morris_res.sigma**2)
-    morris_res["dimless_distance"] = morris_res.distance / morris_res.distance.max()
+    if hasattr(morris_result, "to_df"):
+        morris_df = morris_result.to_df()
+    elif isinstance(morris_result, pd.DataFrame):
+        morris_df = morris_result
+    else:
+        raise ValueError("Expected `MorrisResult` or `pd.DataFrame`.")
 
-    import plotly.graph_objects as go
+    morris_df["distance"] = np.sqrt(morris_df.mu_star**2 + morris_df.sigma**2)
+    morris_df["dimless_distance"] = morris_df["distance"] / morris_df["distance"].max()
 
     fig = go.Figure()
 
     fig.add_trace(
         go.Scatter(
-            x=morris_res.mu_star,
-            y=morris_res.sigma,
-            name="Morris index",
+            x=morris_df["mu_star"],
+            y=morris_df["sigma"],
             mode="markers+text",
-            text=list(morris_res.index),
+            name="Morris index",
+            text=list(morris_df.index),
             textposition="top center",
             marker=dict(
-                size=morris_res.dimless_distance * scaler,
-                color=np.arange(morris_res.shape[0]),
+                size=morris_df["dimless_distance"] * scaler,
+                color=np.arange(len(morris_df)),
             ),
             error_x=dict(
-                type="data",  # value of error bar given in data coordinates
-                array=morris_res.mu_star_conf,
+                type="data",
+                array=morris_df["mu_star_conf"],
                 color="#696969",
                 visible=True,
             ),
         )
     )
 
+    x_max = morris_df["mu_star"].max() * 1.1
     fig.add_trace(
         go.Scatter(
-            x=np.array([0, morris_res.mu_star.max() * 1.1]),
-            y=np.array([0, 0.1 * morris_res.mu_star.max() * 1.1]),
-            name="linear_lim",
+            x=[0, x_max],
+            y=[0, 0.1 * x_max],
+            name="linear",
             mode="lines",
-            line=dict(color="grey", dash="dash"),
+            line=dict(dash="dash", color="grey"),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[0, x_max],
+            y=[0, 0.5 * x_max],
+            name="monotonic",
+            mode="lines",
+            line=dict(dash="dot", color="grey"),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[0, x_max],
+            y=[0, x_max],
+            name="non-linear",
+            mode="lines",
+            line=dict(dash="dashdot", color="grey"),
         )
     )
 
-    fig.add_trace(
-        go.Scatter(
-            x=np.array([0, morris_res.mu_star.max() * 1.1]),
-            y=np.array([0, 0.5 * morris_res.mu_star.max() * 1.1]),
-            name="Monotonic limit",
-            mode="lines",
-            line=dict(color="grey", dash="dot"),
-        )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=np.array([0, morris_res.mu_star.max() * 1.1]),
-            y=np.array([0, 1 * morris_res.mu_star.max() * 1.1]),
-            name="Non linear limit",
-            mode="lines",
-            line=dict(color="grey", dash="dashdot"),
-        )
-    )
-
-    # Edit the layout
-    if title is not None:
-        title = title
-    else:
-        title = "Morris Sensitivity Analysis"
-
-    if autosize:
-        y_lim = [-morris_res.sigma.max() * 0.1, morris_res.sigma.max() * 1.5]
-    else:
-        y_lim = [-morris_res.sigma.max() * 0.1, morris_res.mu_star.max() * 1.1]
-
-    x_label = f"Absolute mean of elementary effects μ* [{unit}]"
-    y_label = f"Standard deviation of elementary effects σ [{unit}]"
-
+    y_max = morris_df["sigma"].max() * 1.5 if autosize else x_max
     fig.update_layout(
         title=title,
-        xaxis_title=x_label,
-        yaxis_title=y_label,
-        yaxis_range=y_lim,
+        xaxis_title=f"Absolute mean of elementary effects μ* [{unit}]",
+        yaxis_title=f"Standard deviation of elementary effects σ [{unit}]",
+        yaxis_range=[-0.1 * y_max, y_max],
     )
 
     return fig
