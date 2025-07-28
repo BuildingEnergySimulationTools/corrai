@@ -266,9 +266,6 @@ class MorrisSampler(RealSampler):
         super().__init__(parameters, model, simulation_options)
         self._dimless_values = None
 
-    def get_dimless_values(self):
-        return self._dimless_values
-
     def add_sample(
         self,
         N: int,
@@ -280,7 +277,6 @@ class MorrisSampler(RealSampler):
         morris_sample = morris_sampler.sample(
             self.get_salib_problem(), N, num_levels, **morris_kwargs
         )
-        self._dimless_values = morris_sample
         self._post_draw_sample(morris_sample, simulate, n_cpu)
 
 

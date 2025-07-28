@@ -46,10 +46,11 @@ METHOD_SAMPLER_DICT = {
 
 class Sanalysis(ABC):
     def __init__(
-        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None, x_needed:bool = False
     ):
         self.sampler = self._set_sampler(parameters, model, simulation_options)
         self.analyser = self._set_analyser()
+        self.x_needed = x_needed
 
     @property
     def parameters(self):
@@ -104,16 +105,14 @@ class Sanalysis(ABC):
             prefix=method,
         )
 
-        X = self.sampler.get_dimless_values()
+        if self.x_needed :
+            analyse_kwargs["X"] = self.sampler.get_dimless_values()
 
-        problem = self.sampler.get_salib_problem()
+        analyse_kwargs["problem"] = self.sampler.get_salib_problem()
 
         if freq is None:
-            Y = agg_result.to_numpy().flatten()
-            if X is not None:
-                res = self.analyser.analyze(problem=problem, X=X, Y=Y, **analyse_kwargs)
-            else:
-                res = self.analyser.analyze(problem=problem, Y=Y, **analyse_kwargs)
+            analyse_kwargs["Y"] = agg_result.to_numpy().flatten()
+            res = self.analyser.analyze(**analyse_kwargs)
             return pd.Series({f"{method}_{indicator}": res})
 
         else:
