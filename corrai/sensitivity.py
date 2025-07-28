@@ -13,7 +13,7 @@ from SALib.sample import fast_sampler, latin
 from SALib.sample import morris as morris_sampler
 
 from corrai.base.parameter import Parameter
-from corrai.base.sampling import SobolSampler
+from corrai.base.sampling import SobolSampler, MorrisSampler
 from corrai.base.model import Model
 from corrai.base.simulate import run_simulations
 from corrai.base.math import aggregate_time_series
@@ -100,27 +100,31 @@ class Sanalysis(ABC):
             prefix=method,
         )
 
+        X = self.sampler.get_dimless_values()
+
+        problem = self.sampler.get_salib_problem()
+
         if freq is None:
-            return pd.Series(
-                {
-                    f"{method}_{indicator}": self.analyser.analyze(
-                        problem=self.sampler.get_salib_problem(),
-                        Y=agg_result.to_numpy().flatten(),
-                        **analyse_kwargs,
-                    )
-                }
-            )
+            Y = agg_result.to_numpy().flatten()
+            if X is not None:
+                res = self.analyser.analyze(problem=problem, X=X, Y=Y, **analyse_kwargs)
+            else:
+                res = self.analyser.analyze(problem=problem, Y=Y, **analyse_kwargs)
+            return pd.Series({f"{method}_{indicator}": res})
+
         else:
-            return pd.Series(
-                {
-                    tstamp: self.analyser.analyze(
-                        problem=self.sampler.get_salib_problem(),
-                        Y=agg_result[tstamp].to_numpy().flatten(),
-                        **analyse_kwargs,
+            result_dict = {}
+            for tstamp in agg_result:
+                Y = agg_result[tstamp].to_numpy().flatten()
+                if X is not None:
+                    res = self.analyser.analyze(
+                        problem=problem, X=X, Y=Y, **analyse_kwargs
                     )
-                    for tstamp in agg_result
-                }
-            )
+                else:
+                    res = self.analyser.analyze(problem=problem, Y=Y, **analyse_kwargs)
+                result_dict[tstamp] = res
+
+            return pd.Series(result_dict)
 
 
 class SobolSanalysis(Sanalysis):
@@ -174,6 +178,56 @@ class SobolSanalysis(Sanalysis):
             reference_time_series=reference_time_series,
             freq=freq,
             calc_second_order=calc_second_order,
+            **analyse_kwargs,
+        )
+
+
+class MorrisSanalysis(Sanalysis):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options)
+
+    def _set_sampler(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        return MorrisSampler(parameters, model, simulation_options)
+
+    def _set_analyser(self):
+        return morris
+
+    # noinspection PyMethodOverriding
+    def add_sample(
+        self,
+        N: int,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        num_levels: int = 4,
+        **sample_kwargs,
+    ):
+        super().add_sample(
+            N=N,
+            simulate=simulate,
+            n_cpu=n_cpu,
+            num_levels=num_levels,
+            **sample_kwargs,
+        )
+
+    def analyze(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        **analyse_kwargs,
+    ):
+        return super().analyze(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
             **analyse_kwargs,
         )
 
