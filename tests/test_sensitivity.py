@@ -12,9 +12,9 @@ from corrai.sensitivity import Method, SobolSanalysis, MorrisSanalysis
 from corrai.sensitivity import ObjectiveFunction
 from corrai.sensitivity import SAnalysisLegacy
 from corrai.sensitivity import (
-    plot_sobol_st_bar,
-    plot_morris_st_bar,
-    plot_morris_scatter,
+    # plot_sobol_st_bar,
+    # plot_morris_st_bar,
+    # plot_morris_scatter,
     plot_sample,
 )
 
@@ -172,24 +172,21 @@ class TestPlots:
             y1,
             y2,
         )
-
         assert list(fig1.data[0].text) == list(fig2.data[0].text)
 
-        # fig = plot_morris_st_bar(res, distance_metric="absolute")
-        # assert (
-        #     fig["layout"]["title"]["text"]
-        #     == "Morris Sensitivity Analysis - euclidian Distance"
-        # )
-        # fig = plot_morris_st_bar(res)
-        # assert (
-        #     fig["layout"]["title"]["text"]
-        #     == "Morris Sensitivity Analysis - Normalized euclidian Distance"
-        # )
-        # with pytest.raises(
-        #     ValueError,
-        #     match="Distance metric must be either 'absolute' or 'normalized'",
-        # ):
-        #     plot_morris_st_bar(res, distance_metric="invalid_metric")
+        fig3 = morris_analysis_2.plot_bar(distance_metric="absolute")
+        assert (
+            fig3["layout"]["title"]["text"]
+            == "Morris Sensitivity Analysis – Absolute Euclidian distance"
+        )
+
+        fig4 = morris_analysis_2.plot_bar(distance_metric="normalized")
+        normalized_values = fig4["data"][0]["y"]
+        assert (
+            fig4["layout"]["title"]["text"]
+            == "Morris Sensitivity Analysis – Normalized Euclidian distance"
+        )
+        assert all(val <= 1 for val in normalized_values)
 
     # def test_dynamic_analysis_and_absolute(self):
     #     model = Ishigami()
