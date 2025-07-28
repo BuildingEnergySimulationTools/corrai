@@ -7,7 +7,7 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 from corrai.base.model import Model
 from corrai.base.parameter import Parameter
-from corrai.sensitivity import Method, SobolSanalysis
+from corrai.sensitivity import Method, SobolSanalysis, MorrisSanalysis
 from corrai.sensitivity import ObjectiveFunction
 from corrai.sensitivity import SAnalysisLegacy
 from corrai.sensitivity import (
@@ -81,7 +81,7 @@ def morris_res_mock():
 
 
 class TestSensitivity:
-    def test_sanalysis(self):
+    def test_sanalysis_sobol(self):
         sobol_analysis = SobolSanalysis(
             parameters=PARAMETER_LIST,
             model=Ishigami(),
@@ -108,6 +108,34 @@ class TestSensitivity:
         np.testing.assert_almost_equal(
             res["2009-01-01 00:00:00"]["S1"],
             np.array([1.02156668, 2.22878092, -1.41228784]),
+            decimal=3,
+        )
+
+    def test_sanalysis_morris(self):
+        morris_analysis = MorrisSanalysis(
+            parameters=PARAMETER_LIST,
+            model=Ishigami(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        morris_analysis.add_sample(N=2, n_cpu=1, seed=42)
+        res = morris_analysis.analyze("res")
+        np.testing.assert_almost_equal(
+            res["mean_res"]["mu"], np.array([1.45525800, 1.77635683e-15, 6.24879610])
+        )
+        assert len(res["mean_res"]["mu_star"]) == len(PARAMETER_LIST)
+
+        res = morris_analysis.analyze("res", freq="h")
+        assert res.index.tolist() == [
+            pd.Timestamp("2009-01-01 00:00:00"),
+            pd.Timestamp("2009-01-01 01:00:00"),
+            pd.Timestamp("2009-01-01 02:00:00"),
+            pd.Timestamp("2009-01-01 03:00:00"),
+            pd.Timestamp("2009-01-01 04:00:00"),
+            pd.Timestamp("2009-01-01 05:00:00"),
+        ]
+        np.testing.assert_almost_equal(
+            res["2009-01-01 00:00:00"]["mu"],
+            np.array([1.45525800, 1.77635683e-15, 6.24879610]),
             decimal=3,
         )
 
