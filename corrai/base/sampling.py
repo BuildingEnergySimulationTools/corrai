@@ -85,6 +85,13 @@ class Sample:
             for row in selected_values
         ]
 
+    def get_dimension_less_values(
+        self, idx: int | list[int] | np.ndarray | slice = slice(None)
+    ):
+        values = self[idx]["values"]
+        intervals = self.get_parameters_intervals()
+        return (values - intervals[:, 0]) / (intervals[:, 1] - intervals[:, 0])
+
     def add_samples(self, values: np.ndarray, results: list[pd.DataFrame] = None):
         n_samples, n_params = values.shape
         assert n_params == len(self.parameters), "Mismatch in number of parameters"
