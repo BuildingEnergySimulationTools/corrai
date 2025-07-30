@@ -164,9 +164,6 @@ class Sampler(ABC):
     def add_sample(self, *args, **kwargs) -> np.ndarray:
         pass
 
-    def get_dimless_values(self):
-        return None
-
     def _post_draw_sample(
         self,
         new_sample,

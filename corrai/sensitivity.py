@@ -46,7 +46,11 @@ METHOD_SAMPLER_DICT = {
 
 class Sanalysis(ABC):
     def __init__(
-        self, parameters: list[Parameter], model: Model, simulation_options: dict = None, x_needed:bool = False
+        self,
+        parameters: list[Parameter],
+        model: Model,
+        simulation_options: dict = None,
+        x_needed: bool = False,
     ):
         self.sampler = self._set_sampler(parameters, model, simulation_options)
         self.analyser = self._set_analyser()
@@ -75,10 +79,6 @@ class Sanalysis(ABC):
     def _set_analyser(self):
         pass
 
-    @abstractmethod
-    def calculate_specific_indicators(self):
-        pass
-
     def add_sample(
         self,
         simulate: bool = True,
@@ -105,8 +105,8 @@ class Sanalysis(ABC):
             prefix=method,
         )
 
-        if self.x_needed :
-            analyse_kwargs["X"] = self.sampler.get_dimless_values()
+        if self.x_needed:
+            analyse_kwargs["X"] = self.sampler.sample.get_dimension_less_values()
 
         analyse_kwargs["problem"] = self.sampler.get_salib_problem()
 
@@ -118,15 +118,9 @@ class Sanalysis(ABC):
         else:
             result_dict = {}
             for tstamp in agg_result:
-                Y = agg_result[tstamp].to_numpy().flatten()
-                if X is not None:
-                    res = self.analyser.analyze(
-                        problem=problem, X=X, Y=Y, **analyse_kwargs
-                    )
-                else:
-                    res = self.analyser.analyze(problem=problem, Y=Y, **analyse_kwargs)
+                analyse_kwargs["Y"] = agg_result[tstamp].to_numpy().flatten()
+                res = self.analyser.analyze(**analyse_kwargs)
                 result_dict[tstamp] = res
-
             return pd.Series(result_dict)
 
 
@@ -189,7 +183,7 @@ class MorrisSanalysis(Sanalysis):
     def __init__(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
     ):
-        super().__init__(parameters, model, simulation_options)
+        super().__init__(parameters, model, simulation_options, x_needed=True)
         self._analysis_cache = {}
 
     def _set_sampler(
