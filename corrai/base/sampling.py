@@ -106,6 +106,34 @@ class Sample:
 
         self.results = pd.concat([self.results, new_results], ignore_index=True)
 
+    def plot(
+        self,
+        indicator: str | None = None,
+        reference_timeseries: pd.Series | None = None,
+        title: str | None = None,
+        y_label: str | None = None,
+        x_label: str | None = None,
+        alpha: float = 0.5,
+        show_legends: bool = False,
+        round_ndigits: int = 2,
+    ) -> go.Figure:
+        if self.results is None:
+            raise ValueError("No results available to plot. Run a simulation first.")
+
+        return plot_sample(
+            results=self.results,
+            indicator=indicator,
+            reference_timeseries=reference_timeseries,
+            title=title,
+            y_label=y_label,
+            x_label=x_label,
+            alpha=alpha,
+            show_legends=show_legends,
+            parameter_values=self.values,
+            parameter_names=[p.name for p in self.parameters],
+            round_ndigits=round_ndigits,
+        )
+
 
 class Sampler(ABC):
     def __init__(
@@ -205,35 +233,6 @@ class Sampler(ABC):
             freq,
             prefix,
         )
-
-    def plot_sample(
-        self,
-        indicator: str | None = None,
-        reference_timeseries: pd.Series | None = None,
-        title: str | None = None,
-        y_label: str | None = None,
-        x_label: str | None = None,
-        alpha: float = 0.5,
-        show_legends: bool = False,
-        round_ndigits: int = 2,
-    ) -> go.Figure:
-        if self.results is None:
-            raise ValueError("No results available to plot. Run a simulation first.")
-
-        return plot_sample(
-            results=self.results,
-            indicator=indicator,
-            reference_timeseries=reference_timeseries,
-            title=title,
-            y_label=y_label,
-            x_label=x_label,
-            alpha=alpha,
-            show_legends=show_legends,
-            parameter_values=self.values,
-            parameter_names=[p.name for p in self.parameters],
-            round_ndigits=round_ndigits,
-        )
-
 
 class RealSampler(Sampler, ABC):
     def __init__(
