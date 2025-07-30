@@ -13,7 +13,7 @@ from SALib.sample import fast_sampler, latin
 from SALib.sample import morris as morris_sampler
 
 from corrai.base.parameter import Parameter
-from corrai.base.sampling import SobolSampler
+from corrai.base.sampling import SobolSampler, MorrisSampler
 from corrai.base.model import Model
 from corrai.base.simulate import run_simulations
 from corrai.base.math import aggregate_time_series
@@ -46,10 +46,15 @@ METHOD_SAMPLER_DICT = {
 
 class Sanalysis(ABC):
     def __init__(
-        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+        self,
+        parameters: list[Parameter],
+        model: Model,
+        simulation_options: dict = None,
+        x_needed: bool = False,
     ):
         self.sampler = self._set_sampler(parameters, model, simulation_options)
         self.analyser = self._set_analyser()
+        self.x_needed = x_needed
 
     @property
     def parameters(self):
@@ -100,27 +105,23 @@ class Sanalysis(ABC):
             prefix=method,
         )
 
+        if self.x_needed:
+            analyse_kwargs["X"] = self.sampler.sample.get_dimension_less_values()
+
+        analyse_kwargs["problem"] = self.sampler.get_salib_problem()
+
         if freq is None:
-            return pd.Series(
-                {
-                    f"{method}_{indicator}": self.analyser.analyze(
-                        problem=self.sampler.get_salib_problem(),
-                        Y=agg_result.to_numpy().flatten(),
-                        **analyse_kwargs,
-                    )
-                }
-            )
+            analyse_kwargs["Y"] = agg_result.to_numpy().flatten()
+            res = self.analyser.analyze(**analyse_kwargs)
+            return pd.Series({f"{method}_{indicator}": res})
+
         else:
-            return pd.Series(
-                {
-                    tstamp: self.analyser.analyze(
-                        problem=self.sampler.get_salib_problem(),
-                        Y=agg_result[tstamp].to_numpy().flatten(),
-                        **analyse_kwargs,
-                    )
-                    for tstamp in agg_result
-                }
-            )
+            result_dict = {}
+            for tstamp in agg_result:
+                analyse_kwargs["Y"] = agg_result[tstamp].to_numpy().flatten()
+                res = self.analyser.analyze(**analyse_kwargs)
+                result_dict[tstamp] = res
+            return pd.Series(result_dict)
 
 
 class SobolSanalysis(Sanalysis):
@@ -176,6 +177,109 @@ class SobolSanalysis(Sanalysis):
             calc_second_order=calc_second_order,
             **analyse_kwargs,
         )
+
+
+class MorrisSanalysis(Sanalysis):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options, x_needed=True)
+        self._analysis_cache = {}
+
+    def _set_sampler(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        return MorrisSampler(parameters, model, simulation_options)
+
+    def _set_analyser(self):
+        return morris
+
+    # noinspection PyMethodOverriding
+    def add_sample(
+        self,
+        N: int,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        num_levels: int = 4,
+        **sample_kwargs,
+    ):
+        super().add_sample(
+            N=N,
+            simulate=simulate,
+            n_cpu=n_cpu,
+            num_levels=num_levels,
+            **sample_kwargs,
+        )
+
+    def analyze(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        **analyse_kwargs,
+    ):
+        return super().analyze(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
+            **analyse_kwargs,
+        )
+
+    def calculate_specific_indicators(
+        self,
+        indicator: str = "res",
+        method: str = "mean",
+        freq: str | pd.Timedelta | dt.timedelta = None,
+    ):
+        current_analysis = f"{method}_{indicator}"
+        morris_res = self.analyze(indicator=indicator, method=method, freq=freq)
+        df = morris_res[current_analysis]
+        df["euclidian distance"] = np.sqrt(df["mu_star"] ** 2 + df["sigma"] ** 2)
+        df["euclidian distance"] = np.sqrt(df["mu_star"] ** 2 + df["sigma"] ** 2)
+        df["normalized euclidian distance"] = (
+            df["euclidian distance"] / df["euclidian distance"].sum()
+        )
+
+        return df
+
+    def plot_scatter(
+        self,
+        indicator: str = "res",
+        method: str = "mean",
+        title: str = "Morris Sensitivity Analysis",
+        unit: str = "",
+        scaler: float = 100,
+        autosize: bool = True,
+        **analyse_kwargs,
+    ):
+        cache_key = (indicator, method, "None")
+        if cache_key in self._analysis_cache:
+            result = self._analysis_cache[cache_key][f"{method}_{indicator}"]
+        else:
+            result = self.analyze(indicator=indicator, method=method, **analyse_kwargs)[
+                f"{method}_{indicator}"
+            ]
+            self._analysis_cache[cache_key] = {f"{method}_{indicator}": result}
+
+        return plot_morris_scatter(
+            result,
+            title=title,
+            unit=unit,
+            scaler=scaler,
+            autosize=autosize,
+        )
+
+    def plot_bar(
+        self, indicator="res", method="mean", freq="h", distance_metric="normalized"
+    ):
+        indicators = self.calculate_specific_indicators(
+            indicator=indicator, method=method, freq=None
+        )
+        return plot_morris_bar(indicators, distance_metric=distance_metric)
 
 
 #
@@ -757,150 +861,149 @@ def plot_sobol_st_bar(salib_res, normalize_dynamic=False):
     return fig
 
 
-def plot_morris_st_bar(salib_res, distance_metric="normalized"):
-    if distance_metric not in ["absolute", "normalized"]:
-        raise ValueError("Distance metric must be either 'absolute'" " or 'normalized'")
+def plot_morris_bar(morris_result, distance_metric="normalized", title=None):
+    """
+    Generate a bar plot of Morris sensitivity results based on Euclidian or Normalized distance.
 
-    salib_res = salib_res.to_df()
-    if distance_metric == "absolute":
-        dist = "euclidian distance"
-    else:
-        dist = "normalized euclidian distance"
-    salib_res.sort_values(by=dist, ascending=True, inplace=True)
+    Parameters
+    ----------
+    morris_result : pd.DataFrame or MorrisResult
+        The Morris sensitivity analysis result. Can be a DataFrame or an object with `.to_df()`.
+    distance_metric : {"absolute", "normalized"}, optional
+        Type of distance metric to use for the y-axis.
+    title : str, optional
+        Custom plot title.
 
-    if distance_metric == "absolute":
-        distance_values = salib_res["euclidian distance"]
-        distance_conf = None
-        title = "Morris Sensitivity Analysis - euclidian Distance"
-    else:
-        distance_values = salib_res["normalized euclidian distance"]
-        distance_conf = None
-        title = "Morris Sensitivity Analysis - Normalized euclidian Distance"
+    Returns
+    -------
+    plotly.graph_objects.Figure
+        Bar chart of the sensitivity results.
+    """
+    if distance_metric not in {"absolute", "normalized"}:
+        raise ValueError("distance_metric must be either 'absolute' or 'normalized'")
 
-    figure = go.Figure()
-    figure.add_trace(
+    if hasattr(morris_result, "to_df"):
+        morris_result = morris_result.to_df()
+
+    dist_col = (
+        "euclidian distance"
+        if distance_metric == "absolute"
+        else "normalized euclidian distance"
+    )
+
+    morris_result_sorted = morris_result.sort_values(by=dist_col, ascending=True)
+
+    fig = go.Figure()
+    fig.add_trace(
         go.Bar(
-            x=salib_res.index,
-            y=distance_values,
+            x=morris_result_sorted.index,
+            y=morris_result_sorted[dist_col],
             name=distance_metric.capitalize(),
             marker_color="orange",
-            error_y=dict(
-                type="data",
-                array=distance_conf.to_numpy() if distance_conf is not None else None,
-            ),
-            yaxis="y1",
         )
     )
 
-    figure.update_layout(
-        title=title,
+    fig.update_layout(
+        title=title
+        or f"Morris Sensitivity Analysis – {distance_metric.capitalize()} Euclidian distance",
         xaxis_title="Parameters",
-        yaxis_title=f"{distance_metric.capitalize()} (d)",
+        yaxis_title=f"{distance_metric.capitalize()} Euclidian distance",
     )
 
-    return figure
+    return fig
 
 
 def plot_morris_scatter(
-    salib_res,
-    title: str = None,
+    morris_result,
+    title: str = "Morris Sensitivity Analysis",
     unit: str = "",
-    scaler: int = 100,
+    scaler: float = 100,
     autosize: bool = True,
-):
+) -> go.Figure:
     """
-    This function generates a scatter plot for Morris sensitivity analysis results.
-    It displays the mean of elementary effects (μ*) on the x-axis and the standard
-    deviation of elementary effects (σ) on the y-axis.
-    Marker sizes and colors represent the 'distance' to the origin.
+    Plot a Morris sensitivity analysis scatter plot using μ* and σ.
 
-    Parameters:
-    - salib_res (pandas DataFrame): DataFrame containing sensitivity analysis results.
-    - title (str, optional): Title for the plot. If not provided, a default title
-    is used.
-    - unit (str, optional): Unit for the axes labels.
-    - scaler (int, optional): A scaling factor for marker sizes in the plot.
-    - autosize (bool, optional): Whether to automatically adjust the y-axis range.
-
+    Parameters
+    ----------
+    morris_result : MorrisResult or pd.DataFrame
+        Result from a Morris analysis (SALib or internal format).
+    title : str, optional
+        Plot title.
+    unit : str, optional
+        Unit for axis labels.
+    scaler : float, optional
+        Scaling factor for marker size.
+    autosize : bool, optional
+        Whether to autoscale y-axis (True: based on σ, False: based on μ*).
     """
-    morris_res = salib_res.to_df()
-    morris_res["distance"] = np.sqrt(morris_res.mu_star**2 + morris_res.sigma**2)
-    morris_res["dimless_distance"] = morris_res.distance / morris_res.distance.max()
+    if hasattr(morris_result, "to_df"):
+        morris_df = morris_result.to_df()
+    elif isinstance(morris_result, pd.DataFrame):
+        morris_df = morris_result
+    else:
+        raise ValueError("Expected `MorrisResult` or `pd.DataFrame`.")
 
-    import plotly.graph_objects as go
+    morris_df["distance"] = np.sqrt(morris_df.mu_star**2 + morris_df.sigma**2)
+    morris_df["dimless_distance"] = morris_df["distance"] / morris_df["distance"].max()
 
     fig = go.Figure()
 
     fig.add_trace(
         go.Scatter(
-            x=morris_res.mu_star,
-            y=morris_res.sigma,
-            name="Morris index",
+            x=morris_df["mu_star"],
+            y=morris_df["sigma"],
             mode="markers+text",
-            text=list(morris_res.index),
+            name="Morris index",
+            text=list(morris_df.index),
             textposition="top center",
             marker=dict(
-                size=morris_res.dimless_distance * scaler,
-                color=np.arange(morris_res.shape[0]),
+                size=morris_df["dimless_distance"] * scaler,
+                color=np.arange(len(morris_df)),
             ),
             error_x=dict(
-                type="data",  # value of error bar given in data coordinates
-                array=morris_res.mu_star_conf,
+                type="data",
+                array=morris_df["mu_star_conf"],
                 color="#696969",
                 visible=True,
             ),
         )
     )
 
+    x_max = morris_df["mu_star"].max() * 1.1
     fig.add_trace(
         go.Scatter(
-            x=np.array([0, morris_res.mu_star.max() * 1.1]),
-            y=np.array([0, 0.1 * morris_res.mu_star.max() * 1.1]),
-            name="linear_lim",
+            x=[0, x_max],
+            y=[0, 0.1 * x_max],
+            name="linear",
             mode="lines",
-            line=dict(color="grey", dash="dash"),
+            line=dict(dash="dash", color="grey"),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[0, x_max],
+            y=[0, 0.5 * x_max],
+            name="monotonic",
+            mode="lines",
+            line=dict(dash="dot", color="grey"),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[0, x_max],
+            y=[0, x_max],
+            name="non-linear",
+            mode="lines",
+            line=dict(dash="dashdot", color="grey"),
         )
     )
 
-    fig.add_trace(
-        go.Scatter(
-            x=np.array([0, morris_res.mu_star.max() * 1.1]),
-            y=np.array([0, 0.5 * morris_res.mu_star.max() * 1.1]),
-            name="Monotonic limit",
-            mode="lines",
-            line=dict(color="grey", dash="dot"),
-        )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=np.array([0, morris_res.mu_star.max() * 1.1]),
-            y=np.array([0, 1 * morris_res.mu_star.max() * 1.1]),
-            name="Non linear limit",
-            mode="lines",
-            line=dict(color="grey", dash="dashdot"),
-        )
-    )
-
-    # Edit the layout
-    if title is not None:
-        title = title
-    else:
-        title = "Morris Sensitivity Analysis"
-
-    if autosize:
-        y_lim = [-morris_res.sigma.max() * 0.1, morris_res.sigma.max() * 1.5]
-    else:
-        y_lim = [-morris_res.sigma.max() * 0.1, morris_res.mu_star.max() * 1.1]
-
-    x_label = f"Absolute mean of elementary effects μ* [{unit}]"
-    y_label = f"Standard deviation of elementary effects σ [{unit}]"
-
+    y_max = morris_df["sigma"].max() * 1.5 if autosize else x_max
     fig.update_layout(
         title=title,
-        xaxis_title=x_label,
-        yaxis_title=y_label,
-        yaxis_range=y_lim,
+        xaxis_title=f"Absolute mean of elementary effects μ* [{unit}]",
+        yaxis_title=f"Standard deviation of elementary effects σ [{unit}]",
+        yaxis_range=[-0.1 * y_max, y_max],
     )
 
     return fig

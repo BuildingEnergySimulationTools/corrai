@@ -238,6 +238,11 @@ def test_sample():
     np.testing.assert_allclose(sample.values[0], [9.9, 1.1, 88])
     assert not sample.results.iloc[0].empty
 
+    dimless_val = sample.get_dimension_less_values()
+    np.testing.assert_allclose(
+        dimless_val, np.array([[0.99, 0.75, 0.88], [0.3, 0.125, 0.2]])
+    )
+
     sample._validate()
 
 
