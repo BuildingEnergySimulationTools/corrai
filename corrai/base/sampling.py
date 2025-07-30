@@ -75,14 +75,7 @@ class Sample:
     def get_list_parameter_value_pairs(
         self, idx: int | list[int] | np.ndarray | slice = None
     ):
-        idx = slice(None) if idx is None else idx
-
-        if isinstance(idx, int) or (
-            isinstance(idx, list) and all(isinstance(x, bool) for x in idx)
-        ):
-            idx = np.array(idx)
-
-        selected_values = self.values[idx]
+        selected_values = self[idx]["values"]
 
         if selected_values.ndim == 1:
             selected_values = selected_values[np.newaxis, :]
