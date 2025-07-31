@@ -218,8 +218,8 @@ class MorrisSanalysis(Sanalysis):
         agg_method_kwarg: dict = None,
         reference_time_series: pd.Series = None,
         freq: str | pd.Timedelta | dt.timedelta = None,
-        **analyse_kwargs,
-    ):
+        **analyse_kwargs: object,
+    ) -> pd.Series:
         res = super().analyze(
             indicator=indicator,
             method=method,
@@ -268,19 +268,67 @@ class MorrisSanalysis(Sanalysis):
         indicator: str = "res",
         sensitivity_metric: str = "euclidian_distance",
         method: str = "mean",
-        unit:str = "",
+        unit: str = "",
         agg_method_kwarg: dict = None,
         title: str = None,
     ):
-        title = f"Morris {sensitivity_metric} {method} {indicator}" if title is None else title
+        title = (
+            f"Morris {sensitivity_metric} {method} {indicator}"
+            if title is None
+            else title
+        )
         res = self.analyze(indicator, method, agg_method_kwarg)[f"{method}_{indicator}"]
 
         return plot_bars(
             pd.Series(
                 data=res[sensitivity_metric],
                 index=res["names"],
-                name=f"{sensitivity_metric} {unit}"),
-            title=title
+                name=f"{sensitivity_metric} {unit}",
+            ),
+            title=title,
+        )
+
+    def plot_dynamic_metric(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "euclidian_distance",
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        method: str = "mean",
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        title: str = None,
+    ):
+        title = (
+            f"Morris dynamic {sensitivity_metric} {method} {indicator}"
+            if title is None
+            else title
+        )
+
+        if freq is None:
+            freq = pd.infer_freq(self.sampler.results[0].index)
+            if freq is None:
+                raise ValueError(
+                    "freq is not specified and cannot be inferred"
+                    "from results. Specify freq for analyse"
+                )
+
+        res = self.analyze(
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq,
+        )
+
+        metrics = pd.DataFrame(
+            data=[val[sensitivity_metric] for val in res],
+            columns=res.iloc[0]["names"],
+            index=res.index,
+        )
+
+        return plot_dynamic_metric(
+            metrics, sensitivity_metric, unit, title, stacked=False
         )
 
 
@@ -767,106 +815,37 @@ class SAnalysisLegacy:
             raise ValueError("Invalid method")
 
 
-def plot_sobol_st_bar(salib_res, normalize_dynamic=False):
-    """
-    Plot Sobol total sensitivity indices (ST) as a bar chart or a dynamic line chart.
-
-    This function automatically detects whether the input is a static or dynamic result,
-    and adjusts the plot accordingly. For dynamic results, it also detects if the indices
-    are absolute (i.e., multiplied by output variance) and adapts the y-axis label.
-
-    Parameters
-    ----------
-    salib_res : SALib.analyze._results.SobolResults | dict
-        The result object returned by a SALib Sobol analysis.
-        - For static analysis: a SobolResults object (e.g., `sanalysis.sensitivity_results`)
-        - For dynamic analysis: a dictionary of time-indexed results (e.g., `sanalysis.sensitivity_dynamic_results`),
-          where each value must contain keys "ST" and "names", and optionally "_absolute" to indicate absolute mode.
-    normalize_dynamic : bool, optional
-        If True, normalizes dynamic results to percentages and plots a cumulative graph (0 to 1).
-    """
-
-    if isinstance(salib_res, dict) and isinstance(next(iter(salib_res.values())), dict):
-        try:
-            df_to_plot = pd.DataFrame(
-                {
-                    t: pd.Series(res["ST"], index=res["names"])
-                    for t, res in salib_res.items()
-                }
-            ).T
-        except KeyError:
-            raise ValueError(
-                "ST index not found in dynamic results. Ensure 'ST' and 'names' are present."
-            )
-        absolute = "_absolute" in next(iter(salib_res.values()))
-
-        if normalize_dynamic:
-            df_to_plot = df_to_plot.div(df_to_plot.sum(axis=1), axis=0)
-
-        df_to_plot.index.name = "Time"
-        df_to_plot.columns.name = "Parameter"
-
-        fig = go.Figure()
-        for param in df_to_plot.columns:
-            fig.add_trace(
-                go.Scatter(
-                    x=df_to_plot.index,
-                    y=df_to_plot[param],
-                    name=param,
-                    mode="lines",
-                    stackgroup="one" if normalize_dynamic else None,
-                )
-            )
-
-        yaxis_title = (
-            "Cumulative percentage [0-1]"
-            if normalize_dynamic
-            else (
-                "Absolute Sobol contribution"
-                if absolute
-                else "Sobol total index value [0-1]"
-            )
-        )
-
-        fig.update_layout(
-            title="Sobol ST indices (dynamic)",
-            xaxis_title="Time",
-            yaxis_title=yaxis_title,
-        )
-        return fig
-
-    sobol_ind = salib_res.to_df()[0]
-    sobol_ind.sort_values(by="ST", ascending=True, inplace=True)
-
-    absolute = sobol_ind.ST.max() > 1.0
-
+def plot_dynamic_metric(
+    metrics: pd.DataFrame,
+    metric_name: str = "",
+    unit: str = "",
+    title: str = None,
+    stacked: bool = False,
+):
     fig = go.Figure()
-    fig.add_trace(
-        go.Bar(
-            x=sobol_ind.index,
-            y=sobol_ind.ST,
-            name="Sobol Total Indices",
-            marker_color="orange",
-            error_y=dict(type="data", array=sobol_ind.ST_conf.to_numpy()),
-            yaxis="y1",
+    for param in metrics.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=metrics.index,
+                y=metrics[param],
+                name=param,
+                mode="lines",
+                stackgroup="one" if stacked else None,
+            )
         )
-    )
 
     fig.update_layout(
-        title="Sobol Total indices",
-        xaxis_title="Parameters",
-        yaxis_title="Absolute Sobol contribution"
-        if absolute
-        else "Sobol total index value [0-1]",
+        title=title,
+        xaxis_title="Time",
+        yaxis_title=f"{metric_name} {unit}",
     )
 
     return fig
 
 
 def plot_bars(
-    sensitivity_results: pd.Series, title: str = None, error: pd.Series=None
+    sensitivity_results: pd.Series, title: str = None, error: pd.Series = None
 ):
-
     error = {} if error is None else dict(type="data", array=error.values)
     fig = go.Figure()
     fig.add_trace(
