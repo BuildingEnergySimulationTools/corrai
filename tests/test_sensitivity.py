@@ -1,10 +1,12 @@
-import numpy as np
 import pytest
-import pandas as pd
 import copy
-from scipy.optimize import minimize
+
+import numpy as np
+import pandas as pd
 
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+from scipy.optimize import minimize
+
 
 from corrai.base.model import Model
 from corrai.base.parameter import Parameter
@@ -119,10 +121,33 @@ class TestSensitivity:
             simulation_options=SIMULATION_OPTIONS,
         )
         morris_analysis.add_sample(N=2, n_cpu=1, seed=42)
+        pd.testing.assert_frame_equal(
+            morris_analysis.sampler.get_aggregate_time_series("res"),
+            pd.DataFrame(
+                {
+                    "aggregated_res": {
+                        0: 5.250000000000186,
+                        1: 4.2798279944936946,
+                        2: -0.970172005506723,
+                        3: -9.301900143286739,
+                        4: 0.9701720055067234,
+                        5: 2.316952686764885e-13,
+                        6: 5.250000000000647,
+                        7: 5.250000000002636,
+                    }
+                }
+            ),
+        )
+
         res = morris_analysis.analyze("res")
         np.testing.assert_almost_equal(
             res["mean_res"]["mu"], np.array([1.45525800, 1.77635683e-15, 6.24879610])
         )
+        np.testing.assert_almost_equal(
+            res["mean_res"]["euclidian_distance"],
+            np.array([1.455258008259737, 13.63990010960599, 10.823232337117245]),
+        )
+
         assert len(res["mean_res"]["mu_star"]) == len(PARAMETER_LIST)
 
         res = morris_analysis.analyze("res", freq="h")

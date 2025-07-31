@@ -220,7 +220,7 @@ class MorrisSanalysis(Sanalysis):
         freq: str | pd.Timedelta | dt.timedelta = None,
         **analyse_kwargs,
     ):
-        return super().analyze(
+        res = super().analyze(
             indicator=indicator,
             method=method,
             agg_method_kwarg=agg_method_kwarg,
@@ -229,22 +229,12 @@ class MorrisSanalysis(Sanalysis):
             **analyse_kwargs,
         )
 
-    def calculate_specific_indicators(
-        self,
-        indicator: str = "res",
-        method: str = "mean",
-        freq: str | pd.Timedelta | dt.timedelta = None,
-    ):
-        current_analysis = f"{method}_{indicator}"
-        morris_res = self.analyze(indicator=indicator, method=method, freq=freq)
-        df = morris_res[current_analysis]
-        df["euclidian distance"] = np.sqrt(df["mu_star"] ** 2 + df["sigma"] ** 2)
-        df["euclidian distance"] = np.sqrt(df["mu_star"] ** 2 + df["sigma"] ** 2)
-        df["normalized euclidian distance"] = (
-            df["euclidian distance"] / df["euclidian distance"].sum()
-        )
+        for idx in res.index:
+            res[idx]["euclidian_distance"] = np.sqrt(
+                res[idx]["mu_star"] ** 2 + res[idx]["sigma"] ** 2
+            )
 
-        return df
+        return res
 
     def plot_scatter(
         self,
@@ -274,12 +264,24 @@ class MorrisSanalysis(Sanalysis):
         )
 
     def plot_bar(
-        self, indicator="res", method="mean", freq="h", distance_metric="normalized"
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "euclidian_distance",
+        method: str = "mean",
+        unit:str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
     ):
-        indicators = self.calculate_specific_indicators(
-            indicator=indicator, method=method, freq=None
+        title = f"Morris {sensitivity_metric} {method} {indicator}" if title is None else title
+        res = self.analyze(indicator, method, agg_method_kwarg)[f"{method}_{indicator}"]
+
+        return plot_bars(
+            pd.Series(
+                data=res[sensitivity_metric],
+                index=res["names"],
+                name=f"{sensitivity_metric} {unit}"),
+            title=title
         )
-        return plot_morris_bar(indicators, distance_metric=distance_metric)
 
 
 #
@@ -861,53 +863,26 @@ def plot_sobol_st_bar(salib_res, normalize_dynamic=False):
     return fig
 
 
-def plot_morris_bar(morris_result, distance_metric="normalized", title=None):
-    """
-    Generate a bar plot of Morris sensitivity results based on Euclidian or Normalized distance.
+def plot_bars(
+    sensitivity_results: pd.Series, title: str = None, error: pd.Series=None
+):
 
-    Parameters
-    ----------
-    morris_result : pd.DataFrame or MorrisResult
-        The Morris sensitivity analysis result. Can be a DataFrame or an object with `.to_df()`.
-    distance_metric : {"absolute", "normalized"}, optional
-        Type of distance metric to use for the y-axis.
-    title : str, optional
-        Custom plot title.
-
-    Returns
-    -------
-    plotly.graph_objects.Figure
-        Bar chart of the sensitivity results.
-    """
-    if distance_metric not in {"absolute", "normalized"}:
-        raise ValueError("distance_metric must be either 'absolute' or 'normalized'")
-
-    if hasattr(morris_result, "to_df"):
-        morris_result = morris_result.to_df()
-
-    dist_col = (
-        "euclidian distance"
-        if distance_metric == "absolute"
-        else "normalized euclidian distance"
-    )
-
-    morris_result_sorted = morris_result.sort_values(by=dist_col, ascending=True)
-
+    error = {} if error is None else dict(type="data", array=error.values)
     fig = go.Figure()
     fig.add_trace(
         go.Bar(
-            x=morris_result_sorted.index,
-            y=morris_result_sorted[dist_col],
-            name=distance_metric.capitalize(),
+            x=sensitivity_results.index,
+            y=sensitivity_results.values,
+            error_y=error,
+            name=sensitivity_results.name,
             marker_color="orange",
         )
     )
 
     fig.update_layout(
-        title=title
-        or f"Morris Sensitivity Analysis – {distance_metric.capitalize()} Euclidian distance",
+        title=title,
         xaxis_title="Parameters",
-        yaxis_title=f"{distance_metric.capitalize()} Euclidian distance",
+        yaxis_title=f"{sensitivity_results.name}",
     )
 
     return fig

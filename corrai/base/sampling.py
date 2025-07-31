@@ -231,6 +231,7 @@ class Sampler(ABC):
             prefix,
         )
 
+
 class RealSampler(Sampler, ABC):
     def __init__(
         self,
