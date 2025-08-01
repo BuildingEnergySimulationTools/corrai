@@ -130,15 +130,24 @@ class Sanalysis(ABC):
         sensitivity_method_name: str,
         method: str = "mean",
         unit: str = "",
+        reference_time_series: pd.Series = None,
         agg_method_kwarg: dict = None,
         title: str = None,
+        **analyse_kwarg,
     ):
         title = (
             f"{sensitivity_method_name} {sensitivity_metric} {method} {indicator}"
             if title is None
             else title
         )
-        res = self.analyze(indicator, method, agg_method_kwarg)[f"{method}_{indicator}"]
+        res = self.analyze(
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq=None,
+            **analyse_kwarg,
+        )[f"{method}_{indicator}"]
 
         return plot_bars(
             pd.Series(
@@ -160,6 +169,7 @@ class Sanalysis(ABC):
         agg_method_kwarg: dict = None,
         reference_time_series: pd.Series = None,
         title: str = None,
+        **analyse_kwarg,
     ):
         title = (
             f"{sensitivity_method_name} dynamic {sensitivity_metric} {method} {indicator}"
@@ -181,6 +191,7 @@ class Sanalysis(ABC):
             agg_method_kwarg,
             reference_time_series,
             freq,
+            **analyse_kwarg,
         )
 
         metrics = pd.DataFrame(
