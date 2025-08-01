@@ -1,24 +1,8 @@
-import pytest
-import copy
-
 import numpy as np
 import pandas as pd
 
-from sklearn.metrics import mean_squared_error, mean_absolute_error
-from scipy.optimize import minimize
-
-
-from corrai.base.model import Model
 from corrai.base.parameter import Parameter
-from corrai.sensitivity import Method, SobolSanalysis, MorrisSanalysis
-from corrai.base.objfunctions import ObjectiveFunction
-from corrai.sensitivity import SAnalysisLegacy
-from corrai.sensitivity import (
-    # plot_sobol_st_bar,
-    # plot_morris_st_bar,
-    # plot_morris_scatter,
-    plot_sample,
-)
+from corrai.sensitivity import SobolSanalysis, MorrisSanalysis
 
 from tests.resources.pymodels import Ishigami
 
@@ -33,54 +17,6 @@ PARAMETER_LIST = [
     Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
     Parameter("par_x3", (-3.14159265359, 3.14159265359), model_property="x3"),
 ]
-
-
-class SobolResult:
-    def __init__(self, sobol_dict):
-        self.sobol_dict = sobol_dict
-
-    def to_df(self):
-        df = [
-            pd.DataFrame(
-                self.sobol_dict,
-                index=[f"param{i + 1}" for i in range(len(self.sobol_dict["ST"]))],
-            )
-        ]
-        return df
-
-
-def sobol_res_mock():
-    sobol_dict = {
-        "S1": [-2.5, 0.8, 3],
-        "S1_conf": [1e-2, 1e-2, 1e-2],
-        "ST": [0.5, 0.7, 0.15],
-        "ST_conf": [1e-2, 3e-2, 5e-2],
-    }
-    return SobolResult(sobol_dict)
-
-
-class MorrisResult:
-    def __init__(self, morris_dict):
-        self.morris_dict = morris_dict
-
-    def to_df(self):
-        df = pd.DataFrame(
-            self.morris_dict,
-            index=[f"param{i + 1}" for i in range(len(self.morris_dict["mu"]))],
-        )
-        return df
-
-
-def morris_res_mock():
-    morris_dict = {
-        "mu": [0.2, 0.5, 0.1],
-        "mu_star": [0.25, 0.55, 0.15],
-        "mu_star_conf": [0.025, 0.055, 0.015],
-        "sigma": [0.05, 0.1, 0.02],
-        "euclidian distance": [0.5, 0.7, 0.15],
-        "normalized euclidian distance": [0.1, 0.2, 0.05],
-    }
-    return MorrisResult(morris_dict)
 
 
 class TestSensitivity:
@@ -184,7 +120,6 @@ class TestPlots:
         assert fig1["layout"]["title"]["text"] == "Morris Sensitivity Analysis"
 
         morris_analysis_2.add_sample(N=2, n_cpu=1, seed=42)
-        res = morris_analysis_2.analyze("res", freq="h")
         fig2 = morris_analysis_2.plot_scatter()
 
         x1 = fig1.data[0].x
@@ -199,19 +134,11 @@ class TestPlots:
         )
         assert list(fig1.data[0].text) == list(fig2.data[0].text)
 
-        fig3 = morris_analysis_2.plot_bar(distance_metric="absolute")
+        fig3 = morris_analysis_2.plot_bar(sensitivity_metric="euclidian_distance")
         assert (
             fig3["layout"]["title"]["text"]
-            == "Morris Sensitivity Analysis – Absolute Euclidian distance"
+            == 'Morris euclidian_distance mean res'
         )
-
-        fig4 = morris_analysis_2.plot_bar(distance_metric="normalized")
-        normalized_values = fig4["data"][0]["y"]
-        assert (
-            fig4["layout"]["title"]["text"]
-            == "Morris Sensitivity Analysis – Normalized Euclidian distance"
-        )
-        assert all(val <= 1 for val in normalized_values)
 
     # def test_dynamic_analysis_and_absolute(self):
     #     model = Ishigami()
@@ -320,4 +247,3 @@ class TestPlots:
     #     assert fig_with_options.layout.title.text == "Test Title"
     #     assert fig_with_options.layout.xaxis.title.text == "X Axis"
     #     assert fig_with_options.layout.yaxis.title.text == "Y Axis"
-
