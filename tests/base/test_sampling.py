@@ -126,274 +126,234 @@ ISHIGAMI_PARAMETERS = [
 ]
 
 
-def test_plot_sample():
-    t = pd.date_range("2025-01-01 00:00:00", periods=2, freq="h")
-    df1 = pd.DataFrame({"res": [1.0, 2.0]}, index=t)
-    df2 = pd.DataFrame({"res": [3.0, 4.0]}, index=t)
-    df3 = pd.DataFrame({"res": [5.0, 6.0]}, index=t)
-    results = pd.Series([df1, df2, df3])
-    ref = pd.Series([2.0, 2.0], index=t)
+class TestSample:
+    def test_plot_sample(self):
+        t = pd.date_range("2025-01-01 00:00:00", periods=2, freq="h")
+        df1 = pd.DataFrame({"res": [1.0, 2.0]}, index=t)
+        df2 = pd.DataFrame({"res": [3.0, 4.0]}, index=t)
+        df3 = pd.DataFrame({"res": [5.0, 6.0]}, index=t)
+        results = pd.Series([df1, df2, df3])
+        ref = pd.Series([2.0, 2.0], index=t)
 
-    param_names = ["p1", "p2"]
-    param_values = np.array([[1.1, 2.2], [3.3, 4.4], [5.5, 6.6]])
+        param_names = ["p1", "p2"]
+        param_values = np.array([[1.1, 2.2], [3.3, 4.4], [5.5, 6.6]])
 
-    fig = plot_sample(
-        results=results,
-        reference_timeseries=ref,
-        title="test",
-        x_label="time",
-        y_label="value",
-        alpha=0.3,
-        show_legends=True,
-        parameter_values=param_values,
-        parameter_names=param_names,
-    )
-    assert isinstance(fig, go.Figure)
-    assert len(fig.data) == 4
-    np.testing.assert_allclose(fig.data[0]["y"], df1["res"].to_numpy())
-    np.testing.assert_allclose(fig.data[-1]["y"], ref.to_numpy())
+        fig = plot_sample(
+            results=results,
+            reference_timeseries=ref,
+            title="test",
+            x_label="time",
+            y_label="value",
+            alpha=0.3,
+            show_legends=True,
+            parameter_values=param_values,
+            parameter_names=param_names,
+        )
+        assert isinstance(fig, go.Figure)
+        assert len(fig.data) == 4
+        np.testing.assert_allclose(fig.data[0]["y"], df1["res"].to_numpy())
+        np.testing.assert_allclose(fig.data[-1]["y"], ref.to_numpy())
 
-    assert fig.data[0].name == "p1: 1.1, p2: 2.2"
-    assert fig.data[1].name == "p1: 3.3, p2: 4.4"
-    assert fig.data[2].name == "p1: 5.5, p2: 6.6"
-    fig.show()
+        assert fig.data[0].name == "p1: 1.1, p2: 2.2"
+        assert fig.data[1].name == "p1: 3.3, p2: 4.4"
+        assert fig.data[2].name == "p1: 5.5, p2: 6.6"
+        fig.show()
 
-    df_multi = pd.concat(
-        [df1.rename(columns={"res": "a"}), df2.rename(columns={"res": "b"})], axis=1
-    )
-    results_multi = pd.Series([df_multi])
-    with pytest.raises(ValueError, match="Provide `indicator`: multiple columns"):
-        plot_sample(results=results_multi)
-    fig_a = plot_sample(results=results_multi, indicator="a")
-    y_values = np.array(fig_a.data[0].y)
-    np.testing.assert_allclose(y_values, df_multi["a"].to_numpy())
+        df_multi = pd.concat(
+            [df1.rename(columns={"res": "a"}), df2.rename(columns={"res": "b"})], axis=1
+        )
+        results_multi = pd.Series([df_multi])
+        with pytest.raises(ValueError, match="Provide `indicator`: multiple columns"):
+            plot_sample(results=results_multi)
+        fig_a = plot_sample(results=results_multi, indicator="a")
+        y_values = np.array(fig_a.data[0].y)
+        np.testing.assert_allclose(y_values, df_multi["a"].to_numpy())
 
-    # empty Series
-    with pytest.raises(ValueError):
-        plot_sample(results=pd.Series(dtype=object))
+        # empty Series
+        with pytest.raises(ValueError):
+            plot_sample(results=pd.Series(dtype=object))
 
-    # Partial simulation
-    empty_df = pd.DataFrame({"res": []})
-    results_partial = pd.Series([empty_df, df1, empty_df])
-    fig_partial = plot_sample(results=results_partial, indicator="res")
+        # Partial simulation
+        empty_df = pd.DataFrame({"res": []})
+        results_partial = pd.Series([empty_df, df1, empty_df])
+        fig_partial = plot_sample(results=results_partial, indicator="res")
 
-    # Only 1 non-empty sample
-    assert len(fig_partial.data) == 1
-    np.testing.assert_allclose(fig_partial.data[0]["y"], df1["res"].to_numpy())
+        # Only 1 non-empty sample
+        assert len(fig_partial.data) == 1
+        np.testing.assert_allclose(fig_partial.data[0]["y"], df1["res"].to_numpy())
 
-    # All results empty and no reference
-    results_all_empty = pd.Series([empty_df, empty_df])
-    with pytest.raises(ValueError, match="No simulated data available to plot."):
-        plot_sample(results_all_empty, indicator="res")
+        # All results empty and no reference
+        results_all_empty = pd.Series([empty_df, empty_df])
+        with pytest.raises(ValueError, match="No simulated data available to plot."):
+            plot_sample(results_all_empty, indicator="res")
 
-    # All results empty but with reference
-    fig_ref_only = plot_sample(
-        results_all_empty, indicator="res", reference_timeseries=ref
-    )
-    assert len(fig_ref_only.data) == 1
-    np.testing.assert_allclose(fig_ref_only.data[0]["y"], ref.to_numpy())
+        # All results empty but with reference
+        fig_ref_only = plot_sample(
+            results_all_empty, indicator="res", reference_timeseries=ref
+        )
+        assert len(fig_ref_only.data) == 1
+        np.testing.assert_allclose(fig_ref_only.data[0]["y"], ref.to_numpy())
+
+    def test_sample(self):
+        sample = Sample(REAL_PARAM)
+        assert sample.values.shape == (0, 3)
+        pd.testing.assert_series_equal(sample.results, pd.Series())
+
+        sample.add_samples(
+            np.array([[1, 0.9, 10], [3, 0.85, 20]]),
+            [
+                pd.DataFrame(),
+                pd.DataFrame(
+                    {"res": [1, 2]}, index=pd.date_range("2009", freq="h", periods=2)
+                ),
+            ],
+        )
+
+        assert sample.get_pending_index().tolist() == [True, False]
+        assert sample.values.tolist() == [[1.0, 0.9, 10.0], [3.0, 0.85, 20.0]]
+        assert sample.get_parameters_intervals().tolist() == [
+            [0.0, 10.0],
+            [0.8, 1.2],
+            [0.0, 100.0],
+        ]
+        assert sample.get_list_parameter_value_pairs(sample.get_pending_index()) == [
+            [(REAL_PARAM[0], 1.0), (REAL_PARAM[1], 0.9), (REAL_PARAM[2], 10.0)],
+        ]
+
+        assert len(sample) == 2
+
+        item = sample[1]
+        assert isinstance(item, dict)
+        assert np.allclose(item["values"], [3.0, 0.85, 20.0])
+        pd.testing.assert_frame_equal(item["results"], sample.results.iloc[1])
+
+        new_result = pd.DataFrame({"res": [42]}, index=pd.date_range("2009", periods=1))
+        sample[1] = {"results": new_result}
+        pd.testing.assert_frame_equal(sample.results.iloc[1], new_result)
+
+        sample[0] = {
+            "values": np.array([9.9, 1.1, 88]),
+            "results": pd.DataFrame({"res": [123]}, index=[pd.Timestamp("2009-01-01")]),
+        }
+        np.testing.assert_allclose(sample.values[0], [9.9, 1.1, 88])
+        assert not sample.results.iloc[0].empty
+
+        dimless_val = sample.get_dimension_less_values()
+        np.testing.assert_allclose(
+            dimless_val, np.array([[0.99, 0.75, 0.88], [0.3, 0.125, 0.2]])
+        )
+
+        pd.testing.assert_frame_equal(
+            sample.get_aggregate_time_series("res"),
+            pd.DataFrame([123.0, 42.0], [0, 1], columns=["aggregated_res"]),
+        )
+
+        fig = sample.plot_hist('res')
+        assert fig.layout.title["text"] == "Sample distribution of mean res"
+        assert fig.layout.xaxis.title["text"] == 'mean res '
+
+        fig = sample.plot('res')
+        assert fig
 
 
-def test_sample():
-    sample = Sample(REAL_PARAM)
-    assert sample.values.shape == (0, 3)
-    pd.testing.assert_series_equal(sample.results, pd.Series())
+        sample._validate()
 
-    sample.add_samples(
-        np.array([[1, 0.9, 10], [3, 0.85, 20]]),
-        [
-            pd.DataFrame(),
-            pd.DataFrame(
-                {"res": [1, 2]}, index=pd.date_range("2009", freq="h", periods=2)
+    def test_lhc_sampler(self):
+        sampler = LHCSampler(
+            parameters=REAL_PARAM,
+            model=Pymodel(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        sampler.add_sample(3, 42, False)
+        np.testing.assert_allclose(
+            sampler.sample.values,
+            np.array(
+                [
+                    [6.9441, 1.0785, 70.7802],
+                    [5.6356, 0.9393, 27.4968],
+                    [0.0112, 0.8330, 61.6539],
+                ]
             ),
-        ],
-    )
+            rtol=0.01,
+        )
 
-    assert sample.get_pending_index().tolist() == [True, False]
-    assert sample.values.tolist() == [[1.0, 0.9, 10.0], [3.0, 0.85, 20.0]]
-    assert sample.get_parameters_intervals().tolist() == [
-        [0.0, 10.0],
-        [0.8, 1.2],
-        [0.0, 100.0],
-    ]
-    assert sample.get_list_parameter_value_pairs(sample.get_pending_index()) == [
-        [(REAL_PARAM[0], 1.0), (REAL_PARAM[1], 0.9), (REAL_PARAM[2], 10.0)],
-    ]
+        sampler.simulate_pending()
 
-    assert len(sample) == 2
+        assert {k: i.values.tolist() for k, i in sampler.results.items()} == {
+            0: [[85.75934698790918]],
+            1: [[38.08478803524709]],
+            2: [[61.67268698504139]],
+        }
 
-    item = sample[1]
-    assert isinstance(item, dict)
-    assert np.allclose(item["values"], [3.0, 0.85, 20.0])
-    pd.testing.assert_frame_equal(item["results"], sample.results.iloc[1])
+        sampler.add_sample(3, rng=42, simulate=False)
+        assert sampler.values.shape == (6, 3)
+        assert all(df.empty for df in sampler.results[-3:].values)
 
-    new_result = pd.DataFrame({"res": [42]}, index=pd.date_range("2009", periods=1))
-    sample[1] = {"results": new_result}
-    pd.testing.assert_frame_equal(sample.results.iloc[1], new_result)
+        sampler.simulate_at(4)
+        assert [df.empty for df in sampler.results[-3:].values] == [True, False, True]
 
-    sample[0] = {
-        "values": np.array([9.9, 1.1, 88]),
-        "results": pd.DataFrame({"res": [123]}, index=[pd.Timestamp("2009-01-01")]),
-    }
-    np.testing.assert_allclose(sample.values[0], [9.9, 1.1, 88])
-    assert not sample.results.iloc[0].empty
+        sampler.simulate_at([3, 5])
+        assert {k: i.values.tolist() for k, i in sampler.results[-3:].items()} == {
+            3: [[85.75934698790918]],
+            4: [[38.08478803524709]],
+            5: [[61.67268698504139]],
+        }
 
-    dimless_val = sample.get_dimension_less_values()
-    np.testing.assert_allclose(
-        dimless_val, np.array([[0.99, 0.75, 0.88], [0.3, 0.125, 0.2]])
-    )
+        sampler.add_sample(3, rng=42, simulate=False)
 
-    sample._validate()
+        sampler.simulate_at(slice(4, 7))
+        assert [df.empty for df in sampler.results[-3:].values] == [False, True, True]
 
+        sampler.add_sample(3, simulate=False)
+        sampler.simulate_at(slice(10, None))
+        assert [df.empty for df in sampler.results[-3:].values] == [True, False, False]
 
-def test_lhc_sampler():
-    sampler = LHCSampler(
-        parameters=REAL_PARAM, model=Pymodel(), simulation_options=SIMULATION_OPTIONS
-    )
-    sampler.add_sample(3, 42, False)
-    np.testing.assert_allclose(
-        sampler.sample.values,
-        np.array(
-            [
-                [6.9441, 1.0785, 70.7802],
-                [5.6356, 0.9393, 27.4968],
-                [0.0112, 0.8330, 61.6539],
-            ]
-        ),
-        rtol=0.01,
-    )
+        sampler.add_sample(3, simulate=True)
+        assert all(not df.empty for df in sampler.results[-3:])
 
-    sampler.simulate_pending()
+    def test_morris_sampler(self):
+        sampler = MorrisSampler(
+            parameters=ISHIGAMI_PARAMETERS,
+            model=Ishigami(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
 
-    assert {k: i.values.tolist() for k, i in sampler.results.items()} == {
-        0: [[85.75934698790918]],
-        1: [[38.08478803524709]],
-        2: [[61.67268698504139]],
-    }
+        sampler.add_sample(N=1, **{"seed": 42})
+        np.testing.assert_allclose(
+            sampler.values,
+            np.array(
+                [
+                    [3.14159265, 1.04719755, 1.04719755],
+                    [-1.04719755, 1.04719755, 1.04719755],
+                    [-1.04719755, -3.14159265, 1.04719755],
+                    [-1.04719755, -3.14159265, -3.14159265],
+                ]
+            ),
+        )
 
-    sampler.add_sample(3, rng=42, simulate=False)
-    assert sampler.values.shape == (6, 3)
-    assert all(df.empty for df in sampler.results[-3:].values)
+    def test_sobol_sampler(self):
+        sampler = SobolSampler(
+            parameters=ISHIGAMI_PARAMETERS,
+            model=Ishigami(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
 
-    sampler.simulate_at(4)
-    assert [df.empty for df in sampler.results[-3:].values] == [True, False, True]
-
-    sampler.simulate_at([3, 5])
-    assert {k: i.values.tolist() for k, i in sampler.results[-3:].items()} == {
-        3: [[85.75934698790918]],
-        4: [[38.08478803524709]],
-        5: [[61.67268698504139]],
-    }
-
-    sampler.add_sample(3, rng=42, simulate=False)
-
-    sampler.simulate_at(slice(4, 7))
-    assert [df.empty for df in sampler.results[-3:].values] == [False, True, True]
-
-    sampler.add_sample(3, simulate=False)
-    sampler.simulate_at(slice(10, None))
-    assert [df.empty for df in sampler.results[-3:].values] == [True, False, False]
-
-    sampler.add_sample(3, simulate=True)
-    assert all(not df.empty for df in sampler.results[-3:])
-
-
-def test_morris_sampler():
-    sampler = MorrisSampler(
-        parameters=ISHIGAMI_PARAMETERS,
-        model=Ishigami(),
-        simulation_options=SIMULATION_OPTIONS,
-    )
-
-    sampler.add_sample(N=1, **{"seed": 42})
-    np.testing.assert_allclose(
-        sampler.values,
-        np.array(
-            [
-                [3.14159265, 1.04719755, 1.04719755],
-                [-1.04719755, 1.04719755, 1.04719755],
-                [-1.04719755, -3.14159265, 1.04719755],
-                [-1.04719755, -3.14159265, -3.14159265],
-            ]
-        ),
-    )
-
-
-def test_sobol_sampler():
-    sampler = SobolSampler(
-        parameters=ISHIGAMI_PARAMETERS,
-        model=Ishigami(),
-        simulation_options=SIMULATION_OPTIONS,
-    )
-
-    sampler.add_sample(N=1, **{"seed": 42})
-    np.testing.assert_allclose(
-        sampler.values,
-        np.array(
-            [
-                [-0.43335459, 1.97523222, 1.92524819],
-                [-2.8057144, 1.97523222, 1.92524819],
-                [-0.43335459, -1.26958525, 1.92524819],
-                [-0.43335459, 1.97523222, 2.13551644],
-                [-0.43335459, -1.26958525, 2.13551644],
-                [-2.8057144, 1.97523222, 2.13551644],
-                [-2.8057144, -1.26958525, 1.92524819],
-                [-2.8057144, -1.26958525, 2.13551644],
-            ]
-        ),
-    )
-
-
-def test_expand_parameter_dict():
-    parameters_to_expand_dict = {
-        "options_expanded": 6,
-        "options_expanded_bis": "bad",
-    }
-    expanded_dict = expand_parameter_dict(parameters_to_expand_dict, params_mappings)
-
-    expected_dict = {
-        "Parameter1": 6,
-        "Parameter2": 6,
-        "Parameter4": 25,
-    }
-    assert expanded_dict == expected_dict
-
-
-def test_get_mapped_bounds():
-    param_list = [
-        {
-            Parameter.NAME: "SHGC",
-            Parameter.INTERVAL: [0.2, 0.6],
-            Parameter.TYPE: "Real",
-        },
-        {
-            Parameter.NAME: "UFactor",
-            Parameter.INTERVAL: [1.2, 2.4],
-            Parameter.TYPE: "Real",
-        },
-    ]
-
-    param_mapping = {
-        "SHGC": [
-            "idf.WindowMaterial:SimpleGlazingSystem.GLAZING_1.Solar_Heat_Gain_Coefficient",
-            "idf.WindowMaterial:SimpleGlazingSystem.GLAZING_2.Solar_Heat_Gain_Coefficient",
-        ],
-        "UFactor": [
-            "idf.WindowMaterial:SimpleGlazingSystem.GLAZING_1.UFactor",
-            "idf.WindowMaterial:SimpleGlazingSystem.GLAZING_2.UFactor",
-        ],
-    }
-
-    bounds = get_mapped_bounds(param_list, param_mapping)
-
-    expected_bounds = [
-        (0.2, 0.6),
-        (0.2, 0.6),
-        (1.2, 2.4),
-        (1.2, 2.4),
-    ]
-
-    assert bounds == expected_bounds
+        sampler.add_sample(N=1, **{"seed": 42})
+        np.testing.assert_allclose(
+            sampler.values,
+            np.array(
+                [
+                    [-0.43335459, 1.97523222, 1.92524819],
+                    [-2.8057144, 1.97523222, 1.92524819],
+                    [-0.43335459, -1.26958525, 1.92524819],
+                    [-0.43335459, 1.97523222, 2.13551644],
+                    [-0.43335459, -1.26958525, 2.13551644],
+                    [-2.8057144, 1.97523222, 2.13551644],
+                    [-2.8057144, -1.26958525, 1.92524819],
+                    [-2.8057144, -1.26958525, 2.13551644],
+                ]
+            ),
+        )
 
 
 class ModelVariant(Model):
