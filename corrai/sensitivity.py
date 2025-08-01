@@ -96,7 +96,7 @@ class Sanalysis(ABC):
         freq: str = None,
         **analyse_kwargs,
     ):
-        agg_result = self.sampler.get_aggregate_time_series(
+        agg_result = self.sampler.sample.get_aggregate_time_series(
             indicator,
             method,
             agg_method_kwarg,

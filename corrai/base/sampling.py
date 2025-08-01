@@ -13,6 +13,8 @@ import plotly.io as pio
 import plotly.graph_objects as go
 import datetime as dt
 
+import plotly.figure_factory as ff
+
 from scipy.stats.qmc import LatinHypercube
 from SALib.sample import morris as morris_sampler
 from SALib.sample import sobol as sobol_sampler
@@ -105,6 +107,63 @@ class Sample:
             new_results = pd.Series(results, dtype=object)
 
         self.results = pd.concat([self.results, new_results], ignore_index=True)
+
+    def get_aggregate_time_series(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        prefix: str = "aggregated",
+    ) -> pd.DataFrame:
+        return aggregate_time_series(
+            self.results,
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq,
+            prefix,
+        )
+
+    def plot_hist(
+        self,
+        indicator: str,
+        method: str = "mean",
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        bin_size: float = 1.0,
+        colors: str = "orange",
+        show_rug: bool = False,
+        title: str = None,
+    ):
+        res = self.get_aggregate_time_series(
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq=None,
+            prefix=method,
+        )
+
+        fig = ff.create_distplot(
+            [res.squeeze().to_numpy()],
+            [f"{method}_{indicator}"],
+            bin_size=bin_size,
+            colors=[colors],
+            show_rug=show_rug,
+        )
+
+        title = (
+            f"Sample distribution of {method} {indicator}" if title is None else title
+        )
+        fig.update_layout(
+            title=title,
+            xaxis_title=f"{method} {indicator} {unit}",
+        )
+        return fig
 
     def plot(
         self,
@@ -211,25 +270,6 @@ class Sampler(ABC):
     def simulate_pending(self, n_cpu: int = 1, simulation_kwargs: dict = None):
         unsimulated_idx = self.sample.get_pending_index()
         self.simulate_at(unsimulated_idx, n_cpu, simulation_kwargs)
-
-    def get_aggregate_time_series(
-        self,
-        indicator: str,
-        method: str = "mean",
-        agg_method_kwarg: dict = None,
-        reference_time_series: pd.Series = None,
-        freq: str | pd.Timedelta | dt.timedelta = None,
-        prefix: str = "aggregated",
-    ) -> pd.DataFrame:
-        return aggregate_time_series(
-            self.results,
-            indicator,
-            method,
-            agg_method_kwarg,
-            reference_time_series,
-            freq,
-            prefix,
-        )
 
 
 class RealSampler(Sampler, ABC):
