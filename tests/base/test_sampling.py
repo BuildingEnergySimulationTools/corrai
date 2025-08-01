@@ -248,13 +248,12 @@ class TestSample:
             pd.DataFrame([123.0, 42.0], [0, 1], columns=["aggregated_res"]),
         )
 
-        fig = sample.plot_hist('res')
+        fig = sample.plot_hist("res")
         assert fig.layout.title["text"] == "Sample distribution of mean res"
-        assert fig.layout.xaxis.title["text"] == 'mean res '
+        assert fig.layout.xaxis.title["text"] == "mean res "
 
-        fig = sample.plot('res')
+        fig = sample.plot("res")
         assert fig
-
 
         sample._validate()
 

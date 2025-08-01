@@ -135,10 +135,7 @@ class TestPlots:
         assert list(fig1.data[0].text) == list(fig2.data[0].text)
 
         fig3 = morris_analysis_2.plot_bar(sensitivity_metric="euclidian_distance")
-        assert (
-            fig3["layout"]["title"]["text"]
-            == 'Morris euclidian_distance mean res'
-        )
+        assert fig3["layout"]["title"]["text"] == "Morris euclidian_distance mean res"
 
     # def test_dynamic_analysis_and_absolute(self):
     #     model = Ishigami()

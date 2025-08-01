@@ -8,6 +8,7 @@ from corrai.base.model import Model
 from corrai.base.parameter import Parameter
 from corrai.base.objfunctions import ObjectiveFunction
 
+
 class IshigamiTwoOutputs(Model):
     def simulate(self, property_dict, simulation_options):
         A1 = 7.0
