@@ -123,6 +123,76 @@ class Sanalysis(ABC):
                 result_dict[tstamp] = res
             return pd.Series(result_dict)
 
+    def salib_plot_bar(
+        self,
+        indicator: str,
+        sensitivity_metric: str,
+        sensitivity_method_name: str,
+        method: str = "mean",
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+    ):
+        title = (
+            f"{sensitivity_method_name} {sensitivity_metric} {method} {indicator}"
+            if title is None
+            else title
+        )
+        res = self.analyze(indicator, method, agg_method_kwarg)[f"{method}_{indicator}"]
+
+        return plot_bars(
+            pd.Series(
+                data=res[sensitivity_metric],
+                index=res["names"],
+                name=f"{sensitivity_metric} {unit}",
+            ),
+            title=title,
+        )
+
+    def salib_plot_dynamic_metric(
+        self,
+        indicator: str,
+        sensitivity_metric: str,
+        sensitivity_method_name: str,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        method: str = "mean",
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        title: str = None,
+    ):
+        title = (
+            f"{sensitivity_method_name} dynamic {sensitivity_metric} {method} {indicator}"
+            if title is None
+            else title
+        )
+
+        if freq is None:
+            freq = pd.infer_freq(self.sampler.results[0].index)
+            if freq is None:
+                raise ValueError(
+                    "freq is not specified and cannot be inferred"
+                    "from results. Specify freq for analyse"
+                )
+
+        res = self.analyze(
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq,
+        )
+
+        metrics = pd.DataFrame(
+            data=[val[sensitivity_metric] for val in res],
+            columns=res.iloc[0]["names"],
+            index=res.index,
+        )
+
+        return plot_dynamic_metric(
+            metrics, sensitivity_metric, unit, title, stacked=False
+        )
+
 
 class SobolSanalysis(Sanalysis):
     def __init__(
@@ -272,20 +342,14 @@ class MorrisSanalysis(Sanalysis):
         agg_method_kwarg: dict = None,
         title: str = None,
     ):
-        title = (
-            f"Morris {sensitivity_metric} {method} {indicator}"
-            if title is None
-            else title
-        )
-        res = self.analyze(indicator, method, agg_method_kwarg)[f"{method}_{indicator}"]
-
-        return plot_bars(
-            pd.Series(
-                data=res[sensitivity_metric],
-                index=res["names"],
-                name=f"{sensitivity_metric} {unit}",
-            ),
-            title=title,
+        return super().salib_plot_bar(
+            indicator,
+            sensitivity_metric,
+            "Morris",
+            method,
+            unit,
+            agg_method_kwarg,
+            title,
         )
 
     def plot_dynamic_metric(
@@ -299,106 +363,17 @@ class MorrisSanalysis(Sanalysis):
         reference_time_series: pd.Series = None,
         title: str = None,
     ):
-        title = (
-            f"Morris dynamic {sensitivity_metric} {method} {indicator}"
-            if title is None
-            else title
-        )
-
-        if freq is None:
-            freq = pd.infer_freq(self.sampler.results[0].index)
-            if freq is None:
-                raise ValueError(
-                    "freq is not specified and cannot be inferred"
-                    "from results. Specify freq for analyse"
-                )
-
-        res = self.analyze(
+        return super().salib_plot_dynamic_metric(
             indicator,
+            sensitivity_metric,
+            "Morris",
+            freq,
             method,
+            unit,
             agg_method_kwarg,
             reference_time_series,
-            freq,
+            title,
         )
-
-        metrics = pd.DataFrame(
-            data=[val[sensitivity_metric] for val in res],
-            columns=res.iloc[0]["names"],
-            index=res.index,
-        )
-
-        return plot_dynamic_metric(
-            metrics, sensitivity_metric, unit, title, stacked=False
-        )
-
-
-#
-#
-# class SobolSanalysis:
-#     def __init__(
-#         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
-#     ):
-#         self.sampler = SobolSampler(parameters, model, simulation_options)
-#
-#     def add_sample(
-#         self,
-#         N: int,
-#         simulate: bool = True,
-#         n_cpu: int = 1,
-#         *,
-#         calc_second_order: bool = True,
-#         scramble: bool = True,
-#         **sobol_kwargs,
-#     ):
-#         self.sampler.add_sample(
-#             N,
-#             simulate,
-#             n_cpu,
-#             calc_second_order=calc_second_order,
-#             scramble=scramble,
-#             **sobol_kwargs,
-#         )
-#
-#     def analyze(
-#         self,
-#         indicator: str,
-#         method: str = "mean",
-#         agg_method_kwarg: dict = None,
-#         reference_time_series: pd.Series = None,
-#         sensitivity_method_kwargs: dict = None,
-#         freq: str = None,
-#     ):
-#         agg_result = self.sampler.get_aggregate_time_series(
-#             indicator,
-#             method,
-#             agg_method_kwarg,
-#             reference_time_series,
-#             freq,
-#             prefix=method,
-#         )
-#
-#         if freq is None:
-#             return pd.Series(
-#                 {
-#                     f"{method}_{indicator}": sobol.analyze(
-#                         problem=self.sampler.get_salib_problem(),
-#                         Y=agg_result.to_numpy().flatten(),
-#                         **sensitivity_method_kwargs,
-#                     )
-#                 }
-#             )
-#
-#         else:
-#             return pd.Series(
-#                 {
-#                     tstamp: sobol.analyze(
-#                         problem=self.sampler.get_salib_problem(),
-#                         Y=agg_result[tstamp].to_numpy().flatten(),
-#                         **sensitivity_method_kwargs,
-#                     )
-#                     for tstamp in agg_result
-#                 }
-#             )
 
 
 class SAnalysisLegacy:
