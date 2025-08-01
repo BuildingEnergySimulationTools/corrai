@@ -356,6 +356,195 @@ class SobolSampler(RealSampler):
         self._post_draw_sample(new_sample, simulate, n_cpu)
 
 
+def plot_sample(
+    results: pd.Series,  # Series d'objets (Series ou DataFrame)
+    indicator: str | None = None,
+    reference_timeseries: pd.Series | None = None,
+    title: str | None = None,
+    y_label: str | None = None,
+    x_label: str | None = None,
+    alpha: float = 0.5,
+    show_legends: bool = False,
+    parameter_values: np.ndarray | None = None,
+    parameter_names: list[str] | None = None,
+    round_ndigits: int = 2,
+) -> go.Figure:
+    """
+    Plot all available (non-empty) simulation results contained in a Series, optionally
+    annotating each trace legend with the corresponding parameter values.
+
+    Parameters
+    ----------
+    results : pd.Series
+        A pandas Series where each element is either a pandas Series or a pandas DataFrame
+        (typically 1 column per indicator). Empty elements are ignored.
+    indicator : str, optional
+        Column name to use if inner elements are DataFrames with multiple columns.
+        If None and the DataFrame has exactly one column, that column is used.
+    reference_timeseries : pd.Series, optional
+        A reference time series to plot alongside simulations.
+    title, y_label, x_label : str, optional
+        Plot title and axis labels.
+    alpha : float, default 0.5
+        Opacity for the markers.
+    show_legends : bool, default False
+        Whether to show a legend per sample trace.
+    parameter_values : np.ndarray, optional
+        Array of shape (n_samples, n_params) with the parameter values used per sample.
+        Only used to build legend strings when `show_legends=True`.
+    parameter_names : list[str], optional
+        Names of the parameters (same order as in `parameter_values`).
+    round_ndigits : int, default 2
+        Number of digits for rounding parameter values in legend strings.
+
+    Returns
+    -------
+    go.Figure
+    """
+
+    if not isinstance(results, pd.Series):
+        raise ValueError("`results` must be a pandas Series.")
+    if results.empty:
+        raise ValueError("`results` is empty. Simulate samples first.")
+
+    def _to_series(obj, indicator_):
+        if isinstance(obj, pd.Series):
+            return obj
+        if isinstance(obj, pd.DataFrame):
+            if obj.empty:
+                return None
+            if indicator_ is None:
+                if obj.shape[1] != 1:
+                    raise ValueError(
+                        "Provide `indicator`: multiple columns in the sample DataFrame."
+                    )
+                return obj.iloc[:, 0]
+            return obj[indicator_]
+        return None
+
+    def _legend_for(i: int) -> str:
+        if not show_legends:
+            return "Simulations"
+        if parameter_values is None or parameter_names is None:
+            return f"sample {i}"
+        vals = parameter_values[i]
+        return ", ".join(
+            f"{n}: {round(v, round_ndigits)}" for n, v in zip(parameter_names, vals)
+        )
+
+    fig = go.Figure()
+    plotted = 0
+
+    for i, sample in enumerate(results):
+        s = _to_series(sample, indicator)
+        if s is None or s.empty:
+            continue
+        fig.add_trace(
+            go.Scattergl(
+                name=_legend_for(i),
+                mode="markers",
+                x=s.index,
+                y=s.to_numpy(),
+                marker=dict(color=f"rgba(135,135,135,{alpha})"),
+                showlegend=show_legends,
+            )
+        )
+        plotted += 1
+
+    if plotted == 0 and reference_timeseries is None:
+        raise ValueError("No simulated data available to plot.")
+
+    if reference_timeseries is not None:
+        fig.add_trace(
+            go.Scattergl(
+                name="Reference",
+                mode="lines",
+                x=reference_timeseries.index,
+                y=reference_timeseries.to_numpy(),
+                marker=dict(color="red"),
+                showlegend=True,
+            )
+        )
+
+    fig.update_layout(
+        title=title,
+        xaxis_title=x_label,
+        yaxis_title=y_label,
+        showlegend=show_legends or (reference_timeseries is not None),
+    )
+    return fig
+
+
+def plot_pcp(
+    sample_results,
+    param_sample,
+    parameters,
+    indicators,
+    aggregation_method=np.mean,
+    html_file_path=None,
+):
+    """
+    Plots a parallel coordinate plot for sensitivity analysis results.
+      Notes
+    -----
+    - The function handles categorical parameters by converting them to numerical
+      codes using `pandas.Categorical`. The tick values are shifted slightly to
+      improve readability.
+    - The first indicator in the list is used to color the lines in the plot.
+    - The function requires the Plotly library (`plotly.graph_objects`) to create
+      the interactive plot.
+    """
+    data_dict = [
+        {param[Parameter.NAME]: value for param, value in zip(parameters, sample)}
+        for sample in param_sample
+    ]
+
+    if isinstance(indicators, str):
+        indicators = [indicators]
+
+    for i, df in enumerate(sample_results):
+        for indicator in indicators:
+            if indicator in df.columns:
+                data_dict[i][indicator] = aggregation_method(df[indicator])
+
+    df_plot = pd.DataFrame(data_dict)
+    dim_list = []
+
+    for col in df_plot.select_dtypes(include="object").columns:
+        cat = pd.Categorical(df_plot[col])
+        df_plot[col] = cat.codes
+        dim_list.append(
+            dict(
+                range=[0, len(cat.categories) - 1],
+                label=col,
+                tickvals=list(set(cat.codes)),
+                ticktext=list(cat.categories),
+                values=df_plot[col].tolist(),
+            )
+        )
+
+    for col in indicators:
+        dim_list.append(dict(label=col, values=df_plot[col].tolist()))
+
+    color_indicator = indicators[0] if indicators else None
+
+    fig = go.Figure(
+        data=go.Parcoords(
+            line=dict(
+                color=df_plot[color_indicator],
+                colorscale="Plasma",
+                showscale=True,
+            ),
+            dimensions=dim_list,
+        )
+    )
+
+    if html_file_path:
+        pio.write_html(fig, html_file_path)
+
+    return fig
+
+
 # def get_mapped_bounds(uncertain_param_list, param_mappings):
 #     """
 #     Return actual bounds (min, max) of all parameters after applying param_mappings.
@@ -729,192 +918,3 @@ class SobolSampler(RealSampler):
 #             comb for comb in self.sample if comb not in self.not_simulated_combinations
 #         ]
 #         self.not_simulated_combinations = []
-
-
-def plot_sample(
-    results: pd.Series,  # Series d'objets (Series ou DataFrame)
-    indicator: str | None = None,
-    reference_timeseries: pd.Series | None = None,
-    title: str | None = None,
-    y_label: str | None = None,
-    x_label: str | None = None,
-    alpha: float = 0.5,
-    show_legends: bool = False,
-    parameter_values: np.ndarray | None = None,
-    parameter_names: list[str] | None = None,
-    round_ndigits: int = 2,
-) -> go.Figure:
-    """
-    Plot all available (non-empty) simulation results contained in a Series, optionally
-    annotating each trace legend with the corresponding parameter values.
-
-    Parameters
-    ----------
-    results : pd.Series
-        A pandas Series where each element is either a pandas Series or a pandas DataFrame
-        (typically 1 column per indicator). Empty elements are ignored.
-    indicator : str, optional
-        Column name to use if inner elements are DataFrames with multiple columns.
-        If None and the DataFrame has exactly one column, that column is used.
-    reference_timeseries : pd.Series, optional
-        A reference time series to plot alongside simulations.
-    title, y_label, x_label : str, optional
-        Plot title and axis labels.
-    alpha : float, default 0.5
-        Opacity for the markers.
-    show_legends : bool, default False
-        Whether to show a legend per sample trace.
-    parameter_values : np.ndarray, optional
-        Array of shape (n_samples, n_params) with the parameter values used per sample.
-        Only used to build legend strings when `show_legends=True`.
-    parameter_names : list[str], optional
-        Names of the parameters (same order as in `parameter_values`).
-    round_ndigits : int, default 2
-        Number of digits for rounding parameter values in legend strings.
-
-    Returns
-    -------
-    go.Figure
-    """
-
-    if not isinstance(results, pd.Series):
-        raise ValueError("`results` must be a pandas Series.")
-    if results.empty:
-        raise ValueError("`results` is empty. Simulate samples first.")
-
-    def _to_series(obj, indicator_):
-        if isinstance(obj, pd.Series):
-            return obj
-        if isinstance(obj, pd.DataFrame):
-            if obj.empty:
-                return None
-            if indicator_ is None:
-                if obj.shape[1] != 1:
-                    raise ValueError(
-                        "Provide `indicator`: multiple columns in the sample DataFrame."
-                    )
-                return obj.iloc[:, 0]
-            return obj[indicator_]
-        return None
-
-    def _legend_for(i: int) -> str:
-        if not show_legends:
-            return "Simulations"
-        if parameter_values is None or parameter_names is None:
-            return f"sample {i}"
-        vals = parameter_values[i]
-        return ", ".join(
-            f"{n}: {round(v, round_ndigits)}" for n, v in zip(parameter_names, vals)
-        )
-
-    fig = go.Figure()
-    plotted = 0
-
-    for i, sample in enumerate(results):
-        s = _to_series(sample, indicator)
-        if s is None or s.empty:
-            continue
-        fig.add_trace(
-            go.Scattergl(
-                name=_legend_for(i),
-                mode="markers",
-                x=s.index,
-                y=s.to_numpy(),
-                marker=dict(color=f"rgba(135,135,135,{alpha})"),
-                showlegend=show_legends,
-            )
-        )
-        plotted += 1
-
-    if plotted == 0 and reference_timeseries is None:
-        raise ValueError("No simulated data available to plot.")
-
-    if reference_timeseries is not None:
-        fig.add_trace(
-            go.Scattergl(
-                name="Reference",
-                mode="lines",
-                x=reference_timeseries.index,
-                y=reference_timeseries.to_numpy(),
-                marker=dict(color="red"),
-                showlegend=True,
-            )
-        )
-
-    fig.update_layout(
-        title=title,
-        xaxis_title=x_label,
-        yaxis_title=y_label,
-        showlegend=show_legends or (reference_timeseries is not None),
-    )
-    return fig
-
-
-def plot_pcp(
-    sample_results,
-    param_sample,
-    parameters,
-    indicators,
-    aggregation_method=np.mean,
-    html_file_path=None,
-):
-    """
-    Plots a parallel coordinate plot for sensitivity analysis results.
-      Notes
-    -----
-    - The function handles categorical parameters by converting them to numerical
-      codes using `pandas.Categorical`. The tick values are shifted slightly to
-      improve readability.
-    - The first indicator in the list is used to color the lines in the plot.
-    - The function requires the Plotly library (`plotly.graph_objects`) to create
-      the interactive plot.
-    """
-    data_dict = [
-        {param[Parameter.NAME]: value for param, value in zip(parameters, sample)}
-        for sample in param_sample
-    ]
-
-    if isinstance(indicators, str):
-        indicators = [indicators]
-
-    for i, df in enumerate(sample_results):
-        for indicator in indicators:
-            if indicator in df.columns:
-                data_dict[i][indicator] = aggregation_method(df[indicator])
-
-    df_plot = pd.DataFrame(data_dict)
-    dim_list = []
-
-    for col in df_plot.select_dtypes(include="object").columns:
-        cat = pd.Categorical(df_plot[col])
-        df_plot[col] = cat.codes
-        dim_list.append(
-            dict(
-                range=[0, len(cat.categories) - 1],
-                label=col,
-                tickvals=list(set(cat.codes)),
-                ticktext=list(cat.categories),
-                values=df_plot[col].tolist(),
-            )
-        )
-
-    for col in indicators:
-        dim_list.append(dict(label=col, values=df_plot[col].tolist()))
-
-    color_indicator = indicators[0] if indicators else None
-
-    fig = go.Figure(
-        data=go.Parcoords(
-            line=dict(
-                color=df_plot[color_indicator],
-                colorscale="Plasma",
-                showscale=True,
-            ),
-            dimensions=dim_list,
-        )
-    )
-
-    if html_file_path:
-        pio.write_html(fig, html_file_path)
-
-    return fig
