@@ -1,42 +1,14 @@
-import enum
 from abc import ABC, abstractmethod
 
 import datetime as dt
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from SALib.analyze import fast, morris, sobol, rbd_fast
-from SALib.sample import sobol as sobol_sampler
-from SALib.sample import fast_sampler, latin
-from SALib.sample import morris as morris_sampler
+from SALib.analyze import morris, sobol
 
 from corrai.base.parameter import Parameter
 from corrai.base.sampling import SobolSampler, MorrisSampler
 from corrai.base.model import Model
-
-
-class Method(enum.Enum):
-    FAST = "FAST"
-    MORRIS = "MORRIS"
-    SOBOL = "SOBOL"
-    RBD_FAST = "RBD_FAST"
-
-
-METHOD_SAMPLER_DICT = {
-    Method.FAST: {
-        "method": fast,
-        "sampling": fast_sampler,
-    },
-    Method.MORRIS: {"method": morris, "sampling": morris_sampler},
-    Method.SOBOL: {
-        "method": sobol,
-        "sampling": sobol_sampler,
-    },
-    Method.RBD_FAST: {
-        "method": rbd_fast,
-        "sampling": latin,
-    },
-}
 
 
 class Sanalysis(ABC):
@@ -147,7 +119,7 @@ class Sanalysis(ABC):
         return plot_bars(
             pd.Series(
                 data=res[sensitivity_metric],
-                index=res["names"],
+                index=[par.name for par in self.sampler.sample.parameters],
                 name=f"{sensitivity_metric} {unit}",
             ),
             title=title,
@@ -164,6 +136,7 @@ class Sanalysis(ABC):
         agg_method_kwarg: dict = None,
         reference_time_series: pd.Series = None,
         title: str = None,
+        stacked: bool = False,
         **analyse_kwarg,
     ):
         title = (
@@ -191,13 +164,11 @@ class Sanalysis(ABC):
 
         metrics = pd.DataFrame(
             data=[val[sensitivity_metric] for val in res],
-            columns=res.iloc[0]["names"],
+            columns=[par.name for par in self.sampler.sample.parameters],
             index=res.index,
         )
 
-        return plot_dynamic_metric(
-            metrics, sensitivity_metric, unit, title, stacked=False
-        )
+        return plot_dynamic_metric(metrics, sensitivity_metric, unit, title, stacked)
 
 
 class SobolSanalysis(Sanalysis):
@@ -252,6 +223,57 @@ class SobolSanalysis(Sanalysis):
             freq=freq,
             calc_second_order=calc_second_order,
             **analyse_kwargs,
+        )
+
+    def plot_bar(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "ST",
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        calc_second_order: bool = True,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwargs,
+    ):
+        return super().salib_plot_bar(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="Sobol",
+            method=method,
+            unit=unit,
+            reference_time_series=reference_time_series,
+            agg_method_kwarg=agg_method_kwarg,
+            title=title,
+            calc_second_order=calc_second_order,
+            **analyse_kwargs,
+        )
+
+    def plot_dynamic_metric(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "ST",
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        calc_second_order: bool = True,
+        title: str = None,
+    ):
+        return super().salib_plot_dynamic_metric(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="Morris",
+            freq=freq,
+            method=method,
+            unit=unit,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            calc_second_order=calc_second_order,
+            stacked=True,
+            title=title,
         )
 
 
@@ -316,6 +338,8 @@ class MorrisSanalysis(Sanalysis):
         self,
         indicator: str = "res",
         method: str = "mean",
+        reference_time_series: pd.Series = None,
+        agg_method_kwarg: dict = None,
         title: str = "Morris Sensitivity Analysis",
         unit: str = "",
         scaler: float = 100,
@@ -326,9 +350,13 @@ class MorrisSanalysis(Sanalysis):
         if cache_key in self._analysis_cache:
             result = self._analysis_cache[cache_key][f"{method}_{indicator}"]
         else:
-            result = self.analyze(indicator=indicator, method=method, **analyse_kwargs)[
-                f"{method}_{indicator}"
-            ]
+            result = self.analyze(
+                indicator=indicator,
+                method=method,
+                reference_time_series=reference_time_series,
+                agg_method_kwarg=agg_method_kwarg,
+                **analyse_kwargs,
+            )[f"{method}_{indicator}"]
             self._analysis_cache[cache_key] = {f"{method}_{indicator}": result}
 
         return plot_morris_scatter(
@@ -344,18 +372,22 @@ class MorrisSanalysis(Sanalysis):
         indicator: str = "res",
         sensitivity_metric: str = "euclidian_distance",
         method: str = "mean",
+        reference_time_series: pd.Series = None,
         unit: str = "",
         agg_method_kwarg: dict = None,
         title: str = None,
+        **analyse_kwargs,
     ):
         return super().salib_plot_bar(
-            indicator,
-            sensitivity_metric,
-            "Morris",
-            method,
-            unit,
-            agg_method_kwarg,
-            title,
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="Morris",
+            method=method,
+            unit=unit,
+            reference_time_series=reference_time_series,
+            agg_method_kwarg=agg_method_kwarg,
+            title=title,
+            **analyse_kwargs,
         )
 
     def plot_dynamic_metric(
@@ -364,9 +396,9 @@ class MorrisSanalysis(Sanalysis):
         sensitivity_metric: str = "euclidian_distance",
         freq: str | pd.Timedelta | dt.timedelta = None,
         method: str = "mean",
+        reference_time_series: pd.Series = None,
         unit: str = "",
         agg_method_kwarg: dict = None,
-        reference_time_series: pd.Series = None,
         title: str = None,
     ):
         return super().salib_plot_dynamic_metric(
