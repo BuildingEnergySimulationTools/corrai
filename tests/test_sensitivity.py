@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from corrai.base.parameter import Parameter
-from corrai.sensitivity import SobolSanalysis, MorrisSanalysis
+from corrai.sensitivity import SobolSanalysis, MorrisSanalysis, FASTSanalysis
 
 from tests.resources.pymodels import Ishigami
 
@@ -100,6 +100,118 @@ class TestSensitivity:
             np.array([1.45525800, 1.77635683e-15, 6.24879610]),
             decimal=3,
         )
+
+    def test_sanalysis_fast(self):
+        fast_analysis = FASTSanalysis(
+            parameters=PARAMETER_LIST,
+            model=Ishigami(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        # N = max(N, 4 * M**2 + 1)
+        fast_analysis.add_sample(N=65, n_cpu=1, seed=42)
+        res_array = np.array(
+            [0.36517142701698435, 0.6669670030829337, 0.022211236308415948]
+        )
+        res = fast_analysis.analyze("res")
+        np.testing.assert_almost_equal(res["mean_res"]["S1"], res_array)
+        assert len(res["mean_res"]["S1_conf"]) == len(PARAMETER_LIST)
+
+        res = fast_analysis.analyze("res", freq="h")
+        assert res.index.tolist() == [
+            pd.Timestamp("2009-01-01 00:00:00"),
+            pd.Timestamp("2009-01-01 01:00:00"),
+            pd.Timestamp("2009-01-01 02:00:00"),
+            pd.Timestamp("2009-01-01 03:00:00"),
+            pd.Timestamp("2009-01-01 04:00:00"),
+            pd.Timestamp("2009-01-01 05:00:00"),
+        ]
+        np.testing.assert_almost_equal(
+            res["2009-01-01 00:00:00"]["S1"],
+            res_array,
+            decimal=3,
+        )
+
+
+## TODO : compare again with salib results
+# def test_fast_salib():
+#     from SALib.sample import fast_sampler
+#     from SALib.analyze import fast
+#     problem = {
+#         "num_vars": 3,
+#         "names": ["x1", "x2", "x3"],
+#         "bounds": [[-3.14159265359, 3.14159265359]] * 3,
+#     }
+#
+#     N, M = 65, 4
+#     param_values = fast_sampler.sample(problem, N, M)
+#
+#     model = Ishigami()
+#     simulation_options = {
+#         "start": "2000-01-01",
+#         "end": "2000-01-01",
+#         "timestep": "H",
+#     }
+#
+#     Y = []
+#     for row in param_values:
+#         prop_dict = dict(zip(problem["names"], row))
+#         df_res = model.simulate(prop_dict, simulation_options)
+#         Y.append(df_res["res"].iloc[0])
+#
+#     Y = np.array(Y)
+#
+#     Si = fast.analyze(problem, Y, print_to_console=True)
+#     print("S1 :", Si["S1"])
+#     print("ST :", Si["ST"])
+#
+# def test_sobol_salib():
+#     from SALib.sample import saltelli
+#     from SALib.analyze import sobol
+#     problem = {
+#         "num_vars": 3,
+#         "names": ["x1", "x2", "x3"],
+#         "bounds": [[-3.14159265359, 3.14159265359]] * 3,
+#     }
+#     N=1
+#     param_values = saltelli.sample(problem, N, calc_second_order=True)
+#     model = Ishigami()
+#     simulation_options = {
+#         "start": "2000-01-01",
+#         "end": "2000-01-01",
+#         "timestep": "H",
+#     }
+#     Y = []
+#     for row in param_values:
+#         prop_dict = dict(zip(problem["names"], row))
+#         df_res = model.simulate(prop_dict, simulation_options)
+#         Y.append(df_res["res"].iloc[0])
+#     Y = np.array(Y)
+#     Si = sobol.analyze(problem, Y, calc_second_order=True, print_to_console=True)
+#     print(Si)
+#
+# def test_morris_salib():
+#     from SALib.sample import morris as morris_sampler
+#     from SALib.analyze import morris
+#     problem = {
+#         "num_vars": 3,
+#         "names": ["x1", "x2", "x3"],
+#         "bounds": [[-3.14159265359, 3.14159265359]] * 3,
+#     }
+#     param_values = morris_sampler.sample(problem, N=2)
+#     model = Ishigami()
+#     simulation_options = {
+#         "start": "2000-01-01",
+#         "end": "2000-01-01",
+#         "timestep": "H",
+#     }
+#     Y = []
+#     for row in param_values:
+#         prop_dict = dict(zip(problem["names"], row))
+#         df_res = model.simulate(prop_dict, simulation_options)
+#         Y.append(df_res["res"].iloc[0])
+#     Y = np.array(Y)
+#     Si = morris.analyze(problem, param_values, Y, print_to_console=True)
+#     print(Si)
 
 
 class TestPlots:

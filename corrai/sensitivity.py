@@ -4,10 +4,10 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from SALib.analyze import morris, sobol
+from SALib.analyze import morris, sobol, fast
 
 from corrai.base.parameter import Parameter
-from corrai.base.sampling import SobolSampler, MorrisSampler
+from corrai.base.sampling import SobolSampler, MorrisSampler, FASTSampler
 from corrai.base.model import Model
 
 
@@ -411,6 +411,56 @@ class MorrisSanalysis(Sanalysis):
             agg_method_kwarg,
             reference_time_series,
             title,
+        )
+
+
+class FASTSanalysis(Sanalysis):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options, x_needed=False)
+        self._analysis_cache = {}
+
+    def _set_sampler(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        return FASTSampler(parameters, model, simulation_options)
+
+    def _set_analyser(self):
+        return fast
+
+    def add_sample(
+        self,
+        N: int,
+        M: int = 4,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        **sample_kwargs,
+    ):
+        super().add_sample(
+            N=N,
+            simulate=simulate,
+            n_cpu=n_cpu,
+            M=M,
+            **sample_kwargs,
+        )
+
+    def analyze(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        **analyse_kwargs,
+    ):
+        return super().analyze(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
+            **analyse_kwargs,
         )
 
 
