@@ -198,7 +198,6 @@ class SobolSanalysis(Sanalysis):
         n_cpu: int = 1,
         *,
         calc_second_order: bool = True,
-        scramble: bool = True,
         **sample_kwargs,
     ):
         super().add_sample(
@@ -206,7 +205,6 @@ class SobolSanalysis(Sanalysis):
             simulate=simulate,
             n_cpu=n_cpu,
             calc_second_order=calc_second_order,
-            scramble=scramble,
             **sample_kwargs,
         )
 

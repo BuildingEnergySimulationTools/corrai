@@ -2,7 +2,12 @@ import numpy as np
 import pandas as pd
 
 from corrai.base.parameter import Parameter
-from corrai.sensitivity import SobolSanalysis, MorrisSanalysis, FASTSanalysis, RBDFASTSanalysis
+from corrai.sensitivity import (
+    SobolSanalysis,
+    MorrisSanalysis,
+    FASTSanalysis,
+    RBDFASTSanalysis,
+)
 
 from tests.resources.pymodels import Ishigami
 
@@ -27,14 +32,15 @@ class TestSensitivity:
             simulation_options=SIMULATION_OPTIONS,
         )
 
-        sobol_analysis.add_sample(N=1, n_cpu=1, calc_second_order=True, seed=42)
+        sobol_analysis.add_sample(N=1000, n_cpu=1, calc_second_order=True)
+        res = sobol_analysis.analyze("res", calc_second_order=True, seed=42)
 
-        res = sobol_analysis.analyze("res", calc_second_order=True)
         np.testing.assert_almost_equal(
-            res["mean_res"]["S1"], np.array([1.02156668, 2.22878092, -1.41228784])
+            res["mean_res"]["S1"],
+            np.array([0.31234581102948833, 0.4429936089111491, 0.009030856634835067]),
         )
 
-        res = sobol_analysis.analyze("res", freq="h", calc_second_order=True)
+        res = sobol_analysis.analyze("res", freq="h", calc_second_order=True, seed=42)
         assert res.index.tolist() == [
             pd.Timestamp("2009-01-01 00:00:00"),
             pd.Timestamp("2009-01-01 01:00:00"),
@@ -46,7 +52,7 @@ class TestSensitivity:
 
         np.testing.assert_almost_equal(
             res["2009-01-01 00:00:00"]["S1"],
-            np.array([1.02156668, 2.22878092, -1.41228784]),
+            np.array([0.31234581102948833, 0.4429936089111491, 0.009030856634835067]),
             decimal=3,
         )
 
@@ -140,7 +146,9 @@ class TestSensitivity:
 
         # N = max(N, 2 * M + 1)
         rbdfast_analysis.add_sample(N=100, n_cpu=1, seed=42)
-        res_array = np.array([0.2497000361318199, 0.5276937277925962, 0.12398148477945364])
+        res_array = np.array(
+            [0.2497000361318199, 0.5276937277925962, 0.12398148477945364]
+        )
         res = rbdfast_analysis.analyze("res")
         np.testing.assert_almost_equal(res["mean_res"]["S1"], res_array)
 

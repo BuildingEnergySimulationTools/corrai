@@ -11,7 +11,7 @@ from corrai.base.sampling import (
     plot_sample,
     plot_pcp,
     # get_mapped_bounds,
-    LHCSampler,
+    LHSSampler,
     MorrisSampler,
     SobolSampler,
     Sample,
@@ -257,8 +257,8 @@ class TestSample:
 
         sample._validate()
 
-    def test_lhc_sampler(self):
-        sampler = LHCSampler(
+    def test_lhs_sampler(self):
+        sampler = LHSSampler(
             parameters=REAL_PARAM,
             model=Pymodel(),
             simulation_options=SIMULATION_OPTIONS,

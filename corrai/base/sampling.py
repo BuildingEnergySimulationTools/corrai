@@ -19,6 +19,7 @@ from scipy.stats.qmc import LatinHypercube
 from SALib.sample import morris as morris_sampler
 from SALib.sample import sobol as sobol_sampler
 from SALib.sample import fast_sampler, latin
+from SALib.sample import saltelli
 
 from corrai.base.parameter import Parameter
 from corrai.base.model import Model
@@ -353,15 +354,15 @@ class RBDFASTSampler(RealSampler):
         self._post_draw_sample(rbdfast_sample, simulate, n_cpu)
 
 
-class LHCSampler(RealSampler):
+class LHSSampler(RealSampler):
     def __init__(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
     ):
         super().__init__(parameters, model, simulation_options)
 
     def add_sample(self, n: int, rng: int = None, simulate=True, **lhs_kwargs):
-        lhc = LatinHypercube(d=len(self.parameters), rng=rng, **lhs_kwargs)
-        new_dimless_sample = lhc.random(n=n)
+        lhs = LatinHypercube(d=len(self.parameters), rng=rng, **lhs_kwargs)
+        new_dimless_sample = lhs.random(n=n)
         self._post_draw_sample(new_dimless_sample, simulate, sample_is_dimless=True)
 
 
@@ -378,14 +379,12 @@ class SobolSampler(RealSampler):
         n_cpu: int = 1,
         *,
         calc_second_order: bool = True,
-        scramble: bool = True,
         **sobol_kwargs,
     ):
-        new_sample = sobol_sampler.sample(
+        new_sample = saltelli.sample(
             problem=self.get_salib_problem(),
             N=N,
             calc_second_order=calc_second_order,
-            scramble=scramble,
             **sobol_kwargs,
         )
 
