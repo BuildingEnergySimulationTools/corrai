@@ -62,9 +62,11 @@ class TestSensitivity:
             model=Ishigami(),
             simulation_options=SIMULATION_OPTIONS,
         )
-        morris_analysis.add_sample(N=2, n_cpu=1, seed=42)
+        morris_analysis.add_sample(N=1000, n_cpu=1, seed=42)
+        agg_res = morris_analysis.sampler.sample.get_aggregate_time_series("res")
+
         pd.testing.assert_frame_equal(
-            morris_analysis.sampler.sample.get_aggregate_time_series("res"),
+            agg_res.loc[0:7],
             pd.DataFrame(
                 {
                     "aggregated_res": {
@@ -83,11 +85,12 @@ class TestSensitivity:
 
         res = morris_analysis.analyze("res")
         np.testing.assert_almost_equal(
-            res["mean_res"]["mu"], np.array([1.45525800, 1.77635683e-15, 6.24879610])
+            res["mean_res"]["mu"],
+            np.array([7.654063742766665, -0.3150000000000245, 0.37492776620012525]),
         )
         np.testing.assert_almost_equal(
             res["mean_res"]["euclidian_distance"],
-            np.array([1.455258008259737, 13.63990010960599, 10.823232337117245]),
+            np.array([9.882749087179025, 11.135259466146298, 10.443154164442882]),
         )
 
         assert len(res["mean_res"]["mu_star"]) == len(PARAMETER_LIST)
@@ -103,7 +106,7 @@ class TestSensitivity:
         ]
         np.testing.assert_almost_equal(
             res["2009-01-01 00:00:00"]["mu"],
-            np.array([1.45525800, 1.77635683e-15, 6.24879610]),
+            np.array([7.654063742766665, -0.3150000000000245, 0.37492776620012525]),
             decimal=3,
         )
 
