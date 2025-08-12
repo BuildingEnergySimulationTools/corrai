@@ -541,6 +541,53 @@ class FASTSanalysis(Sanalysis):
             **analyse_kwargs,
         )
 
+    def plot_bar(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "ST",
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwargs,
+    ):
+        return super().salib_plot_bar(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="FAST",
+            method=method,
+            unit=unit,
+            reference_time_series=reference_time_series,
+            agg_method_kwarg=agg_method_kwarg,
+            title=title,
+            **analyse_kwargs,
+        )
+
+    def plot_dynamic_metric(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "ST",
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+    ):
+        return super().salib_plot_dynamic_metric(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="FAST",
+            freq=freq,
+            method=method,
+            unit=unit,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            stacked=True,
+            title=title,
+        )
+
     def plot_pcp(
         self,
         aggregations: dict | None = None,
@@ -603,6 +650,53 @@ class RBDFASTSanalysis(Sanalysis):
             reference_time_series=reference_time_series,
             freq=freq,
             **analyse_kwargs,
+        )
+
+    def plot_bar(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "S1",
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwargs,
+    ):
+        return super().salib_plot_bar(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="RBD_FAST",
+            method=method,
+            unit=unit,
+            reference_time_series=reference_time_series,
+            agg_method_kwarg=agg_method_kwarg,
+            title=title,
+            **analyse_kwargs,
+        )
+
+    def plot_dynamic_metric(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "S1",
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+    ):
+        return super().salib_plot_dynamic_metric(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="RBD_FAST",
+            freq=freq,
+            method=method,
+            unit=unit,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            stacked=True,
+            title=title,
         )
 
     def plot_pcp(
