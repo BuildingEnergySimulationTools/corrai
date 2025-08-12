@@ -127,6 +127,36 @@ ISHIGAMI_PARAMETERS = [
 
 
 class TestSample:
+    def test_plot_pcp(self):
+        t = pd.date_range("2025-01-01 00:00:00", periods=2, freq="h")
+        df1 = pd.DataFrame({"res": [1.0, 2.0]}, index=t)
+        df2 = pd.DataFrame({"res": [3.0, 4.0]}, index=t)
+        df3 = pd.DataFrame({"res": [5.0, 6.0]}, index=t)
+        results = pd.Series([df1, df2, df3])
+
+        param_names = ["p1", "p2"]
+        param_values = np.array(
+            [
+                [1.1, 2.2],
+                [3.3, 4.4],
+                [5.5, 6.6],
+            ]
+        )
+        fig = plot_pcp(
+            results=results,
+            parameter_values=param_values,
+            parameter_names=param_names,
+            aggregations={"res": [np.sum, np.mean]},
+            color_by="res:sum",
+            title="Parallel Coordinates — Samples",
+        )
+        fig.show()
+
+        assert isinstance(fig, go.Figure)
+        assert len(fig.data) == 1
+        pc = fig.data[0]
+        np.testing.assert_allclose(pc.dimensions[0]["values"], [1.1, 3.3, 5.5])  # p1
+
     def test_plot_sample(self):
         t = pd.date_range("2025-01-01 00:00:00", periods=2, freq="h")
         df1 = pd.DataFrame({"res": [1.0, 2.0]}, index=t)

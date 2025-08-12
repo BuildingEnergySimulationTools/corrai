@@ -1,5 +1,4 @@
-# import random
-# import itertools
+from typing import Callable, Iterable
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -511,71 +510,172 @@ def plot_sample(
 
 
 def plot_pcp(
-    sample_results,
-    param_sample,
-    parameters,
-    indicators,
-    aggregation_method=np.mean,
-    html_file_path=None,
-):
+    results: pd.Series,
+    parameter_values: np.ndarray,
+    parameter_names: list[str],
+    aggregations: dict | None = None,  # <= optionnel
+    *,
+    bounds: list[tuple[float, float]] | None = None,
+    color_by: str | None = None,
+    title: str | None = "Parallel Coordinates — Samples",
+    html_file_path: str | None = None,
+) -> go.Figure:
     """
-    Plots a parallel coordinate plot for sensitivity analysis results.
-      Notes
-    -----
-    - The function handles categorical parameters by converting them to numerical
-      codes using `pandas.Categorical`. The tick values are shifted slightly to
-      improve readability.
-    - The first indicator in the list is used to color the lines in the plot.
-    - The function requires the Plotly library (`plotly.graph_objects`) to create
-      the interactive plot.
+    Creates a Parallel Coordinates Plot (PCP) for parameter samples and aggregated indicators.
+    Each vertical axis corresponds to a parameter
+    or an aggregated indicator, and each polyline represents one simulation.
+
+    Parameters
+    ----------
+    results : pd.Series
+        Series of length `n_samples` where each element is a pandas Series or DataFrame
+        containing simulation results for one sample. If a DataFrame, columns are
+        treated as separate indicators.
+    parameter_values : np.ndarray
+        Array of shape (n_samples, n_parameters) containing the parameter values for
+        each sample.
+    parameter_names : list of str
+        Names of the parameters, in the same order as in `parameter_values`.
+    aggregations : dict, optional
+        Mapping of {indicator_name: callable | [callable] | {label: callable}} defining
+        how to aggregate indicator time series into single values per sample.
+        Example:
+            {"res": [np.sum, np.mean]} -> creates columns "res:sum" and "res:mean".
+        If None, defaults to computing `np.mean` for the first available indicator.
+    bounds : list of tuple(float, float), optional
+        Parameter bounds (min, max) in the same order as `parameter_names`. If None,
+        ranges are inferred from the data.
+    color_by : str, optional
+        Name of a parameter or aggregated indicator column to color the polylines.
+        If None, the first aggregated indicator is used; if no aggregated indicators
+        are available, defaults to the first parameter.
+    title : str, optional
+        Figure title. Defaults to "Parallel Coordinates — Samples".
+    html_file_path : str, optional
+        If provided, saves the plot as an HTML file at the given path.
+
+    Returns
+    -------
+    go.Figure
+        A Plotly Figure object containing the parallel coordinates plot.
     """
-    data_dict = [
-        {param[Parameter.NAME]: value for param, value in zip(parameters, sample)}
-        for sample in param_sample
-    ]
 
-    if isinstance(indicators, str):
-        indicators = [indicators]
-
-    for i, df in enumerate(sample_results):
-        for indicator in indicators:
-            if indicator in df.columns:
-                data_dict[i][indicator] = aggregation_method(df[indicator])
-
-    df_plot = pd.DataFrame(data_dict)
-    dim_list = []
-
-    for col in df_plot.select_dtypes(include="object").columns:
-        cat = pd.Categorical(df_plot[col])
-        df_plot[col] = cat.codes
-        dim_list.append(
-            dict(
-                range=[0, len(cat.categories) - 1],
-                label=col,
-                tickvals=list(set(cat.codes)),
-                ticktext=list(cat.categories),
-                values=df_plot[col].tolist(),
-            )
+    if not isinstance(results, pd.Series):
+        raise ValueError("`results` must be a pandas Series.")
+    if results.empty:
+        raise ValueError("`results` is empty. Simulate samples first.")
+    if parameter_values.shape[0] != len(results):
+        raise ValueError(
+            "Mismatch between number of samples in `results` and `parameter_values`."
+        )
+    if len(parameter_names) != parameter_values.shape[1]:
+        raise ValueError(
+            "`parameter_names` length must match number of parameter columns."
         )
 
-    for col in indicators:
-        dim_list.append(dict(label=col, values=df_plot[col].tolist()))
+    if aggregations is None:
+        first = next(
+            (
+                obj
+                for obj in results
+                if isinstance(obj, (pd.Series, pd.DataFrame)) and not obj.empty
+            ),
+            None,
+        )
+        if first is None:
+            raise ValueError("No non-empty results to infer a default aggregation.")
+        if isinstance(first, pd.DataFrame):
+            ind_name = str(first.columns[0])
+        else:
+            ind_name = str(first.name or "indicator")
+        aggregations = {ind_name: np.mean}
 
-    color_indicator = indicators[0] if indicators else None
+    def _extract_indicator_series(obj, indicator_name: str) -> pd.Series | None:
+        if isinstance(obj, pd.DataFrame):
+            if indicator_name not in obj.columns:
+                return None
+            s = obj[indicator_name]
+            return None if s.empty else s
+        if isinstance(obj, pd.Series):
+            if obj.empty:
+                return None
+            return obj if (obj.name is None or obj.name == indicator_name) else None
+        return None
+
+    data_cols: dict[str, np.ndarray] = {}
+
+    for j, pname in enumerate(parameter_names):
+        data_cols[pname] = parameter_values[:, j]
+
+    def _norm_agg_map(aggs):
+        if callable(aggs):
+            return {aggs.__name__: aggs}
+        if isinstance(aggs, dict):
+            return aggs
+        return {fn.__name__: fn for fn in aggs}
+
+    agg_col_names: list[str] = []
+    for ind_name, aggs in aggregations.items():
+        agg_map = _norm_agg_map(aggs)
+        for agg_label, agg_fn in agg_map.items():
+            col_name = f"{ind_name}:{agg_label}"
+            vals = []
+            for sample_obj in results:
+                s = _extract_indicator_series(sample_obj, ind_name)
+                if s is None:
+                    vals.append(np.nan)
+                else:
+                    try:
+                        vals.append(float(agg_fn(s.to_numpy())))
+                    except Exception:
+                        vals.append(np.nan)
+            data_cols[col_name] = np.asarray(vals, dtype=float)
+            agg_col_names.append(col_name)
+
+    df = pd.DataFrame(data_cols)
+    if color_by is None:
+        if agg_col_names:
+            color_by = agg_col_names[0]
+        else:
+            color_by = parameter_names[0] if parameter_names else None
+
+    dimensions = []
+    for j, pname in enumerate(parameter_names):
+        dim = {"label": pname, "values": df[pname].to_numpy()}
+        if bounds is not None:
+            lb, ub = bounds[j]
+            dim["range"] = [lb, ub]
+        dimensions.append(dim)
+
+    for col in df.columns:
+        if col in parameter_names:
+            continue
+        col_vals = df[col].to_numpy()
+        if np.all(np.isnan(col_vals)):
+            dim = {"label": col, "values": col_vals}
+        else:
+            vmin = float(np.nanmin(col_vals))
+            vmax = float(np.nanmax(col_vals))
+            if np.isfinite(vmin) and np.isfinite(vmax) and vmin != vmax:
+                dim = {"label": col, "values": col_vals, "range": [vmin, vmax]}
+            else:
+                dim = {"label": col, "values": col_vals}
+        dimensions.append(dim)
+
+    line_kwargs = {}
+    if color_by is not None and color_by in df.columns:
+        line_kwargs = dict(color=df[color_by], colorscale="Viridis", showscale=True)
 
     fig = go.Figure(
         data=go.Parcoords(
-            line=dict(
-                color=df_plot[color_indicator],
-                colorscale="Plasma",
-                showscale=True,
-            ),
-            dimensions=dim_list,
+            dimensions=dimensions,
+            line=line_kwargs if line_kwargs else dict(),
         )
     )
+    fig.update_layout(title=title)
 
     if html_file_path:
-        pio.write_html(fig, html_file_path)
+        fig.write_html(html_file_path)
 
     return fig
 

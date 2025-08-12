@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from SALib.analyze import morris, sobol, fast, rbd_fast
-
+from corrai.base.sampling import plot_pcp as _plot_pcp
 from corrai.base.parameter import Parameter
 from corrai.base.sampling import (
     SobolSampler,
@@ -175,6 +175,47 @@ class Sanalysis(ABC):
 
         return plot_dynamic_metric(metrics, sensitivity_metric, unit, title, stacked)
 
+    def plot_pcp(
+        self,
+        aggregations: dict | None = None,  # <= optionnel
+        *,
+        bounds: list[tuple[float, float]] | None = None,
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates — Samples",
+        html_file_path: str | None = None,
+    ):
+        """
+        Parallel Coordinates Plot basé sur les échantillons et résultats présents dans l'analyse.
+
+        Parameters
+        ----------
+        aggregations : dict
+            {indicator: callable | [callable] | {label: callable}}
+            Ex. {"res": [np.sum, np.mean]}  -> colonnes "res:sum", "res:mean".
+        bounds : list[(float, float)] | None
+            Bornes (min, max) par paramètre (même ordre que les paramètres). Si None, autoscale.
+        color_by : str | None
+            Nom d'une dimension (paramètre ou indicateur agrégé) pour colorer les lignes.
+        title : str | None
+            Titre.
+        html_file_path : str | None
+            Si fourni, export HTML.
+        """
+        results = self.sampler.sample.results
+        parameter_values = self.sampler.sample.values
+        parameter_names = [p.name for p in self.sampler.sample.parameters]
+
+        return _plot_pcp(
+            results=results,
+            parameter_values=parameter_values,
+            parameter_names=parameter_names,
+            aggregations=aggregations,
+            bounds=bounds,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
+        )
+
 
 class SobolSanalysis(Sanalysis):
     def __init__(
@@ -268,7 +309,7 @@ class SobolSanalysis(Sanalysis):
         return super().salib_plot_dynamic_metric(
             indicator=indicator,
             sensitivity_metric=sensitivity_metric,
-            sensitivity_method_name="Morris",
+            sensitivity_method_name="Sobol",
             freq=freq,
             method=method,
             unit=unit,
@@ -277,6 +318,23 @@ class SobolSanalysis(Sanalysis):
             calc_second_order=calc_second_order,
             stacked=True,
             title=title,
+        )
+
+    def plot_pcp(
+        self,
+        aggregations: dict | None = None,
+        *,
+        bounds: list[tuple[float, float]] | None = None,
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates — Samples",
+        html_file_path: str | None = None,
+    ) -> go.Figure:
+        return super().plot_pcp(
+            aggregations=aggregations,
+            bounds=bounds,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
         )
 
 
@@ -416,6 +474,23 @@ class MorrisSanalysis(Sanalysis):
             title,
         )
 
+    def plot_pcp(
+        self,
+        aggregations: dict | None = None,
+        *,
+        bounds: list[tuple[float, float]] | None = None,
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates — Samples",
+        html_file_path: str | None = None,
+    ) -> go.Figure:
+        return super().plot_pcp(
+            aggregations=aggregations,
+            bounds=bounds,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
+        )
+
 
 class FASTSanalysis(Sanalysis):
     def __init__(
@@ -466,6 +541,23 @@ class FASTSanalysis(Sanalysis):
             **analyse_kwargs,
         )
 
+    def plot_pcp(
+        self,
+        aggregations: dict | None = None,
+        *,
+        bounds: list[tuple[float, float]] | None = None,
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates — Samples",
+        html_file_path: str | None = None,
+    ) -> go.Figure:
+        return super().plot_pcp(
+            aggregations=aggregations,
+            bounds=bounds,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
+        )
+
 
 class RBDFASTSanalysis(Sanalysis):
     def __init__(
@@ -511,6 +603,23 @@ class RBDFASTSanalysis(Sanalysis):
             reference_time_series=reference_time_series,
             freq=freq,
             **analyse_kwargs,
+        )
+
+    def plot_pcp(
+        self,
+        aggregations: dict | None = None,
+        *,
+        bounds: list[tuple[float, float]] | None = None,
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates — Samples",
+        html_file_path: str | None = None,
+    ) -> go.Figure:
+        return super().plot_pcp(
+            aggregations=aggregations,
+            bounds=bounds,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
         )
 
 
