@@ -4,10 +4,15 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from SALib.analyze import morris, sobol, fast
+from SALib.analyze import morris, sobol, fast, rbd_fast
 
 from corrai.base.parameter import Parameter
-from corrai.base.sampling import SobolSampler, MorrisSampler, FASTSampler
+from corrai.base.sampling import (
+    SobolSampler,
+    MorrisSampler,
+    FASTSampler,
+    RBDFASTSampler,
+)
 from corrai.base.model import Model
 
 
@@ -442,6 +447,53 @@ class FASTSanalysis(Sanalysis):
             simulate=simulate,
             n_cpu=n_cpu,
             M=M,
+            **sample_kwargs,
+        )
+
+    def analyze(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        **analyse_kwargs,
+    ):
+        return super().analyze(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
+            **analyse_kwargs,
+        )
+
+
+class RBDFASTSanalysis(Sanalysis):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options, x_needed=True)
+
+    def _set_sampler(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        return RBDFASTSampler(parameters, model, simulation_options)
+
+    def _set_analyser(self):
+        return rbd_fast
+
+    def add_sample(
+        self,
+        N: int,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        **sample_kwargs,
+    ):
+        super().add_sample(
+            N=N,
+            simulate=simulate,
+            n_cpu=n_cpu,
             **sample_kwargs,
         )
 

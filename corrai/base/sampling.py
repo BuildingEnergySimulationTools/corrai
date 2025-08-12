@@ -18,7 +18,7 @@ import plotly.figure_factory as ff
 from scipy.stats.qmc import LatinHypercube
 from SALib.sample import morris as morris_sampler
 from SALib.sample import sobol as sobol_sampler
-from SALib.sample import fast_sampler
+from SALib.sample import fast_sampler, latin
 
 from corrai.base.parameter import Parameter
 from corrai.base.model import Model
@@ -334,6 +334,23 @@ class FASTSampler(RealSampler):
     ):
         fast_sample = fast_sampler.sample(self.get_salib_problem(), N, M, **fast_kwargs)
         self._post_draw_sample(fast_sample, simulate, n_cpu)
+
+
+class RBDFASTSampler(RealSampler):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options)
+
+    def add_sample(
+        self,
+        N: int,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        **rbdfast_kwargs,
+    ):
+        rbdfast_sample = latin.sample(self.get_salib_problem(), N, **rbdfast_kwargs)
+        self._post_draw_sample(rbdfast_sample, simulate, n_cpu)
 
 
 class LHCSampler(RealSampler):
