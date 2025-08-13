@@ -187,26 +187,48 @@ class TestPlots:
         )
 
         morris_analysis.add_sample(N=2, n_cpu=1, seed=42)
-        fig1 = morris_analysis.plot_scatter()
-        assert fig1["layout"]["title"]["text"] == "Morris Sensitivity Analysis"
+        fig_scatter = morris_analysis.plot_scatter()
+        assert fig_scatter["layout"]["title"]["text"] == "Morris Sensitivity Analysis"
 
         morris_analysis_2.add_sample(N=2, n_cpu=1, seed=42)
-        fig2 = morris_analysis_2.plot_scatter()
+        fig_scatter2 = morris_analysis_2.plot_scatter()
 
-        x1 = fig1.data[0].x
-        y1 = fig1.data[0].y
-        x2 = fig2.data[0].x
-        y2 = fig2.data[0].y
+        x1 = fig_scatter.data[0].x
+        y1 = fig_scatter.data[0].y
+        x2 = fig_scatter2.data[0].x
+        y2 = fig_scatter2.data[0].y
 
         np.testing.assert_allclose(x1, x2)
         np.testing.assert_allclose(
             y1,
             y2,
         )
-        assert list(fig1.data[0].text) == list(fig2.data[0].text)
+        assert list(fig_scatter.data[0].text) == list(fig_scatter2.data[0].text)
 
-        fig3 = morris_analysis_2.plot_bar(sensitivity_metric="euclidian_distance")
-        assert fig3["layout"]["title"]["text"] == "Morris euclidian_distance mean res"
+        fig_bar = morris_analysis_2.plot_bar(sensitivity_metric="euclidian_distance")
+        assert (
+            fig_bar["layout"]["title"]["text"] == "Morris euclidian_distance mean res"
+        )
+
+        res_euclidian = morris_analysis.analyze("res")[f"mean_res"]
+        fig_data = fig_bar.data[0]
+        expected_x = [p.name for p in PARAMETER_LIST]
+        expected_y = res_euclidian["euclidian_distance"].tolist()
+        assert list(fig_data.x) == expected_x
+        np.testing.assert_allclose(fig_data.y, expected_y)
+
+        fig_dyn = morris_analysis.plot_dynamic_metric(
+            indicator="res",
+            sensitivity_metric="euclidian_distance",
+            freq="h",
+            method="mean",
+        )
+        assert (
+            fig_dyn["layout"]["title"]["text"]
+            == "Morris dynamic euclidian_distance mean res"
+        )
+
+        # assert isinstance(fig_dyn, go.Figure)
 
     # def test_dynamic_analysis_and_absolute(self):
     #     model = Ishigami()

@@ -127,6 +127,31 @@ ISHIGAMI_PARAMETERS = [
 
 
 class TestSample:
+    def test_plot_hist(self):
+        sampler = LHSSampler(
+            parameters=REAL_PARAM,
+            model=Pymodel(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        sampler.add_sample(3, 42, simulate=True)
+
+        fig = sampler.sample.plot_hist(
+            indicator="res",
+            method="mean",
+            unit="J",
+            bin_size=0.5,
+            colors="orange",
+            show_rug=True,
+        )
+
+        assert isinstance(fig, go.Figure)
+        assert fig.layout.title.text == "Sample distribution of mean res"
+
+        hist_traces = [tr for tr in fig.data if tr.type == "histogram"]
+        assert len(hist_traces) == 1
+        hist = hist_traces[0]
+        assert len(hist.x) == len(sampler.results)
+
     def test_plot_pcp(self):
         t = pd.date_range("2025-01-01 00:00:00", periods=2, freq="h")
         df1 = pd.DataFrame({"res": [1.0, 2.0]}, index=t)
