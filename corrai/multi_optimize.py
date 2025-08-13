@@ -1,317 +1,159 @@
-from typing import Any
+from typing import Callable, Sequence
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objs as go
-import plotly.io as pio
+
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Integer, Real, Choice, Binary
 
-from corrai.base.parameter import Parameter
 
-
-# TODO Add permutation variables to MyMixedProblem
-class MyProblem(ElementwiseProblem):
+class Problem(ElementwiseProblem):
     """
-    A class that represents a single-objective optimization problem
-    with one or more constraints. This class inherits from the PyMOO
-    ElementwiseProblem class and overrides the _evaluate method.
+    A  Pymoo ElementwiseProblem for real-valued and mixed-variable optimization.
 
     Parameters
     ----------
-    parameters (list):
-        A list of dictionaries, where each dictionary represents a
-        parameter and contains its name, interval, and type.
-    obj_func_list (list):
-        A list of objects that have methods that represent the objective
-        functions to be optimized or constraints (example: Modelica,
-        EnergyPlus models...). If optimization is subject to inequality
-        constraints g, they should be formulated as "less than" constraints
-        (i.e., g(x) < 0). Leave empy if none.
-    func_list (list):
-        A list of objects that have methods that represent the objective
-        functions to be optimized or constraints. If optimization is subject
-        to inequality constraints g, they should be formulated as "less than"
-        constraints (i.e., g(x) < 0). Leave empy if none.
-    function_names (list):
-        A list of strings that represent the names of the objective functions.
-    constraint_names (list):
-        A list of strings that represent the names of the constraint. Leave
-        empy if none.
-
-    Attributes
-    ----------
-    n_var (int):
-        The number of variables inherited from parameters.
-    n_obj (int):
-        The number of objective functions inherited from parameters.
-    n_ieq_constr (int):
-        The number of constraints inherited from parameters.
-    xl (numpy.ndarray):
-        An array of lower bound of each variable inherited from parameters.
-    xu (numpy.ndarray):
-        An array of upper bound of each variable inherited from parameters.
-
-    Methods
-    -------
-    _evaluate(x, out, *args, **kwargs):
-        Evaluates the problem for the given variable values and returns
-        the objective values out["F"] as a list of NumPy array with length of
-        n_obj and the constraints values out["G"] with length of n_ieq_constr
-        (if the problem has constraints to be satisfied at all).
-
+    parameters : list
+        A list of Parameter objects, each defining a variable's name, type
+        ({"Real", "Integer", "Binary", "Choice"}), and domain (interval or values).
+    evaluators : Sequence[Callable]
+        A sequence of functions or callable objects that take a dictionary of
+        parameter values and return results as:
+            - a dict mapping metric names to floats
+            - a pandas.Series
+            - or a single scalar (only if there is exactly one objective or constraint)
+    objective_ids : Sequence[str]
+        Names of the objectives to extract from the evaluator results, in the order
+        they will appear in F.
+    constraint_ids : Sequence[str], optional
+        Names of the constraints to extract from the evaluator results, in the order
+        they will appear in G. If omitted, G will be an empty array.
     """
 
     def __init__(
         self,
-        parameters: list[dict[Parameter, Any]],
-        obj_func_list,
-        func_list,
-        function_names,
-        constraint_names,
+        *,
+        parameters: list,
+        evaluators: Sequence[Callable] | None = None,
+        objective_ids: Sequence[str],
+        constraint_ids: Sequence[str] | None = None,
     ):
-        self.parameters = parameters
+        if not evaluators:
+            raise ValueError("evaluators must be provided")
+
+        self.parameters = list(parameters)
         _check_duplicate_params(parameters)
-        if len(obj_func_list) == 0 and len(func_list) == 0:
-            raise ValueError(
-                "At least one of obj_func_list or func_list should be provided"
+        self.param_names = [p.name for p in self.parameters]
+        self.evaluators = list(evaluators)
+        self.objective_ids = list(objective_ids)
+        self.constraint_ids = list(constraint_ids) if constraint_ids else []
+
+        self.is_all_real = all(p.ptype == "Real" for p in self.parameters)
+        if self.is_all_real:
+            xl = np.array([p.interval[0] for p in self.parameters], dtype=float)
+            xu = np.array([p.interval[1] for p in self.parameters], dtype=float)
+            super().__init__(
+                n_var=len(self.parameters),
+                n_obj=len(self.objective_ids),
+                n_ieq_constr=len(self.constraint_ids),
+                xl=xl,
+                xu=xu,
             )
-        self.obj_func_list = obj_func_list
-        self.func_list = func_list
-        self.function_names = function_names
-        self.constraint_names = constraint_names
-
-        super().__init__(
-            n_var=len(parameters),
-            n_obj=len(function_names),
-            n_ieq_constr=len(constraint_names),
-            xl=np.array([p[Parameter.INTERVAL][0] for p in parameters]),
-            xu=np.array([p[Parameter.INTERVAL][-1] for p in parameters]),
-        )
-
-    def _evaluate(self, x, out, *args, **kwargs):
-        current_param = {
-            param[Parameter.NAME]: val for param, val in zip(self.parameters, x)
-        }
-        res = pd.concat(
-            [pd.Series(m.function(current_param)) for m in self.obj_func_list]
-            + [pd.Series(pyf(current_param)) for pyf in self.func_list],
-            axis=0,
-        ).T
-        out["F"] = list(res[self.function_names])
-        out["G"] = list(res[self.constraint_names])
-
-    def plot_pcp(self, res, ref, bounds=False):
-        data_dict = {
-            param[Parameter.NAME]: res.X[:, i]
-            for param, i in zip(self.parameters, range(res.X.shape[1]))
-        }
-        data_dict.update(
-            {self.function_names[i]: res.F[:, i] for i in range(res.F.shape[1])}
-        )
-
-        plot_parcoord(
-            data_dict=data_dict,
-            bounds=bounds,
-            parameters=self.parameters,
-            colorby=ref,
-            obj_res=res.F,
-        )
-
-
-class MyMixedProblem(ElementwiseProblem):
-    """
-     A class that represents a mixed-integer optimization problem with one
-     or more constraints. This class inherits from the PyMOO ElementwiseProblem
-     class and overrides the _evaluate method.
-
-     Parameters
-     ----------
-     parameters (list):
-         A list of dictionaries, where each dictionary represents a parameter
-         and contains its name, interval, and type.
-     obj_func_list (list):
-         A list of objects that have methods that represent the objective
-         functions to be optimized. Leave empy if none
-     func_list (list):
-         A list of PyFunc objects that represent the constraints to be satisfied.
-         Leave empy if none.
-     function_names (list):
-         A list of strings that represent the names of the objective functions.
-         Leave empy if none.
-     constraint_names (list):
-         A list of strings that represent the names of the constraints.
-         Leave empy if none.
-
-     Attributes
-     ----------
-     vars (dict):
-         A dictionary of decision variables and their types inherited
-         from parameters. The variable types can be any of the following:
-         - Real: continuous variable that takes values within a range of real numbers.
-         - Integer: variable that takes integer values within a range.
-         - Binary: variable that takes binary values (0 or 1).
-         - Choice: variable that represents multiple choices from a
-         set of discrete values.
-     n_var (int):
-        The number of variables inherited from parameters.
-     n_obj (int):
-        The number of objective functions inherited from parameters.
-     n_ieq_constr (int):
-        The number of constraints inherited from parameters.
-
-     Methods
-     -------
-    _evaluate(x, out, *args, **kwargs):
-        Evaluates the problem for the given variable values and returns
-        the objective values out["F"] as a list of NumPy array with length of
-        n_obj and the constraints values out["G"] with length of n_ieq_constr
-        (if the problem has constraints to be satisfied at all).
-    """
-
-    def __init__(
-        self,
-        parameters: list[dict[Parameter, Any]],
-        obj_func_list,
-        func_list,
-        function_names,
-        constraint_names,
-    ):
-        self.parameters = parameters
-        _check_duplicate_params(parameters)
-        if len(obj_func_list) == 0 and len(func_list) == 0:
-            raise ValueError(
-                "At least one of obj_func_list or func_list should be provided"
+            self._mode = "float"
+        else:
+            vars_dict = {}
+            for p in self.parameters:
+                if p.ptype == "Real":
+                    lo, hi = p.interval
+                    vars_dict[p.name] = Real(bounds=(float(lo), float(hi)))
+                elif p.ptype == "Integer":
+                    lo, hi = p.interval
+                    vars_dict[p.name] = Integer(bounds=(int(lo), int(hi)))
+                elif p.ptype == "Binary":
+                    vars_dict[p.name] = Binary()
+                elif p.ptype == "Choice":
+                    if p.values is None:
+                        raise ValueError(
+                            f"Parameter {p.name!r} of type Choice requires 'values'"
+                        )
+                    vars_dict[p.name] = Choice(options=list(p.values))
+                else:
+                    raise ValueError(
+                        f"Unsupported ptype={p.ptype!r} for parameter {p.name!r}"
+                    )
+            super().__init__(
+                vars=vars_dict,
+                n_obj=len(self.objective_ids),
+                n_ieq_constr=len(self.constraint_ids),
             )
-        self.obj_func_list = obj_func_list
-        self.func_list = func_list
-        self.function_names = function_names
-        self.constraint_names = constraint_names
-        variable_string = {}
+            self._mode = "mixed"
 
-        for param in parameters:
-            name, bounds, vtype = (
-                param[Parameter.NAME],
-                param[Parameter.INTERVAL],
-                param[Parameter.TYPE],
+    def _x_to_param_dict(self, x) -> dict:
+        if self._mode == "float":
+            return {name: float(val) for name, val in zip(self.param_names, x)}
+
+        if isinstance(x, dict):
+            return x
+
+        if isinstance(x, (list, tuple, np.ndarray, pd.Series)):
+            out = {}
+            for (name, p), val in zip(zip(self.param_names, self.parameters), x):
+                if p.ptype == "Integer":
+                    out[name] = int(val)
+                elif p.ptype == "Real":
+                    out[name] = float(val)
+                elif p.ptype == "Binary":
+                    out[name] = bool(val)
+                elif p.ptype == "Choice":
+                    out[name] = val
+                else:
+                    raise ValueError(
+                        f"Unsupported ptype={p.ptype!r} for parameter {p.name!r}"
+                    )
+            return out
+
+        raise TypeError(f"Unsupported x type for mixed mode: {type(x).__name__}")
+
+    def _aggregate(self, param_dict: dict) -> dict[str, float]:
+        acc: dict[str, float] = {}
+        total_ids = len(self.objective_ids) + len(self.constraint_ids)
+        for block in self.evaluators:
+            res = (
+                block.function(param_dict)
+                if hasattr(block, "function")
+                else block(param_dict)
             )
-            if vtype == "Integer":
-                var = Integer(bounds=bounds)
-            elif vtype == "Real":
-                var = Real(bounds=bounds)
-            elif vtype == "Choice":
-                var = Choice(options=bounds)
-            elif vtype == "Binary":
-                var = Binary()
+            if isinstance(res, dict):
+                acc.update({k: float(v) for k, v in res.items()})
+            elif hasattr(res, "to_dict"):
+                acc.update({k: float(v) for k, v in res.to_dict().items()})
             else:
-                raise ValueError(
-                    "Unknown vtype. Choose one of 'Integer', 'Real', 'Choice', "
-                    "'Binary'"
+                if total_ids != 1:
+                    raise TypeError(
+                        "A scalar was returned, but several objective/constraint IDs are defined"
+                    )
+                target = (
+                    self.objective_ids[0]
+                    if self.objective_ids
+                    else self.constraint_ids[0]
                 )
-            variable_string[name] = var
-
-        super().__init__(
-            vars=variable_string,
-            n_obj=len(function_names),
-            n_ieq_constr=len(constraint_names),
-        )
+                acc[target] = float(res)
+        return acc
 
     def _evaluate(self, x, out, *args, **kwargs):
-        current_param = {
-            param[Parameter.NAME]: val for param, val in zip(self.parameters, x)
-        }
-        print(current_param)
-        res = pd.concat(
-            [pd.Series(m.function(current_param)) for m in self.obj_func_list]
-            + [pd.Series(pyf(current_param)) for pyf in self.func_list],
-            axis=0,
-        ).T
+        param_dict = self._x_to_param_dict(x)
+        acc = self._aggregate(param_dict)
 
-        out["F"] = list(res[self.function_names])
-        out["G"] = list(res[self.constraint_names])
+        F = [acc[name] for name in self.objective_ids]
+        G = [acc[name] for name in self.constraint_ids] if self.constraint_ids else []
 
-    def plot_pcp(self, res, ref, bounds=False):
-        data_dict = {
-            param[Parameter.NAME]: res.X[:, i]
-            for param, i in zip(self.parameters, range(res.X.shape[1]))
-        }
-        data_dict.update(
-            {self.function_names[i]: res.F[:, i] for i in range(res.F.shape[1])}
-        )
-
-        plot_parcoord(
-            data_dict=data_dict,
-            bounds=bounds,
-            parameters=self.parameters,
-            colorby=ref,
-            obj_res=res.F,
-        )
+        out["F"] = F
+        out["G"] = G
 
 
-def plot_parcoord(
-    data_dict,
-    bounds,
-    parameters,
-    obj_res,
-    colorby=None,
-    html_file_path=None,
-    plot_unselected=True,
-):
-    # Define the color palette
-    color_palette = ["#FFAD85", "#FF8D70", "#ED665A", "#52E0B6", "#479A91"]
-
-    if bounds:
-        range_down = [p[Parameter.INTERVAL][0] for i, p in enumerate(parameters)]
-        range_down.extend(obj_res.min(axis=0))
-        range_up = [p[Parameter.INTERVAL][-1] for i, p in enumerate(parameters)]
-        range_up.extend(obj_res.max(axis=0))
-        ranges = [[range_down[i], range_up[i]] for i in range(len(range_up))]
-
-    else:
-        ranges = [
-            [data_dict[par].min(), data_dict[par].max()] for par in data_dict.keys()
-        ]
-
-    unselected = dict(line=dict(color="grey", opacity=0.5 if plot_unselected else 0))
-    fig = go.Figure(
-        data=go.Parcoords(
-            line=dict(
-                color=data_dict[colorby],
-                colorscale=color_palette,
-                showscale=True,
-                cmin=data_dict[colorby].min(),
-                cmax=data_dict[colorby].max(),
-            ),
-            dimensions=[
-                {
-                    "range": r,
-                    "label": par,
-                    "values": data_dict[par],
-                }
-                for par, r in zip(data_dict.keys(), ranges)
-            ],
-            unselected=unselected,
-        )
-    )
-
-    fig.show()
-
-    if html_file_path:
-        pio.write_html(fig, html_file_path)
-
-
-def _check_duplicate_params(params):
-    """
-    Check for duplicate parameter names in the list of parameters.
-
-    Raises
-    ------
-    ValueError
-        If duplicate parameter names are found.
-    """
-    param_names = set()
-    for param in params:
-        name = param[Parameter.NAME]
-        if name in param_names:
-            raise ValueError(f"Duplicate parameter name: {name}")
-        param_names.add(name)
+def _check_duplicate_params(params: list["Parameter"]) -> None:
+    seen = set()
+    for p in params:
+        if p.name in seen:
+            raise ValueError(f"Duplicate parameter name: {p.name}")
+        seen.add(p.name)

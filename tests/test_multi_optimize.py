@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from corrai.multi_optimize import MyProblem, MyMixedProblem, _check_duplicate_params
+from corrai.multi_optimize import Problem, _check_duplicate_params
 from corrai.base.parameter import Parameter
 
 from pymoo.algorithms.moo.nsga2 import NSGA2
@@ -56,17 +56,17 @@ class MyObjectMixed:
 
 
 parameters = [
-    {Parameter.NAME: "x", Parameter.INTERVAL: (-2, 10)},
-    {Parameter.NAME: "y", Parameter.INTERVAL: (-2, 10)},
+    Parameter(name="x", interval=(-2, 10)),
+    Parameter(name="y", interval=(-2, 10)),
 ]
 
 
-class TestMyProblem:
+class TestProblem:
     def test_duplicates(self):
         parameters = [
-            {Parameter.NAME: "x", Parameter.INTERVAL: (-2, 10)},
-            {Parameter.NAME: "y", Parameter.INTERVAL: (-2, 10)},
-            {Parameter.NAME: "x", Parameter.INTERVAL: (-2, 12)},
+            Parameter(name="x", interval=(-2, 10)),
+            Parameter(name="y", interval=(-2, 10)),
+            Parameter(name="x", interval=(-2, 12)),
         ]
 
         with pytest.raises(ValueError) as excinfo:
@@ -74,38 +74,32 @@ class TestMyProblem:
 
         assert "Duplicate parameter name: x" in str(excinfo.value)
 
-    def test_myproblem_simple(self):
-        problem = MyProblem(
+    def test_problem_simple(self):
+        problem = Problem(
             parameters=parameters,
-            obj_func_list=[],
-            func_list=[py_func_rosen],
-            function_names=["f1"],
-            constraint_names=[],
+            evaluators=[py_func_rosen],
+            objective_ids=["f1"],
         )
-
         algorithm = DE(pop_size=100, sampling=LHS(), CR=0.3, jitter=False)
-
         res = minimize(problem, algorithm, seed=1, verbose=False)
 
         np.testing.assert_allclose(res.X, np.array([1, 1]), rtol=0.01)
 
-    def test_myproblem_twoobjectsfunction(self):
+    def test_Problem_twoobjectsfunction(self):
         param = [
-            {Parameter.NAME: "x", Parameter.INTERVAL: (0, 5)},
-            {Parameter.NAME: "y", Parameter.INTERVAL: (0, 3)},
+            Parameter(name="x", interval=(0, 5)),
+            Parameter(name="y", interval=(0, 3)),
         ]
 
         obj1 = MyObjectBinhandKorn1()
         obj2 = MyObjectBinhandKorn2()
 
-        problem = MyProblem(
+        problem = Problem(
             parameters=param,
-            obj_func_list=[obj1, obj2],
-            func_list=[],
-            function_names=["f1", "f2"],
-            constraint_names=["g1", "g2"],
+            evaluators=[obj1, obj2],
+            objective_ids=["f1", "f2"],
+            constraint_ids=["g1", "g2"],
         )
-
         res = minimize(
             problem, NSGA2(pop_size=10), ("n_gen", 10), seed=1, verbose=False
         )
@@ -164,54 +158,29 @@ class TestMyProblem:
             )
         )
 
-    def test_myproblem_integers(self):
-        problem = MyProblem(
-            parameters=parameters,
-            obj_func_list=[],
-            func_list=[py_func_rosen],
-            function_names=["f1"],
-            constraint_names=[],
-        )
+    parameters = [
+        Parameter(name="x", interval=(-2, 10)),
+        Parameter(name="y", interval=(-2, 10)),
+    ]
 
-        # for  integer variables only --> no need to specify type integer
-        method = GA(
-            pop_size=20,
-            sampling=IntegerRandomSampling(),
-            crossover=SBX(prob=1.0, eta=3.0, vtype=float, repair=RoundingRepair()),
-            mutation=PM(prob=1.0, eta=3.0, vtype=float, repair=RoundingRepair()),
-            eliminate_duplicates=True,
-        )
-
-        res = minimize(
-            problem, method, termination=("n_gen", 40), seed=1, verbose=False
-        )
-
-        assert np.allclose(res.X, np.array([1, 1]), rtol=0, atol=0)
-
-    def test_myproblem_mixed(self):
+    def test_Problem_mixed(self):
         param = [
-            {Parameter.NAME: "b", Parameter.INTERVAL: (), Parameter.TYPE: "Binary"},
-            {
-                Parameter.NAME: "x",
-                Parameter.INTERVAL: ("nothing", "multiply"),
-                Parameter.TYPE: "Choice",
-            },
-            {
-                Parameter.NAME: "y",
-                Parameter.INTERVAL: (-2, 2.5),
-                Parameter.TYPE: "Integer",
-            },
-            {Parameter.NAME: "z", Parameter.INTERVAL: (-5, 5), Parameter.TYPE: "Real"},
+            Parameter(
+                name="b",
+                values=(0, 1),
+                ptype="Binary",
+            ),
+            Parameter(name="x", values=("nothing", "multiply"), ptype="Choice"),
+            Parameter(name="y", interval=(-2, 2.5), ptype="Integer"),
+            Parameter(name="z", interval=(-5, 5), ptype="Real"),
         ]
 
         obj = MyObjectMixed()
 
-        problem = MyMixedProblem(
+        problem = Problem(
             parameters=param,
-            obj_func_list=[obj],
-            func_list=[],
-            function_names=["f1", "f2"],
-            constraint_names=[],
+            evaluators=[obj],
+            objective_ids=["f1", "f2"],
         )
 
         to_test = problem.evaluate(
@@ -227,19 +196,7 @@ class TestMyProblem:
 
     def test_warning_error(self):
         with pytest.raises(ValueError):
-            MyProblem(
+            Problem(
                 parameters=parameters,
-                obj_func_list=[],
-                func_list=[],
-                function_names=["f1"],
-                constraint_names=[],
-            )
-
-        with pytest.raises(ValueError):
-            MyMixedProblem(
-                parameters=parameters,
-                obj_func_list=[],
-                func_list=[],
-                function_names=["f1"],
-                constraint_names=[],
+                objective_ids=["f1"],
             )
