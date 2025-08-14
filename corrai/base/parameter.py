@@ -116,14 +116,14 @@ class Parameter:
                 if isinstance(self.init_value, list)
                 else [self.init_value]
             )
-            if self.interval is not None:
+            if self.interval is not None and self.relabs != "Relative":
                 lo, hi = self.interval
                 if not all(lo <= i_value <= hi for i_value in list_to_test):
                     raise ValueError(
                         f"init_value {self.init_value} "
                         f"not in interval {self.interval}"
                     )
-            elif self.values is not None:
+            elif self.values is not None and self.relabs != "Relative":
                 if not all(i_value in self.values for i_value in list_to_test):
                     raise ValueError(
                         f"init_value {self.init_value} " f"not in values {self.values}"

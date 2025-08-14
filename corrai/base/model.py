@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -19,9 +20,25 @@ class Model(ABC):
             )
             if param.relabs == "Relative":
                 if param.init_value is None:
-                    param.init_value = self.get_property_values(props)
+                    base_vals = self.get_property_values(props)
+                else:
+                    base_vals = param.init_value
 
-                values = [nom_val * value for nom_val in param.init_value]
+                if isinstance(base_vals, dict):
+                    base_vals = [base_vals[p] for p in props]
+                elif isinstance(base_vals, (np.ndarray, pd.Series)):
+                    base_vals = list(base_vals)
+                elif not isinstance(base_vals, (list, tuple)):
+                    base_vals = [base_vals] * len(props)
+
+                if isinstance(value, (list, tuple, np.ndarray, pd.Series)):
+                    mults = list(value)
+                    if len(mults) == 1:
+                        mults = mults * len(props)
+                else:
+                    mults = [value] * len(props)
+
+                values = [b * m for b, m in zip(base_vals, mults)]
             else:
                 values = [value] * len(props)
             for prop, val in zip(props, values):
