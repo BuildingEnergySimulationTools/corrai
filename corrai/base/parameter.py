@@ -98,7 +98,7 @@ class Parameter:
     def __post_init__(self):
         if self.interval is not None and self.values is not None:
             raise ValueError("Only one of 'interval' or 'values' may be specified.")
-        if self.interval is None and self.values is None:
+        if self.interval is None and self.values is None and self.ptype != "Binary":
             raise ValueError("One of 'interval' or 'values' must be specified.")
 
         if self.ptype not in TYPES:
