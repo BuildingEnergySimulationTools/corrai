@@ -441,19 +441,27 @@ def plot_sample(
     if results.empty:
         raise ValueError("`results` is empty. Simulate samples first.")
 
-    def _to_series(obj, indicator_):
+    ref_name = getattr(reference_timeseries, "name", None)
+
+    def _to_series(obj, indicator_, ref_name_):
         if isinstance(obj, pd.Series):
             return obj
         if isinstance(obj, pd.DataFrame):
             if obj.empty:
                 return None
-            if indicator_ is None:
-                if obj.shape[1] != 1:
-                    raise ValueError(
-                        "Provide `indicator`: multiple columns in the sample DataFrame."
-                    )
+            # 1) indicateur explicitement demandé
+            if indicator_ is not None:
+                return obj[indicator_]
+            # 2) sinon, si une référence nommée correspond à une colonne, on la prend
+            if ref_name_ is not None and ref_name_ in obj.columns:
+                return obj[ref_name_]
+            # 3) sinon, autoriser DF mono-colonne
+            if obj.shape[1] == 1:
                 return obj.iloc[:, 0]
-            return obj[indicator_]
+            # 4) cas ambigu : demander indicator
+            raise ValueError(
+                "Provide `indicator`: multiple columns in the sample DataFrame."
+            )
         return None
 
     def _legend_for(i: int) -> str:
@@ -470,7 +478,7 @@ def plot_sample(
     plotted = 0
 
     for i, sample in enumerate(results):
-        s = _to_series(sample, indicator)
+        s = _to_series(sample, indicator, ref_name)
         if s is None or s.empty:
             continue
         fig.add_trace(

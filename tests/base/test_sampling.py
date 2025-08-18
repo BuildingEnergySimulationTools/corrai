@@ -212,7 +212,6 @@ class TestSample:
         assert fig.data[0].name == "p1: 1.1, p2: 2.2"
         assert fig.data[1].name == "p1: 3.3, p2: 4.4"
         assert fig.data[2].name == "p1: 5.5, p2: 6.6"
-        fig.show()
 
         df_multi = pd.concat(
             [df1.rename(columns={"res": "a"}), df2.rename(columns={"res": "b"})], axis=1
@@ -248,6 +247,25 @@ class TestSample:
         )
         assert len(fig_ref_only.data) == 1
         np.testing.assert_allclose(fig_ref_only.data[0]["y"], ref.to_numpy())
+
+    def test_plot_sample_infer_indicator_from_reference_name(self):
+        t = pd.date_range("2025-01-01 00:00:00", periods=3, freq="h")
+        df = pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [10.0, 20.0, 30.0]}, index=t)
+        results = pd.Series([df])
+
+        ref = pd.Series([0.0, 0.0, 0.0], index=t, name="a")  # <- nom = "a"
+
+        fig = plot_sample(
+            results=results,
+            reference_timeseries=ref,
+            show_legends=False,
+        )
+        assert len(fig.data) == 2
+
+        np.testing.assert_allclose(np.array(fig.data[0].y), df["a"].to_numpy())
+        assert fig.data[0].mode == "markers"
+        np.testing.assert_allclose(np.array(fig.data[1].y), ref.to_numpy())
+        assert fig.data[1].mode == "lines"
 
     def test_sample(self):
         sample = Sample(REAL_PARAM)
