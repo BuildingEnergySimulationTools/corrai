@@ -174,6 +174,18 @@ class TestSensitivity:
 
 
 class TestPlots:
+    def test_sobol_s2_matrix(self):
+        sobol_analysis = SobolSanalysis(
+            parameters=PARAMETER_LIST,
+            model=Ishigami(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        sobol_analysis.add_sample(N=2**2, n_cpu=1, calc_second_order=True)
+        fig_matrix = sobol_analysis.plot_s2_matrix()
+        assert fig_matrix["layout"]["title"]["text"] == (
+            "Sobol mean res " "- 2nd order interactions"
+        )
+
     def test_morris_plots(self):
         morris_analysis = MorrisSanalysis(
             parameters=PARAMETER_LIST,

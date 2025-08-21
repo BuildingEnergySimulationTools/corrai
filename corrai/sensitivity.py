@@ -216,6 +216,36 @@ class Sanalysis(ABC):
             html_file_path=html_file_path,
         )
 
+    def salib_plot_matrix(
+        self,
+        indicator: str,
+        sensitivity_method_name: str,
+        method: str = "mean",
+        unit: str = "",
+        reference_time_series: pd.Series = None,
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwarg,
+    ):
+        title = (
+            f"{sensitivity_method_name} {method} {indicator} "
+            f"- 2nd order interactions"
+            if title is None
+            else title
+        )
+
+        result = self.analyze(
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq=None,
+            **analyse_kwarg,
+        )[f"{method}_{indicator}"]
+
+        parameter_names = [p.name for p in self.sampler.sample.parameters]
+        return plot_s2_matrix(result, parameter_names, title=title)
+
 
 class SobolSanalysis(Sanalysis):
     def __init__(
@@ -335,6 +365,30 @@ class SobolSanalysis(Sanalysis):
             color_by=color_by,
             title=title,
             html_file_path=html_file_path,
+        )
+
+    def plot_s2_matrix(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "S2",
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        calc_second_order: bool = True,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwargs,
+    ):
+        return super().salib_plot_matrix(
+            indicator=indicator,
+            sensitivity_method_name="Sobol",
+            method=method,
+            unit=unit,
+            reference_time_series=reference_time_series,
+            agg_method_kwarg=agg_method_kwarg,
+            title=title,
+            calc_second_order=calc_second_order,
+            **analyse_kwargs,
         )
 
 
@@ -860,6 +914,37 @@ def plot_morris_scatter(
         xaxis_title=f"Absolute mean of elementary effects μ* [{unit}]",
         yaxis_title=f"Standard deviation of elementary effects σ [{unit}]",
         yaxis_range=[-0.1 * y_max, y_max],
+    )
+
+    return fig
+
+
+def plot_s2_matrix(
+    result: dict,
+    param_names: list[str],
+    title: str = "Sobol 2nd-order interactions (S2)",
+    colorscale: str = "Reds",
+):
+    df_S2 = pd.DataFrame(result["S2"], index=param_names, columns=param_names)
+
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=df_S2.values,
+            x=df_S2.columns,
+            y=df_S2.index,
+            colorscale=colorscale,
+            zmin=0,
+            zmax=df_S2.values.max(),
+            colorbar=dict(title="S2"),
+            text=df_S2.round(3).astype(str),
+            texttemplate="%{text}",
+        )
+    )
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="Parameter",
+        yaxis_title="Parameter",
     )
 
     return fig
