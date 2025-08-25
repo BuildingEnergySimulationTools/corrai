@@ -128,3 +128,4 @@ class Parameter:
                     raise ValueError(
                         f"init_value {self.init_value} " f"not in values {self.values}"
                     )
+            self.init_value = list_to_test

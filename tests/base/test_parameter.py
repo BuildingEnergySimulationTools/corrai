@@ -24,7 +24,7 @@ class TestParameter:
             ptype="Choice",
             init_value="A",
         )
-        assert param.init_value in param.values
+        assert all([val in param.values for val in param.init_value])
 
     def test_error_both_interval_and_values(self):
         with pytest.raises(
