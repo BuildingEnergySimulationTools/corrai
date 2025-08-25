@@ -1,5 +1,3 @@
-import enum
-
 import numpy as np
 import pandas as pd
 
@@ -16,76 +14,74 @@ from sklearn.utils.validation import check_is_fitted
 from corrai.metrics import nmbe, cv_rmse
 from corrai.base.utils import as_1_column_dataframe
 
-
-class Model(str, enum.Enum):
-    TREE_REGRESSOR = "TREE_REGRESSOR"
-    RANDOM_FOREST = "RANDOM_FOREST"
-    LINEAR_REGRESSION = "LINEAR_REGRESSION"
-    LINEAR_SECOND_ORDER = "LINEAR_SECOND_ORDER"
-    LINEAR_THIRD_ORDER = "LINEAR_THIRD_ORDER"
-    SUPPORT_VECTOR = "SUPPORT_VECTOR"
-    MULTI_LAYER_PERCEPTRON = "MULTI_LAYER_PERCEPTRON"
-
-
 MODEL_MAP = {
-    Model.TREE_REGRESSOR: RandomForestRegressor(),
-    Model.RANDOM_FOREST: RandomForestRegressor(),
-    Model.LINEAR_REGRESSION: LinearRegression(),
-    Model.LINEAR_SECOND_ORDER: Pipeline(
+    "TREE_REGRESSOR": RandomForestRegressor(),
+    "RANDOM_FOREST": RandomForestRegressor(),
+    "LINEAR_REGRESSION": LinearRegression(),
+    "LINEAR_SECOND_ORDER": Pipeline(
         [
             ("poly", PolynomialFeatures(2)),
             # Intercept is already added by PolynomialFeatures
             ("Line_reg", LinearRegression(fit_intercept=False)),
         ]
     ),
-    Model.LINEAR_THIRD_ORDER: Pipeline(
+    "LINEAR_THIRD_ORDER": Pipeline(
         [
             ("poly", PolynomialFeatures(3)),
             ("Line_reg", LinearRegression(fit_intercept=False)),
         ]
     ),
-    Model.SUPPORT_VECTOR: SVR(),
-    Model.MULTI_LAYER_PERCEPTRON: MLPRegressor(max_iter=5000),
+    "SUPPORT_VECTOR": SVR(),
+    "MULTI_LAYER_PERCEPTRON": MLPRegressor(max_iter=5000),
 }
 
 GRID_DICT = {
-    Model.TREE_REGRESSOR: [
+    "TREE_REGRESSOR": [
         {
-            "n_estimators": [100, 200, 500],
-            "max_depth": [5, 10, 20, None],
+            "n_estimators": [100, 300, 500],
+            "max_depth": [None, 10, 20, 40],
             "min_samples_split": [2, 5, 10],
             "min_samples_leaf": [1, 2, 4],
-            "max_features": ["sqrt", "log2", None],
+            "max_features": ["sqrt", "log2", 0.5],  # allow fraction
+            "bootstrap": [True, False],
         }
     ],
-    Model.RANDOM_FOREST: [
-        {"n_estimators": [100, 200, 400, 600]},
+    "RANDOM_FOREST": [
+        {
+            "n_estimators": [100, 200, 400, 800],
+            "max_features": ["sqrt", "log2"],
+            "min_samples_leaf": [1, 2, 5],
+        }
     ],
-    Model.LINEAR_REGRESSION: [{"fit_intercept": [True, False]}],
-    Model.LINEAR_SECOND_ORDER: [{"poly__interaction_only": [True, False]}],
-    Model.LINEAR_THIRD_ORDER: [{"poly__interaction_only": [True, False]}],
-    Model.SUPPORT_VECTOR: [
+    "LINEAR_REGRESSION": [{"fit_intercept": [True, False]}],
+    "LINEAR_SECOND_ORDER": [{"poly__interaction_only": [True, False]}],
+    "LINEAR_THIRD_ORDER": [{"poly__interaction_only": [True, False]}],
+    "SUPPORT_VECTOR": [
         {
             "kernel": ["linear", "poly", "rbf", "sigmoid"],
-            "degree": [2, 3, 4],
+            "C": [0.1, 1, 10, 100],
             "gamma": ["scale", "auto"],
-            "epsilon": [0.005, 0.01, 0.1],
+            "epsilon": [0.001, 0.01, 0.1],
+            "degree": [2, 3, 4],  # only relevant if kernel="poly"
         }
     ],
-    Model.MULTI_LAYER_PERCEPTRON: [
+    "MULTI_LAYER_PERCEPTRON": [
         {
-            "hidden_layer_sizes": [(50,), (100,), (150,)],
-            "activation": ["identity", "logistic", "tanh", "relu"],
-            "solver": ["lbfgs", "sgd", "adam"],
-            "alpha": [0.00005, 0.0005, 0.005],
-            # 'batch_size': ['auto', 100, 200, 300]
+            "hidden_layer_sizes": [(50,), (100,), (150,), (50, 50), (100, 50)],
+            "activation": [
+                "relu",
+                "tanh",
+            ],  # identity/logistic rarely perform well in regression
+            "solver": ["adam", "lbfgs"],  # "sgd" often unstable unless tuned further
+            "alpha": [0.0001, 0.001, 0.01],
+            "learning_rate": ["constant", "adaptive"],
         }
     ],
 }
 
 
 class ModelTrainer:
-    def __init__(self, model_pipe, test_size: float = 0.2, random_state: float = 42):
+    def __init__(self, model, test_size: float = 0.2, random_state: float = 42):
         """
         Initialize a ModelTrainer instance for training a machine learning model.
 
@@ -110,7 +106,7 @@ class ModelTrainer:
         - _is_trained: A boolean indicating if the model has been trained.
         """
         self.test_size = test_size
-        self.model_pipe = model_pipe
+        self.model = model
         self.random_state = random_state
         self.x_train = None
         self.x_test = None
@@ -126,71 +122,120 @@ class ModelTrainer:
             X, y, test_size=self.test_size, random_state=self.random_state
         )
 
-        self.model_pipe.fit(self.x_train, self.y_train)
+        self.model.fit(self.x_train, self.y_train)
         self._is_trained = True
 
     @property
     def test_nmbe_score(self):
         if self._is_trained:
-            return nmbe(self.model_pipe.predict(self.x_test), self.y_test)
+            return nmbe(self.model.predict(self.x_test), self.y_test)
         else:
             raise ValueError("Model is not trained yet. use train() method")
 
     @property
     def test_cvrmse_score(self):
         if self._is_trained:
-            return cv_rmse(self.model_pipe.predict(self.x_test), self.y_test)
+            return cv_rmse(self.model.predict(self.x_test), self.y_test)
         else:
             raise ValueError("Model is not trained yet. use train() method")
 
 
 class MultiModelSO(BaseEstimator, RegressorMixin):
+    """
+    Multi-model selection and optimization wrapper for scikit-learn regressors.
+
+    This class automates model training, cross-validation scoring,
+    model selection, and optional fine-tuning via grid search.
+    It compares multiple candidate models and selects the one with the
+    best cross-validation performance according to a specified scoring metric.
+
+    Parameters
+    ----------
+    models : list of str, optional
+        List of model keys to evaluate. Must be a subset of ``MODEL_MAP``.
+            "TREE_REGRESSOR", "RANDOM_FOREST", "LINEAR_REGRESSION",
+            "LINEAR_SECOND_ORDER", "LINEAR_THIRD_ORDER", "SUPPORT_VECTOR",
+            "MULTI_LAYER_PERCEPTRON"
+        If ``None`` (default), all models in ``MODEL_MAP`` are evaluated.
+    cv : int, default=10
+        Number of cross-validation folds to use for model comparison.
+    fine_tuning : bool, default=True
+        If True, perform a grid search on the best model to fine-tune its
+        hyperparameters.
+    scoring : str, default="neg_mean_squared_error"
+        Scoring function to evaluate models. Should be a valid scikit-learn
+        scorer string (e.g. ``"r2"``, ``"neg_mean_absolute_error"``).
+    n_jobs : int, default=-1
+        Number of parallel jobs for cross-validation and grid search.
+        ``-1`` means using all available cores.
+    random_state : int, optional
+        Random seed for reproducibility.
+
+    Attributes
+    ----------
+    model_map : dict
+        Dictionary mapping model keys to fitted estimator instances.
+    best_model_key : str
+        The key of the best-performing model after training.
+    _is_fitted : bool
+        Whether the estimator has been fitted.
+
+    Methods
+    -------
+    fit(X, y, verbose=True)
+        Train and evaluate all models, selecting the best one.
+    predict(X, model=None)
+        Predict using the best model (or a specified model).
+    get_model(model=None)
+        Retrieve the fitted estimator by key.
+    fine_tune(X, y, model=None, verbose=3)
+        Perform grid search hyperparameter tuning on a given model.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> from sklearn.datasets import load_diabetes
+    >>> from sklearn.model_selection import train_test_split
+    >>> from corrai.learning.model_selection import MultiModelSO
+    >>>
+    >>> data = load_diabetes(as_frame=True)
+    >>> X = data.data
+    >>> y = data.target
+    >>> X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    >>>
+    >>> model = MultiModelSO(models=["LINEAR_REGRESSION", "RANDOM_FOREST"], cv=5, fine_tuning=False)
+    >>> model.fit(X_train, y_train, verbose=True)
+    === Training results ===
+    Cross validation neg_mean_squared_error scores of 5 folds
+                                  mean(neg_mean_squared_error) std(neg_mean_squared_error)
+    RANDOM_FOREST                                -3143.015307                          355.466814
+    LINEAR_REGRESSION                            -3425.368758                          525.460964
+    >>> y_pred = model.predict(X_test)
+    >>> y_pred.head()
+          0
+    287  139.547558
+    211  179.517208
+    72   134.038756
+    321  291.417029
+    73   123.789659
+    """
+
     def __init__(
         self,
-        models: list[Model] = Model,
+        models: list[str] = None,
         cv: int = 10,
         fine_tuning: bool = True,
         scoring: str = "neg_mean_squared_error",
         n_jobs: int = -1,
         random_state: int = None,
     ):
-        """
-        Initialize a MultiModelsSO instance for training and evaluating multiple
-        regression models.
-        Allows training and comparing multiple regression models,
-        selecting the best-performing model, and optionally fine-tuning its
-        hyperparameters.
-
-        :param models: A list of regression model names to be trained and
-            compared (default: Model Enum).
-        :param cv: The number of cross-validation folds (default: 10).
-        :param fine_tuning: Whether to perform hyperparameter fine-tuning
-            (default: True).
-        :param scoring: The scoring metric for model evaluation
-            (default: 'neg_mean_squared_error').
-        :param n_jobs: The number of CPU cores to use for parallel processing
-            (default: -1, all available cores).
-        :param random_state: Seed for random number generation (default: None).
-
-        Attributes:
-        - model_map: A dictionary mapping model names to model instances.
-
-        Methods:
-        - fit(X, y, verbose=True): Train the models on the provided data and select
-            the best-performing model.
-        - predict(X, model=None): Make predictions using a specified or the best model.
-        - get_model(model=None): Retrieve a model instance by name.
-        - fine_tune(X, y, model=None, verbose=3): Fine-tune the
-            hyperparameters of a model.
-
-        """
         self.cv = cv
         self.fine_tuning = fine_tuning
         self.scoring = scoring
         self.n_jobs = n_jobs
         self.random_state = random_state
         self.best_model_key = None
-        self.models = models
+        self.models = models if models is not None else list(MODEL_MAP.keys())
         self.model_map = {mod: clone(MODEL_MAP[mod]) for mod in self.models}
 
     def __sklearn_is_fitted__(self):
@@ -200,43 +245,40 @@ class MultiModelSO(BaseEstimator, RegressorMixin):
         return hasattr(self, "_is_fitted") and self._is_fitted
 
     def fit(self, X: pd.DataFrame, y: pd.DataFrame | pd.Series, verbose=True):
-        if isinstance(y, pd.DataFrame):
-            y = y.squeeze()
+        y = y.squeeze() if isinstance(y, pd.DataFrame) else y
 
         for mod in self.model_map.values():
             mod.fit(X, y)
 
-        score_dict = {}
-        for key, mod in self.model_map.items():
-            cv_scores = cross_val_score(mod, X, y, scoring=self.scoring, cv=self.cv)
-
-            score_dict[key] = [np.mean(cv_scores), np.std(cv_scores)]
-        sorted_score_dict = dict(
-            sorted(score_dict.items(), key=lambda item: item[1], reverse=True)
+        score_frame = pd.DataFrame(
+            columns=[f"mean({self.scoring})", f"std({self.scoring})"], index=self.models
         )
+        for mod_name, mod in self.model_map.items():
+            cv_scores = cross_val_score(mod, X, y, scoring=self.scoring, cv=self.cv)
+            score_frame.loc[mod_name, f"mean({self.scoring})"] = np.mean(cv_scores)
+            score_frame.loc[mod_name, f"std({self.scoring})"] = np.std(cv_scores)
+
+        score_frame.sort_values(f"mean({self.scoring})", ascending=False, inplace=True)
 
         if verbose:
             print(
-                "=== Training results ==="
-                "Cross validation neg_mean_squared_error scores"
-                f"[mean, standard deviation] of {self.cv} folds\n"
+                "=== Training results === \n"
+                f"Cross validation {self.scoring} scores of {self.cv} folds\n"
+                f"{score_frame}"
             )
-            for key, val in sorted_score_dict.items():
-                print(f"{key}: {val}")
 
-        self.best_model_key = list(sorted_score_dict)[0]
+        self.best_model_key = score_frame.index[0]
 
         if self.fine_tuning:
             if verbose:
-                print(f"\n === Fine tuning === \nFine tuning {self.best_model_key}")
+                print(f"\n === Fine tuning === \n" f"Fine tuning {self.best_model_key}")
+
             self.fine_tune(X, y, self.best_model_key)
 
         self._is_fitted = True
 
-        pass
-
     def predict(
-        self, X: pd.DataFrame | np.ndarray | pd.Series, model: Model = None
+        self, X: pd.DataFrame | np.ndarray | pd.Series, model: str = None
     ) -> pd.DataFrame:
         check_is_fitted(self)
         model_for_prediction = self.get_model(model)
@@ -248,9 +290,8 @@ class MultiModelSO(BaseEstimator, RegressorMixin):
         else:
             return pd.DataFrame(model_for_prediction.predict(X))
 
-    def get_model(self, model: Model = None):
+    def get_model(self, model: str = None):
         if model is None:
-            check_is_fitted(self)
             model = self.best_model_key
 
         if model not in self.model_map.keys():
@@ -262,7 +303,7 @@ class MultiModelSO(BaseEstimator, RegressorMixin):
         self,
         X: pd.DataFrame,
         y: pd.DataFrame | pd.Series,
-        model: Model = None,
+        model: str = None,
         verbose=3,
     ):
         if GRID_DICT[model] is None:
