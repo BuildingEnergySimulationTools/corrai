@@ -8,6 +8,7 @@ from SALib.analyze import morris, sobol, fast, rbd_fast
 from corrai.base.sampling import plot_pcp as _plot_pcp
 from corrai.base.parameter import Parameter
 from corrai.base.sampling import (
+    SaltelliSampler,
     SobolSampler,
     MorrisSampler,
     FASTSampler,
@@ -393,14 +394,24 @@ class SobolSanalysis(Sanalysis):
     """
 
     def __init__(
-        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+        self,
+        parameters: list[Parameter],
+        model: Model,
+        simulation_options: dict = None,
+        sampler: str = "saltelli",
     ):
+        self._sampler_choice = sampler
         super().__init__(parameters, model, simulation_options)
 
     def _set_sampler(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
     ):
-        return SobolSampler(parameters, model, simulation_options)
+        if self._sampler_choice == "saltelli":
+            return SaltelliSampler(parameters, model, simulation_options)
+        elif self._sampler_choice == "sobol":
+            return SobolSampler(parameters, model, simulation_options)
+        else:
+            raise ValueError("sampler must be 'saltelli' or 'sobol'")
 
     def _set_analyser(self):
         return sobol

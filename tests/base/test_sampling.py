@@ -451,12 +451,11 @@ class TestSample:
             ),
         )
 
-    def test_sobol_sampler(self):
+    def test_saltelli_sampler(self):
         sampler = SobolSampler(
             parameters=ISHIGAMI_PARAMETERS,
             model=Ishigami(),
             simulation_options=SIMULATION_OPTIONS,
-            sampler="sobol",
         )
         sampler.add_sample(N=1, **{"seed": 42})
         expected_values = np.array(
