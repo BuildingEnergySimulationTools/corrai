@@ -446,9 +446,36 @@ class LHSSampler(RealSampler):
 
 class SobolSampler(RealSampler):
     def __init__(
-        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+        self,
+        parameters: list[Parameter],
+        model: Model,
+        simulation_options: dict = None,
+        sampler: str = "saltelli",
     ):
+        """
+        Sampler for Sobol-based sensitivity analysis.
+
+        This class generates parameter samples using either the Saltelli extension
+        of Sobol sequences (default) or pure Sobol sequences. It provides the
+        sampling step for variance-based sensitivity analyses such as Sobol indices.
+
+        Parameters
+        ----------
+        parameters : list[Parameter]
+            List of model parameters to sample.
+        model : Model
+            The model to simulate.
+        simulation_options : dict, optional
+            Additional options passed to the simulation runner.
+        sampler : {"saltelli", "sobol"}, default="saltelli"
+            Choice of sampling strategy:
+            - "saltelli": Saltelli extension for Sobol indices (recommended).
+            - "sobol":  Sobol sampler from SALib.sample.
+        """
         super().__init__(parameters, model, simulation_options)
+        if sampler not in ("saltelli", "sobol"):
+            raise ValueError("`sampler` must be either 'saltelli' or 'sobol'.")
+        self.sampler = sampler
 
     def add_sample(
         self,
@@ -459,14 +486,22 @@ class SobolSampler(RealSampler):
         calc_second_order: bool = True,
         **sobol_kwargs,
     ):
-        new_sample = saltelli.sample(
-            problem=self.get_salib_problem(),
-            N=N,
-            calc_second_order=calc_second_order,
-            **sobol_kwargs,
-        )
+        if self.sampler == "saltelli":
+            new_sample = saltelli.sample(
+                problem=self.get_salib_problem(),
+                N=N,
+                calc_second_order=calc_second_order,
+                **sobol_kwargs,
+            )
+        else:
+            new_sample = sobol_sampler.sample(
+                problem=self.get_salib_problem(),
+                N=N,
+                calc_second_order=calc_second_order,
+                **sobol_kwargs,
+            )
 
-        self._post_draw_sample(new_sample, simulate, n_cpu)
+        self._post_draw_sample(new_sample, simulate, n_cpu, sample_is_dimless=True)
 
 
 def plot_sample(
