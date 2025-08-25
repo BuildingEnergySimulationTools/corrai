@@ -52,7 +52,7 @@ class IshigamiTwoOutputs(Model):
 
 class RosenModel(Model):
     def simulate(
-        self, property_dict=None, simulation_options=None, **kwargs
+        self, property_dict=None, simulation_options=None, simulation_kwargs=None
     ) -> pd.DataFrame:
         default_parameters = {
             "x": 1,

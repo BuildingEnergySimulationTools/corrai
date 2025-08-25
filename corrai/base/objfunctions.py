@@ -75,38 +75,6 @@ class ObjectiveFunction:
             else scipy_obj_indicator
         )
 
-    def _as_vector(self, x: dict[str, float] | Iterable[float]) -> list[float]:
-        """Accepts a dict keyed by parameter name OR a positional vector."""
-        if isinstance(x, dict):
-            try:
-                return [float(x[p.name]) for p in self.parameters]
-            except KeyError as e:
-                raise ValueError(f"Missing value for parameter {e.args[0]!r}") from e
-        else:
-            vec = list(x)
-            if len(vec) != len(self.parameters):
-                raise ValueError(
-                    "Length of values does not match number of parameters."
-                )
-            return [float(v) for v in vec]
-
-    def _to_property_dict(self, vec: list[float]) -> dict[str, float]:
-        """
-        Map parameter values to the model properties.
-        If `model_property` is a tuple of paths, apply the same scalar value to each path.
-        """
-        prop_dict: dict[str, float] = {}
-        for val, par in zip(vec, self.parameters):
-            mp = par.model_property
-            if mp is None:
-                prop_dict[par.name] = val
-            elif isinstance(mp, tuple):
-                for path in mp:
-                    prop_dict[path] = val
-            else:
-                prop_dict[mp] = val
-        return prop_dict
-
     @property
     def bounds(self) -> list[tuple[float, float]]:
         bnds: list[tuple[float, float]] = []
@@ -117,6 +85,19 @@ class ObjectiveFunction:
                     "continuous optimization requires continuous bounds."
                 )
             lo, hi = p.interval
+
+            if getattr(p, "relabs", None) == "Relative":
+                init_val = p.init_value
+                if init_val is None:
+                    init_vals = self.model.get_property_values(
+                        (p.model_property,)
+                        if not isinstance(p.model_property, tuple)
+                        else p.model_property
+                    )
+                    init_val = sum(init_vals) / len(init_vals)
+
+                lo, hi = lo * init_val, hi * init_val
+
             bnds.append((float(lo), float(hi)))
         return bnds
 
@@ -128,7 +109,9 @@ class ObjectiveFunction:
             if iv is None:
                 return None
             if isinstance(iv, (tuple, list)):
-                return None
+                if len(iv) != 1:
+                    return None
+                iv = iv[0]
             vals.append(float(iv))
         return vals
 
@@ -140,33 +123,34 @@ class ObjectiveFunction:
         """
         Run the model and compute the configured indicators.
 
-        Parameters
-        ----------
-        param_values : dict[str, float] | Iterable[float]
-            Parameter values either as {parameter_name: value} or a positional vector
-            in the same order as `self.parameters`.
-        kwargs : dict, optional
-            Extra kwargs forwarded to the model.
-
-        Returns
-        -------
-        dict[str, float]
-            Computed indicators: {indicator_name: value}
+        If `param_values` is a dict, calls `model.simulate`.
+        If it is a vector, converts to parameter-value pairs and calls `model.simulate_parameter`.
         """
         kwargs = {} if kwargs is None else kwargs
-        vec = self._as_vector(param_values)
-        property_dict = self._to_property_dict(vec)
 
-        sim_df = self.model.simulate(
-            property_dict=property_dict,
-            simulation_options=self.simulation_options,
-            simulation_kwargs=kwargs,
-        )
-        if not isinstance(sim_df, (pd.DataFrame, pd.Series)):
-            raise TypeError("Model.simulate must return a pandas DataFrame or Series.")
+        if isinstance(param_values, dict):
+            sim_df = self.model.simulate(
+                property_dict=param_values,
+                simulation_options=self.simulation_options,
+                **kwargs,
+            )
+        else:
+            vec = list(param_values)
+            if len(vec) != len(self.parameters):
+                raise ValueError(
+                    "Length of values does not match number of parameters."
+                )
+            pairs = list(zip(self.parameters, vec))
+            sim_df = self.model.simulate_parameter(
+                pairs,
+                self.simulation_options,
+                kwargs,
+            )
 
         if isinstance(sim_df, pd.Series):
             sim_df = sim_df.to_frame()
+        if not isinstance(sim_df, pd.DataFrame):
+            raise TypeError("Model.simulate must return a pandas DataFrame or Series.")
 
         out: dict[str, float] = {}
         for ind, cfg in self.indicators_config.items():
@@ -177,8 +161,7 @@ class ObjectiveFunction:
                 func, ref = cfg
                 out[ind] = float(func(series, ref))
             else:
-                func = cfg
-                out[ind] = float(func(series))
+                out[ind] = float(cfg(series))
         return out
 
     def scipy_obj_function(

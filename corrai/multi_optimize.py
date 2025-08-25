@@ -117,11 +117,10 @@ class Problem(ElementwiseProblem):
     def _aggregate(self, param_dict: dict) -> dict[str, float]:
         acc: dict[str, float] = {}
         total_ids = len(self.objective_ids) + len(self.constraint_ids)
+        vec = [param_dict[p.name] for p in self.parameters]
         for block in self.evaluators:
             res = (
-                block.function(param_dict)
-                if hasattr(block, "function")
-                else block(param_dict)
+                block.function(vec) if hasattr(block, "function") else block(param_dict)
             )
             if isinstance(res, dict):
                 acc.update({k: float(v) for k, v in res.items()})
