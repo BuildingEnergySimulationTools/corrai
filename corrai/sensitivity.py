@@ -4,10 +4,16 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from SALib.analyze import morris, sobol
-
+from SALib.analyze import morris, sobol, fast, rbd_fast
+from corrai.base.sampling import plot_pcp as _plot_pcp
 from corrai.base.parameter import Parameter
-from corrai.base.sampling import SobolSampler, MorrisSampler
+from corrai.base.sampling import (
+    SaltelliSampler,
+    SobolSampler,
+    MorrisSampler,
+    FASTSampler,
+    RBDFASTSampler,
+)
 from corrai.base.model import Model
 
 
@@ -34,6 +40,141 @@ class Sanalysis(ABC):
     @property
     def results(self):
         return self.sampler.results
+
+    def plot_sample(
+        self,
+        indicator: str | None = None,
+        reference_timeseries: pd.Series | None = None,
+        title: str | None = None,
+        y_label: str | None = None,
+        x_label: str | None = None,
+        alpha: float = 0.5,
+        show_legends: bool = False,
+        parameter_values: np.ndarray | None = None,
+        parameter_names: list[str] | None = None,
+        round_ndigits: int = 2,
+    ) -> go.Figure:
+        """
+        Plot all available simulation runs against an optional reference time series.
+
+        This method wraps :meth:`Sampler.plot_sample` and plots the simulations
+        associated with this sensitivity analysis instance. Each run is displayed
+        as a scatter trace, optionally annotated with parameter values.
+
+        Parameters
+        ----------
+        indicator : str, optional
+            Column name to select if simulation outputs are DataFrames with multiple
+            columns. If None and a DataFrame has a single column, that column is used.
+        reference_timeseries : pd.Series, optional
+            A time series to plot as ground truth or reference, shown as a red line.
+        title : str, optional
+            Plot title.
+        y_label : str, optional
+            Label for the y-axis.
+        x_label : str, optional
+            Label for the x-axis.
+        alpha : float, default=0.5
+            Opacity for the sample markers.
+        show_legends : bool, default=False
+            Whether to display a legend entry for each sample.
+        parameter_values : np.ndarray, optional
+            Custom parameter values for legend annotation. If None, values from
+            this Sanalysis instance are used.
+        parameter_names : list of str, optional
+            Custom parameter names. If None, names from this Sanalysis instance are used.
+        round_ndigits : int, default=2
+            Number of decimal digits for rounding parameter values in legends.
+
+        Returns
+        -------
+        go.Figure
+            A Plotly Figure containing the sample simulations and optional reference.
+        """
+        return self.sampler.plot_sample(
+            indicator=indicator,
+            reference_timeseries=reference_timeseries,
+            title=title,
+            y_label=y_label,
+            x_label=x_label,
+            alpha=alpha,
+            show_legends=show_legends,
+            parameter_values=parameter_values,
+            parameter_names=parameter_names,
+            round_ndigits=round_ndigits,
+        )
+
+    def plot_pcp(
+        self,
+        indicator: str | None = None,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        prefix: str | None = None,
+        bounds: list[tuple[float, float]] | None = None,
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates - Samples",
+        html_file_path: str | None = None,
+    ) -> go.Figure:
+        """
+        Create a Parallel Coordinates Plot (PCP) of parameters and aggregated results.
+
+        Each vertical axis corresponds to a parameter or an aggregated indicator,
+        and each polyline represents one simulation. Useful for visualizing the
+        relationship between sampled parameters and performance metrics.
+
+        This method wraps :meth:`Sampler.plot_pcp`.
+
+        Parameters
+        ----------
+        indicator : str, optional
+            Indicator name to extract from simulation results before aggregation.
+            If None, only parameters are shown.
+        method : str, default="mean"
+            Aggregation method to apply. Supported values include:
+            - "mean"
+            - "sum"
+            - "nmbe"
+            - "cv_rmse"
+            - "mean_squared_error"
+            - "mean_absolute_error"
+        agg_method_kwarg : dict, optional
+            Extra keyword arguments passed to the aggregation function.
+        reference_time_series : pd.Series, optional
+            Required for error-based methods (e.g., "cv_rmse"). Must have the same
+            index and length as each simulation.
+        freq : str or pd.Timedelta or datetime.timedelta, optional
+            If provided, aggregation is performed per time bin.
+        prefix : str, optional
+            Custom prefix for naming aggregated columns. Defaults to the method name.
+        bounds : list of tuple(float, float), optional
+            Parameter bounds for each parameter axis.
+        color_by : str, optional
+            Column name (parameter or aggregate) used to color polylines.
+        title : str, optional
+            Figure title.
+        html_file_path : str, optional
+            If provided, saves the plot as an interactive HTML file.
+
+        Returns
+        -------
+        go.Figure
+            A Plotly Figure with the parallel coordinates visualization.
+        """
+
+        return self.sampler.plot_pcp(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
+            prefix=prefix,
+            bounds=bounds,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
+        )
 
     @abstractmethod
     def _set_sampler(
@@ -170,17 +311,107 @@ class Sanalysis(ABC):
 
         return plot_dynamic_metric(metrics, sensitivity_metric, unit, title, stacked)
 
+    # def plot_pcp(
+    #     self,
+    #     aggregations: dict | None = None,  # <= optionnel
+    #     *,
+    #     bounds: list[tuple[float, float]] | None = None,
+    #     color_by: str | None = None,
+    #     title: str | None = "Parallel Coordinates — Samples",
+    #     html_file_path: str | None = None,
+    # ):
+    #     """
+    #     Parallel Coordinates Plot basé sur les échantillons et résultats présents dans l'analyse.
+    #
+    #     Parameters
+    #     ----------
+    #     aggregations : dict
+    #         {indicator: callable | [callable] | {label: callable}}
+    #         Ex. {"res": [np.sum, np.mean]}  -> colonnes "res:sum", "res:mean".
+    #     bounds : list[(float, float)] | None
+    #         Bornes (min, max) par paramètre (même ordre que les paramètres). Si None, autoscale.
+    #     color_by : str | None
+    #         Nom d'une dimension (paramètre ou indicateur agrégé) pour colorer les lignes.
+    #     title : str | None
+    #         Titre.
+    #     html_file_path : str | None
+    #         Si fourni, export HTML.
+    #     """
+    #     results = self.sampler.sample.results
+    #     parameter_values = self.sampler.sample.values
+    #     parameter_names = [p.name for p in self.sampler.sample.parameters]
+    #
+    #     return _plot_pcp(
+    #         results=results,
+    #         parameter_values=parameter_values,
+    #         parameter_names=parameter_names,
+    #         aggregations=aggregations,
+    #         bounds=bounds,
+    #         color_by=color_by,
+    #         title=title,
+    #         html_file_path=html_file_path,
+    #     )
+
+    def salib_plot_matrix(
+        self,
+        indicator: str,
+        sensitivity_method_name: str,
+        method: str = "mean",
+        unit: str = "",
+        reference_time_series: pd.Series = None,
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwarg,
+    ):
+        title = (
+            f"{sensitivity_method_name} {method} {indicator} "
+            f"- 2nd order interactions"
+            if title is None
+            else title
+        )
+
+        result = self.analyze(
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq=None,
+            **analyse_kwarg,
+        )[f"{method}_{indicator}"]
+
+        parameter_names = [p.name for p in self.sampler.sample.parameters]
+        return plot_s2_matrix(result, parameter_names, title=title)
+
 
 class SobolSanalysis(Sanalysis):
+    """
+    Sobol sensitivity analysis class using Saltelli sampling.
+
+    This class extends :class:`Sanalysis` and provides variance-based global
+    sensitivity analysis following the Sobol method. Sampling of the parameter
+    space is performed using the Saltelli scheme, which ensures efficient
+    estimation of first-order, second-order, and total-order Sobol indices.
+    """
+
     def __init__(
-        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+        self,
+        parameters: list[Parameter],
+        model: Model,
+        simulation_options: dict = None,
+        sampler: str = "saltelli",
     ):
+        self._sampler_choice = sampler
         super().__init__(parameters, model, simulation_options)
 
     def _set_sampler(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
     ):
-        return SobolSampler(parameters, model, simulation_options)
+        if self._sampler_choice == "saltelli":
+            return SaltelliSampler(parameters, model, simulation_options)
+        elif self._sampler_choice == "sobol":
+            return SobolSampler(parameters, model, simulation_options)
+        else:
+            raise ValueError("sampler must be 'saltelli' or 'sobol'")
 
     def _set_analyser(self):
         return sobol
@@ -193,7 +424,6 @@ class SobolSanalysis(Sanalysis):
         n_cpu: int = 1,
         *,
         calc_second_order: bool = True,
-        scramble: bool = True,
         **sample_kwargs,
     ):
         super().add_sample(
@@ -201,7 +431,6 @@ class SobolSanalysis(Sanalysis):
             simulate=simulate,
             n_cpu=n_cpu,
             calc_second_order=calc_second_order,
-            scramble=scramble,
             **sample_kwargs,
         )
 
@@ -265,7 +494,7 @@ class SobolSanalysis(Sanalysis):
         return super().salib_plot_dynamic_metric(
             indicator=indicator,
             sensitivity_metric=sensitivity_metric,
-            sensitivity_method_name="Morris",
+            sensitivity_method_name="Sobol",
             freq=freq,
             method=method,
             unit=unit,
@@ -274,6 +503,30 @@ class SobolSanalysis(Sanalysis):
             calc_second_order=calc_second_order,
             stacked=True,
             title=title,
+        )
+
+    def plot_s2_matrix(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "S2",
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        calc_second_order: bool = True,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwargs,
+    ):
+        return super().salib_plot_matrix(
+            indicator=indicator,
+            sensitivity_method_name="Sobol",
+            method=method,
+            unit=unit,
+            reference_time_series=reference_time_series,
+            agg_method_kwarg=agg_method_kwarg,
+            title=title,
+            calc_second_order=calc_second_order,
+            **analyse_kwargs,
         )
 
 
@@ -411,6 +664,197 @@ class MorrisSanalysis(Sanalysis):
             agg_method_kwarg,
             reference_time_series,
             title,
+        )
+
+
+class FASTSanalysis(Sanalysis):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options, x_needed=False)
+        self._analysis_cache = {}
+
+    def _set_sampler(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        return FASTSampler(parameters, model, simulation_options)
+
+    def _set_analyser(self):
+        return fast
+
+    def add_sample(
+        self,
+        N: int,
+        M: int = 4,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        **sample_kwargs,
+    ):
+        super().add_sample(
+            N=N,
+            simulate=simulate,
+            n_cpu=n_cpu,
+            M=M,
+            **sample_kwargs,
+        )
+
+    def analyze(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        **analyse_kwargs,
+    ):
+        return super().analyze(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
+            **analyse_kwargs,
+        )
+
+    def plot_bar(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "ST",
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwargs,
+    ):
+        return super().salib_plot_bar(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="FAST",
+            method=method,
+            unit=unit,
+            reference_time_series=reference_time_series,
+            agg_method_kwarg=agg_method_kwarg,
+            title=title,
+            **analyse_kwargs,
+        )
+
+    def plot_dynamic_metric(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "ST",
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+    ):
+        return super().salib_plot_dynamic_metric(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="FAST",
+            freq=freq,
+            method=method,
+            unit=unit,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            stacked=True,
+            title=title,
+        )
+
+
+class RBDFASTSanalysis(Sanalysis):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options, x_needed=True)
+
+    def _set_sampler(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        return RBDFASTSampler(parameters, model, simulation_options)
+
+    def _set_analyser(self):
+        return rbd_fast
+
+    def add_sample(
+        self,
+        N: int,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        **sample_kwargs,
+    ):
+        super().add_sample(
+            N=N,
+            simulate=simulate,
+            n_cpu=n_cpu,
+            **sample_kwargs,
+        )
+
+    def analyze(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        **analyse_kwargs,
+    ):
+        return super().analyze(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
+            **analyse_kwargs,
+        )
+
+    def plot_bar(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "S1",
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwargs,
+    ):
+        return super().salib_plot_bar(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="RBD_FAST",
+            method=method,
+            unit=unit,
+            reference_time_series=reference_time_series,
+            agg_method_kwarg=agg_method_kwarg,
+            title=title,
+            **analyse_kwargs,
+        )
+
+    def plot_dynamic_metric(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "S1",
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+    ):
+        return super().salib_plot_dynamic_metric(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="RBD_FAST",
+            freq=freq,
+            method=method,
+            unit=unit,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            stacked=True,
+            title=title,
         )
 
 
@@ -557,6 +1001,37 @@ def plot_morris_scatter(
         xaxis_title=f"Absolute mean of elementary effects μ* [{unit}]",
         yaxis_title=f"Standard deviation of elementary effects σ [{unit}]",
         yaxis_range=[-0.1 * y_max, y_max],
+    )
+
+    return fig
+
+
+def plot_s2_matrix(
+    result: dict,
+    param_names: list[str],
+    title: str = "Sobol 2nd-order interactions (S2)",
+    colorscale: str = "Reds",
+):
+    df_S2 = pd.DataFrame(result["S2"], index=param_names, columns=param_names)
+
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=df_S2.values,
+            x=df_S2.columns,
+            y=df_S2.index,
+            colorscale=colorscale,
+            zmin=0,
+            zmax=df_S2.values.max(),
+            colorbar=dict(title="S2"),
+            text=df_S2.round(3).astype(str),
+            texttemplate="%{text}",
+        )
+    )
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="Parameter",
+        yaxis_title="Parameter",
     )
 
     return fig

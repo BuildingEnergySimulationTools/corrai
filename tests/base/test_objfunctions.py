@@ -10,7 +10,9 @@ from corrai.base.objfunctions import ObjectiveFunction
 
 
 class IshigamiTwoOutputs(Model):
-    def simulate(self, property_dict, simulation_options):
+    def simulate(
+        self, property_dict=None, simulation_options=None, **kwargs
+    ) -> pd.DataFrame:
         A1 = 7.0
         B1 = 0.1
         A2 = 5.0
@@ -47,12 +49,11 @@ class IshigamiTwoOutputs(Model):
 
         return results_df
 
-    def save(self, file_path):
-        pass
-
 
 class RosenModel(Model):
-    def simulate(self, property_dict, simulation_options):
+    def simulate(
+        self, property_dict=None, simulation_options=None, simulation_kwargs=None
+    ) -> pd.DataFrame:
         default_parameters = {
             "x": 1,
             "y": 1,
@@ -79,15 +80,11 @@ class RosenModel(Model):
 
         return results_df
 
-    def save(self, file_path):
-        pass
-
 
 PARAMETERS = [
-    {Parameter.NAME: "x", Parameter.INTERVAL: (0.0, 3.0), Parameter.INIT_VALUE: 2.0},
-    {Parameter.NAME: "y", Parameter.INTERVAL: (0.0, 3.0), Parameter.INIT_VALUE: 2.0},
+    Parameter(name="x", interval=(0.0, 3.0), init_value=2.0, model_property="x"),
+    Parameter(name="y", interval=(0.0, 3.0), init_value=2.0, model_property="y"),
 ]
-
 
 X_DICT = {"x": 2, "y": 2}
 
@@ -99,7 +96,6 @@ dataset = pd.DataFrame(
     index=pd.date_range("2023-01-01 00:00:00", freq="s", periods=2),
 )
 
-
 SIMU_OPTIONS = {
     "start": "2023-01-01 00:00:00",
     "end": "2023-01-01 00:00:01",
@@ -110,10 +106,7 @@ SIMU_OPTIONS = {
 class TestObjectiveFunction:
     def test_function_indicators(self):
         expected_model_res = pd.DataFrame(
-            {
-                "res1": [6.79, 6.79],
-                "res2": [5.50, 5.50],
-            },
+            {"res1": [6.79, 6.79], "res2": [5.50, 5.50]},
             index=pd.date_range("2023-01-01 00:00:00", freq="s", periods=2),
         )
 
@@ -121,7 +114,7 @@ class TestObjectiveFunction:
         obj_func = ObjectiveFunction(
             model=python_model,
             simulation_options=SIMU_OPTIONS,
-            param_list=PARAMETERS,
+            parameters=PARAMETERS,
             indicators_config={
                 "res1": (mean_squared_error, dataset["meas1"]),
                 "res2": (mean_absolute_error, dataset["meas2"]),
@@ -144,11 +137,11 @@ class TestObjectiveFunction:
         obj_func = ObjectiveFunction(
             model=python_model,
             simulation_options=SIMU_OPTIONS,
-            param_list=PARAMETERS,
+            parameters=PARAMETERS,
             indicators_config={"res1": (np.mean, None), "res2": (np.mean, None)},
         )
 
-        assert obj_func.bounds == [(0, 3.0), (0, 3.0)]
+        assert obj_func.bounds == [(0.0, 3.0), (0.0, 3.0)]
         assert obj_func.init_values == [2.0, 2.0]
 
     def test_scipy_obj_function(self):
@@ -156,7 +149,7 @@ class TestObjectiveFunction:
         obj_func = ObjectiveFunction(
             model=rosen,
             simulation_options=SIMU_OPTIONS,
-            param_list=PARAMETERS,
+            parameters=PARAMETERS,
             indicators_config={"res": (np.mean, None)},
         )
 
@@ -167,4 +160,4 @@ class TestObjectiveFunction:
             tol=1e-6,
         )
 
-        np.testing.assert_allclose(res.x, np.array([1, 1]), rtol=0.01)
+        np.testing.assert_allclose(res.x, np.array([1.0, 1.0]), rtol=0.01)

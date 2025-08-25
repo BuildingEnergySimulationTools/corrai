@@ -1,5 +1,4 @@
-# import random
-# import itertools
+from typing import Callable, Iterable
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -18,6 +17,8 @@ import plotly.figure_factory as ff
 from scipy.stats.qmc import LatinHypercube
 from SALib.sample import morris as morris_sampler
 from SALib.sample import sobol as sobol_sampler
+from SALib.sample import fast_sampler, latin
+from SALib.sample import saltelli
 
 from corrai.base.parameter import Parameter
 from corrai.base.model import Model
@@ -177,7 +178,7 @@ class Sample:
         round_ndigits: int = 2,
     ) -> go.Figure:
         if self.results is None:
-            raise ValueError("No results available to plot. Run a simulation first.")
+            raise ValueError("No results available to plot." " Run a simulation first.")
 
         return plot_sample(
             results=self.results,
@@ -271,6 +272,85 @@ class Sampler(ABC):
         unsimulated_idx = self.sample.get_pending_index()
         self.simulate_at(unsimulated_idx, n_cpu, simulation_kwargs)
 
+    def plot_sample(
+        self,
+        indicator: str | None = None,
+        reference_timeseries: pd.Series | None = None,
+        title: str | None = None,
+        y_label: str | None = None,
+        x_label: str | None = None,
+        alpha: float = 0.5,
+        show_legends: bool = False,
+        parameter_values: np.ndarray | None = None,
+        parameter_names: list[str] | None = None,
+        round_ndigits: int = 2,
+    ) -> go.Figure:
+        if parameter_values is None:
+            parameter_values = self.values
+        if parameter_names is None:
+            parameter_names = [p.name for p in self.parameters]
+
+        return plot_sample(
+            self.results,
+            indicator=indicator,
+            reference_timeseries=reference_timeseries,
+            title=title,
+            y_label=y_label,
+            x_label=x_label,
+            alpha=alpha,
+            show_legends=show_legends,
+            parameter_values=parameter_values,
+            parameter_names=parameter_names,
+            round_ndigits=round_ndigits,
+        )
+
+    def plot_pcp(
+        self,
+        indicator: str | None = None,
+        method: str | list[str] = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        prefix: str | None = None,
+        bounds: list[tuple[float, float]] | None = None,
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates — Samples",
+        html_file_path: str | None = None,
+    ) -> go.Figure:
+        if indicator is None:
+            aggregated = pd.DataFrame(index=range(len(self.values)))
+        else:
+            methods = [method] if isinstance(method, str) else method
+            dfs = []
+            for m in methods:
+                this_prefix = prefix if prefix is not None else m
+                agg = aggregate_time_series(
+                    results=self.results,
+                    indicator=indicator,
+                    method=m,
+                    agg_method_kwarg=agg_method_kwarg,
+                    reference_time_series=reference_time_series,
+                    freq=freq,
+                    prefix=this_prefix,
+                )
+                if agg is not None and not agg.empty:
+                    dfs.append(agg)
+            aggregated = (
+                pd.concat(dfs, axis=1)
+                if dfs
+                else pd.DataFrame(index=range(len(self.values)))
+            )
+
+        return plot_pcp(
+            parameter_values=self.values,
+            parameter_names=[p.name for p in self.parameters],
+            aggregated_results=aggregated,
+            bounds=bounds,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
+        )
+
 
 class RealSampler(Sampler, ABC):
     def __init__(
@@ -317,19 +397,25 @@ class MorrisSampler(RealSampler):
         self._post_draw_sample(morris_sample, simulate, n_cpu)
 
 
-class LHCSampler(RealSampler):
+class FASTSampler(RealSampler):
     def __init__(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
     ):
         super().__init__(parameters, model, simulation_options)
 
-    def add_sample(self, n: int, rng: int = None, simulate=True, **lhs_kwargs):
-        lhc = LatinHypercube(d=len(self.parameters), rng=rng, **lhs_kwargs)
-        new_dimless_sample = lhc.random(n=n)
-        self._post_draw_sample(new_dimless_sample, simulate, sample_is_dimless=True)
+    def add_sample(
+        self,
+        N: int,
+        M: int = 4,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        **fast_kwargs,
+    ):
+        fast_sample = fast_sampler.sample(self.get_salib_problem(), N, M, **fast_kwargs)
+        self._post_draw_sample(fast_sample, simulate, n_cpu)
 
 
-class SobolSampler(RealSampler):
+class RBDFASTSampler(RealSampler):
     def __init__(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
     ):
@@ -340,24 +426,82 @@ class SobolSampler(RealSampler):
         N: int,
         simulate: bool = True,
         n_cpu: int = 1,
+        **rbdfast_kwargs,
+    ):
+        rbdfast_sample = latin.sample(self.get_salib_problem(), N, **rbdfast_kwargs)
+        self._post_draw_sample(rbdfast_sample, simulate, n_cpu)
+
+
+class LHSSampler(RealSampler):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options)
+
+    def add_sample(self, n: int, rng: int = None, simulate=True, **lhs_kwargs):
+        lhs = LatinHypercube(d=len(self.parameters), rng=rng, **lhs_kwargs)
+        new_dimless_sample = lhs.random(n=n)
+        self._post_draw_sample(new_dimless_sample, simulate, sample_is_dimless=True)
+
+
+class SobolSampler(RealSampler):
+    def __init__(
+        self,
+        parameters: list[Parameter],
+        model: Model,
+        simulation_options: dict = None,
+    ):
+        super().__init__(parameters, model, simulation_options)
+
+    def add_sample(
+        self,
+        N: int,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        scramble: bool = True,
         *,
         calc_second_order: bool = True,
-        scramble: bool = True,
         **sobol_kwargs,
     ):
         new_sample = sobol_sampler.sample(
             problem=self.get_salib_problem(),
+            scramble=scramble,
             N=N,
             calc_second_order=calc_second_order,
-            scramble=scramble,
             **sobol_kwargs,
         )
+        self._post_draw_sample(new_sample, simulate, n_cpu, sample_is_dimless=False)
 
-        self._post_draw_sample(new_sample, simulate, n_cpu)
+
+class SaltelliSampler(RealSampler):
+    def __init__(
+        self,
+        parameters: list[Parameter],
+        model: Model,
+        simulation_options: dict = None,
+    ):
+        super().__init__(parameters, model, simulation_options)
+
+    def add_sample(
+        self,
+        N: int,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        *,
+        calc_second_order: bool = True,
+        **saltelli_kwargs,
+    ):
+        new_sample = saltelli.sample(
+            problem=self.get_salib_problem(),
+            N=N,
+            calc_second_order=calc_second_order,
+            **saltelli_kwargs,
+        )
+        self._post_draw_sample(new_sample, simulate, n_cpu, sample_is_dimless=False)
 
 
 def plot_sample(
-    results: pd.Series,  # Series d'objets (Series ou DataFrame)
+    results: pd.Series,
     indicator: str | None = None,
     reference_timeseries: pd.Series | None = None,
     title: str | None = None,
@@ -407,19 +551,23 @@ def plot_sample(
     if results.empty:
         raise ValueError("`results` is empty. Simulate samples first.")
 
-    def _to_series(obj, indicator_):
+    ref_name = getattr(reference_timeseries, "name", None)
+
+    def _to_series(obj, indicator_, ref_name_):
         if isinstance(obj, pd.Series):
             return obj
         if isinstance(obj, pd.DataFrame):
             if obj.empty:
                 return None
-            if indicator_ is None:
-                if obj.shape[1] != 1:
-                    raise ValueError(
-                        "Provide `indicator`: multiple columns in the sample DataFrame."
-                    )
+            if indicator_ is not None:
+                return obj[indicator_]
+            if ref_name_ is not None and ref_name_ in obj.columns:
+                return obj[ref_name_]
+            if obj.shape[1] == 1:
                 return obj.iloc[:, 0]
-            return obj[indicator_]
+            raise ValueError(
+                "Provide `indicator`: multiple columns in the sample DataFrame."
+            )
         return None
 
     def _legend_for(i: int) -> str:
@@ -436,7 +584,7 @@ def plot_sample(
     plotted = 0
 
     for i, sample in enumerate(results):
-        s = _to_series(sample, indicator)
+        s = _to_series(sample, indicator, ref_name)
         if s is None or s.empty:
             continue
         fig.add_trace(
@@ -476,445 +624,68 @@ def plot_sample(
 
 
 def plot_pcp(
-    sample_results,
-    param_sample,
-    parameters,
-    indicators,
-    aggregation_method=np.mean,
-    html_file_path=None,
-):
+    parameter_values: np.ndarray,
+    parameter_names: list[str],
+    aggregated_results: pd.DataFrame,
+    *,
+    bounds: list[tuple[float, float]] | None = None,
+    color_by: str | None = None,
+    title: str | None = "Parallel Coordinates — Samples",
+    html_file_path: str | None = None,
+) -> go.Figure:
     """
-    Plots a parallel coordinate plot for sensitivity analysis results.
-      Notes
-    -----
-    - The function handles categorical parameters by converting them to numerical
-      codes using `pandas.Categorical`. The tick values are shifted slightly to
-      improve readability.
-    - The first indicator in the list is used to color the lines in the plot.
-    - The function requires the Plotly library (`plotly.graph_objects`) to create
-      the interactive plot.
+    Creates a Parallel Coordinates Plot (PCP) for parameter samples and aggregated indicators.
+    Each vertical axis corresponds to a parameter or an aggregated indicator,
+    and each polyline represents one simulation.
     """
-    data_dict = [
-        {param[Parameter.NAME]: value for param, value in zip(parameters, sample)}
-        for sample in param_sample
-    ]
 
-    if isinstance(indicators, str):
-        indicators = [indicators]
-
-    for i, df in enumerate(sample_results):
-        for indicator in indicators:
-            if indicator in df.columns:
-                data_dict[i][indicator] = aggregation_method(df[indicator])
-
-    df_plot = pd.DataFrame(data_dict)
-    dim_list = []
-
-    for col in df_plot.select_dtypes(include="object").columns:
-        cat = pd.Categorical(df_plot[col])
-        df_plot[col] = cat.codes
-        dim_list.append(
-            dict(
-                range=[0, len(cat.categories) - 1],
-                label=col,
-                tickvals=list(set(cat.codes)),
-                ticktext=list(cat.categories),
-                values=df_plot[col].tolist(),
-            )
+    if parameter_values.shape[0] != len(aggregated_results):
+        raise ValueError("Mismatch between number of samples and aggregated results.")
+    if len(parameter_names) != parameter_values.shape[1]:
+        raise ValueError(
+            "`parameter_names` length must match parameter_values.shape[1]."
         )
 
-    for col in indicators:
-        dim_list.append(dict(label=col, values=df_plot[col].tolist()))
-
-    color_indicator = indicators[0] if indicators else None
-
-    fig = go.Figure(
-        data=go.Parcoords(
-            line=dict(
-                color=df_plot[color_indicator],
-                colorscale="Plasma",
-                showscale=True,
-            ),
-            dimensions=dim_list,
-        )
+    df = pd.DataFrame(
+        parameter_values, columns=parameter_names, index=aggregated_results.index
     )
+    df = pd.concat([df, aggregated_results], axis=1)
+
+    if color_by is None:
+        if not aggregated_results.empty:
+            color_by = aggregated_results.columns[0]
+        else:
+            color_by = parameter_names[0]
+
+    dimensions = []
+    for j, pname in enumerate(parameter_names):
+        dim = {"label": pname, "values": df[pname].to_numpy()}
+        if bounds is not None:
+            lb, ub = bounds[j]
+            dim["range"] = [lb, ub]
+        dimensions.append(dim)
+
+    for col in aggregated_results.columns:
+        col_vals = df[col].to_numpy()
+        if np.all(np.isnan(col_vals)):
+            dim = {"label": col, "values": col_vals}
+        else:
+            vmin = float(np.nanmin(col_vals))
+            vmax = float(np.nanmax(col_vals))
+            if np.isfinite(vmin) and np.isfinite(vmax) and vmin != vmax:
+                dim = {"label": col, "values": col_vals, "range": [vmin, vmax]}
+            else:
+                dim = {"label": col, "values": col_vals}
+        dimensions.append(dim)
+
+    line_kwargs = {}
+    if color_by is not None and color_by in df.columns:
+        line_kwargs = dict(color=df[color_by], colorscale="Viridis", showscale=True)
+
+    fig = go.Figure(data=go.Parcoords(dimensions=dimensions, line=line_kwargs))
+    fig.update_layout(title=title)
 
     if html_file_path:
-        pio.write_html(fig, html_file_path)
+        fig.write_html(html_file_path)
 
     return fig
-
-
-# def get_mapped_bounds(uncertain_param_list, param_mappings):
-#     """
-#     Return actual bounds (min, max) of all parameters after applying param_mappings.
-#
-#     Args:
-#         uncertain_param_list (list): List of parameter dicts with NAME, INTERVAL, TYPE.
-#         param_mappings (dict): Mapping rules to expand parameters.
-#
-#     Returns:
-#         List[Tuple[float, float]]: List of bounds for each expanded parameter.
-#     """
-#     reverse_mapping = {}
-#     for base_param, expanded_list in param_mappings.items():
-#         for expanded_param in expanded_list:
-#             reverse_mapping[expanded_param] = base_param
-#
-#     bounds_dict = {
-#         param[Parameter.NAME]: tuple(param[Parameter.INTERVAL])
-#         for param in uncertain_param_list
-#     }
-#
-#     base_values = {name: bounds_dict[name][0] for name in bounds_dict}
-#     expanded_dict = expand_parameter_dict(base_values, param_mappings)
-#
-#     bounds = []
-#     for expanded_param in expanded_dict:
-#         base_param = reverse_mapping.get(
-#             expanded_param, expanded_param
-#         )  # fall back to self
-#         if base_param not in bounds_dict:
-#             raise ValueError(
-#                 f"No matching bounds for parameter: {expanded_param} (base: {base_param})"
-#             )
-#         bounds.append(bounds_dict[base_param])
-#
-#     return bounds
-
-
-# class VariantSubSampler:
-#     """
-#     A class for subsampling variants from a given set of combinations.
-#     """
-#
-#     def __init__(
-#         self,
-#         model,
-#         add_existing=False,
-#         variant_dict=None,
-#         modifier_map=None,
-#         custom_combination=None,
-#         simulation_options=None,
-#         save_dir=None,
-#         file_extension=".txt",
-#     ):
-#         """
-#         Initialize the VariantSubSampler.
-#
-#         Args:
-#             model: The model to be used for simulations.
-#             custom_combination: List of lists, each inner list
-#             representing a custom combination of variants. Otherwise, all variants are automatically
-#             deduced from variant_dict and modifier_map.
-#             add_existing: A boolean flag indicating whether to include existing
-#                 variant to each modifier.
-#                 If True, existing modifiers will be included;
-#                 if False, only non-existing modifiers will be considered.
-#                 Set to False by default.
-#             variant_dict (optional): A dictionary containing variant information where
-#                                      keys are variant names and values are dictionaries
-#                                      with keys from the VariantKeys enum.
-#             modifier_map (optional): A map of modifiers for simulation.
-#             simulation_options (optional): Options for simulations. Defaults to None.
-#             save_dir (optional): Directory to save simulation results. Defaults to None.
-#             file_extension (optional): File extension for
-#             saved simulation results. Defaults to ".txt".
-#
-#         """
-#         self.model = model
-#         self.add_existing = add_existing
-#         self.variant_dict = variant_dict
-#         self.combinations = (
-#             custom_combination
-#             if custom_combination
-#             else get_combined_variants(self.variant_dict)
-#         )
-#         self.modifier_map = modifier_map
-#         self.simulation_options = simulation_options
-#         self.save_dir = save_dir
-#         self.file_extension = file_extension
-#         self.sample = []
-#         self.simulated_samples = []
-#         self.all_variants = set(itertools.chain(*self.combinations))
-#         self.sample_results = []
-#         self.not_simulated_combinations = []
-#         self.variant_coverage = {variant: False for variant in self.all_variants}
-#
-#     def add_sample(
-#         self,
-#         sample_size,
-#         simulate=True,
-#         seed=None,
-#         ensure_full_coverage=False,
-#         n_cpu=-1,
-#         simulation_options=None,
-#     ):
-#         """
-#         Add a sample to the VariantSubSampler.
-#
-#             seed (optional): Seed for random number generation. Defaults to None.
-#         Args:
-#             sample_size: The size of the sample to be added.
-#             simulate (optional): Whether to perform simulation
-#             after adding the sample. Defaults to True.
-#             ensure_full_coverage (optional): Whether to ensure
-#             full coverage of variants in the sample. Defaults to False.
-#             n_cpu (optional): Number of CPU cores to use for simulation. Defaults to -1.
-#             simulation_options (optional): Options for simulations. Defaults to None.
-#         """
-#
-#         effective_simulation_options = (
-#             simulation_options
-#             if simulation_options is not None
-#             else self.simulation_options
-#         )
-#         if effective_simulation_options is None:
-#             raise ValueError(
-#                 "Simulation options must be provided either during "
-#                 "initialization or when adding samples."
-#             )
-#
-#         shuffled_combinations = self.combinations[:]
-#
-#         if seed is not None:
-#             random.Random(seed).shuffle(shuffled_combinations)
-#
-#         else:
-#             random.shuffle(shuffled_combinations)
-#
-#         current_sample_count = 0
-#
-#         if ensure_full_coverage and not all(self.variant_coverage.values()):
-#             for combination in shuffled_combinations:
-#                 if (
-#                     any(not self.variant_coverage[variant] for variant in combination)
-#                     and combination not in self.sample
-#                 ):
-#                     self.sample.append(combination)
-#                     self.not_simulated_combinations.append(combination)
-#                     current_sample_count += 1
-#                     for variant in combination:
-#                         self.variant_coverage[variant] = True
-#
-#                     if all(self.variant_coverage.values()):
-#                         break
-#
-#         additional_needed = sample_size - current_sample_count
-#         if additional_needed > 0:
-#             for combination in shuffled_combinations:
-#                 if combination not in self.sample:
-#                     self.sample.append(combination)
-#                     self.not_simulated_combinations.append(combination)
-#                     additional_needed -= 1
-#                     if additional_needed == 0:
-#                         break
-#
-#         if additional_needed > 0:
-#             print(
-#                 "Warning: Not enough unique combinations "
-#                 "to meet the additional requested sampl"
-#                 "e size."
-#             )
-#
-#         if simulate:
-#             self.simulate_combinations(
-#                 n_cpu=n_cpu, simulation_options=effective_simulation_options
-#             )
-#
-#     def draw_sample(
-#         self,
-#         sample_size,
-#         seed=None,
-#         ensure_full_coverage=False,
-#         n_cpu=-1,
-#         simulation_options=None,
-#     ):
-#         """
-#         Draw a sample from the VariantSubSampler.
-#
-#         Args:
-#             sample_size: The size of the sample to be drawn.
-#             seed (optional): Seed for random number generation.
-#             Defaults to None.
-#             ensure_full_coverage (optional): Whether to ensure
-#             full coverage of variants in the sample. Defaults to False.
-#             n_cpu (optional): Number of CPU cores to use for
-#             simulation. Defaults to -1.
-#             simulation_options (optional): Options for simulations.
-#             Defaults to None.
-#         """
-#         self.add_sample(
-#             sample_size,
-#             simulate=False,
-#             seed=seed,
-#             ensure_full_coverage=ensure_full_coverage,
-#             n_cpu=n_cpu,
-#             simulation_options=simulation_options,
-#         )
-#
-#     def simulate_combinations(
-#         self,
-#         n_cpu=-1,
-#         simulation_options=None,
-#     ):
-#         """
-#         Simulate combinations in the VariantSubSampler.
-#
-#         Args:
-#             n_cpu (optional): Number of CPU cores to use for simulation. Defaults to -1.
-#             simulation_options (optional): Options for simulations. Defaults to None.
-#         """
-#         effective_simulation_options = (
-#             simulation_options
-#             if simulation_options is not None
-#             else self.simulation_options
-#         )
-#         if not effective_simulation_options:
-#             raise ValueError("Simulation options are not available for simulation.")
-#
-#         if self.not_simulated_combinations:
-#             results = simulate_variants(
-#                 self.model,
-#                 self.variant_dict,
-#                 self.modifier_map,
-#                 effective_simulation_options,
-#                 n_cpu,
-#                 add_existing=self.add_existing,
-#                 custom_combinations=list(self.not_simulated_combinations),
-#                 save_dir=Path(self.save_dir) if self.save_dir else None,
-#                 file_extension=self.file_extension,
-#             )
-#
-#             self.sample_results.extend(results)
-#             self.simulated_samples.extend(self.not_simulated_combinations)
-#             self.not_simulated_combinations = []  # Clear the list after simulation
-#
-#     def simulate_all_variants_and_parameters(
-#         self,
-#         parameter,
-#         param_mapping=None,
-#         simulation_options=None,
-#         n_cpu=1,
-#     ):
-#         """
-#         Simulates all combinations of parameters and variants by applying parameter sets
-#         and generating multiple model variants based on the provided variant dictionary.
-#
-#
-#         Parameters
-#         ----------
-#
-#         parameter : list
-#             A list of parameters.
-#
-#         param_mapping : dict, optional
-#             A dictionary defining how sampled parameters should be expanded into additional key-value pairs
-#             before being applied to the model. Each key in `param_mapping` corresponds to a parameter name
-#             in `parameter_dict`. The value can be:
-#             - A dictionary: Maps discrete parameter values to new parameter sets.
-#             - An iterable: Directly applies the sampled value to a set of keys.
-#
-#         simulation_options : dict, optional
-#             Simulation options to override the default `self.simulation_options` set during instantiation.
-#
-#         n_cpu : int, optional
-#             Number of CPU cores to use for parallel simulation. Defaults to 1 (for now, -1 not working with both parameters and variants variations).
-#
-#         Returns
-#         -------
-#         None
-#             The method updates the `self.sample` and `self.sample_results` attributes with the parameter and variant
-#             combinations used in each simulation and the corresponding simulation results.
-#
-#         Notes
-#         -----
-#         - The function expects that `self.parameters` contains parameters with the `Choice` type, which defines a discrete
-#           set of possible values for each parameter.
-#         - It generates parameter combinations using `itertools.product` to exhaustively cover all possible choices.
-#         - The parameter and variant combinations are stored in `self.sample` using `np.vstack`.
-#         - The function calls `simulate_variants` to generate and simulate each variant combination.
-#         - The `self.param_mappings` attribute is used to dynamically expand the sampled parameters into additional
-#           key-value pairs, which can modify how the model parameters are applied during simulations.
-#         """
-#         effective_simulation_options = (
-#             simulation_options
-#             if simulation_options is not None
-#             else self.simulation_options
-#         )
-#
-#         if not effective_simulation_options:
-#             raise ValueError("Simulation options must be provided for the simulation.")
-#
-#         if not isinstance(self.sample, np.ndarray) or self.sample.size == 0:
-#             self.sample = np.empty((0, len(parameter) + len(self.combinations[0])))
-#
-#         choice_parameters = [
-#             param for param in parameter if param[Parameter.TYPE] == "Choice"
-#         ]
-#         param_names = [param[Parameter.NAME] for param in choice_parameters]
-#         param_values = [param[Parameter.INTERVAL] for param in choice_parameters]
-#
-#         all_parameter_dicts = [
-#             dict(zip(param_names, combination))
-#             for combination in product(*param_values)
-#         ]
-#
-#         for idx, param_dict in enumerate(all_parameter_dicts):
-#             expanded_param_dict = expand_parameter_dict(param_dict, param_mapping)
-#             print(f"Simulating combination {idx + 1}/{len(all_parameter_dicts)}...")
-#
-#             result = simulate_variants(
-#                 n_cpu=n_cpu,
-#                 add_existing=self.add_existing,
-#                 model=deepcopy(self.model),
-#                 variant_dict=self.variant_dict,
-#                 modifier_map=self.modifier_map,
-#                 simulation_options=effective_simulation_options,
-#                 custom_combinations=self.combinations,
-#                 parameter_dict=expanded_param_dict,
-#             )
-#
-#             new_sample_value = np.array(
-#                 [
-#                     list(param_dict.values()) + list(variant_tuple)
-#                     for variant_tuple in self.combinations
-#                 ]
-#             )
-#             self.sample = np.vstack((self.sample, new_sample_value))
-#             self.sample_results.extend(result)
-#
-#     def clear_sample(self):
-#         """
-#         Clears all samples and related simulation data from the sampler. This method is
-#         useful for resetting the sampler's state, typically used when starting a new set
-#         of simulations or after a complete set of simulations has been processed and the
-#         data is no longer needed.
-#
-#         Parameters:
-#         - None
-#
-#         Returns:
-#         - None: The method resets the internal state related to samples but does not
-#           return any value.
-#         """
-#         self.sample = []
-#         self.simulated_samples = []
-#         self.sample_results = []
-#         self.not_simulated_combinations = []
-#
-#     def dump_sample(self):
-#         """
-#         Clears all non-simulated samples.
-#
-#         Parameters:
-#         - None
-#
-#         Returns:
-#         - None: The method resets the internal state
-#         related to non-simulated samples.
-#         """
-#         self.sample = [
-#             comb for comb in self.sample if comb not in self.not_simulated_combinations
-#         ]
-#         self.not_simulated_combinations = []

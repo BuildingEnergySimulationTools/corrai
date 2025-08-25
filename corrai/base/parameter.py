@@ -98,7 +98,7 @@ class Parameter:
     def __post_init__(self):
         if self.interval is not None and self.values is not None:
             raise ValueError("Only one of 'interval' or 'values' may be specified.")
-        if self.interval is None and self.values is None:
+        if self.interval is None and self.values is None and self.ptype != "Binary":
             raise ValueError("One of 'interval' or 'values' must be specified.")
 
         if self.ptype not in TYPES:
@@ -116,15 +116,16 @@ class Parameter:
                 if isinstance(self.init_value, list)
                 else [self.init_value]
             )
-            if self.interval is not None:
+            if self.interval is not None and self.relabs != "Relative":
                 lo, hi = self.interval
                 if not all(lo <= i_value <= hi for i_value in list_to_test):
                     raise ValueError(
                         f"init_value {self.init_value} "
                         f"not in interval {self.interval}"
                     )
-            elif self.values is not None:
+            elif self.values is not None and self.relabs != "Relative":
                 if not all(i_value in self.values for i_value in list_to_test):
                     raise ValueError(
                         f"init_value {self.init_value} " f"not in values {self.values}"
                     )
+            self.init_value = list_to_test

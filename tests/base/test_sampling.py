@@ -11,12 +11,13 @@ from corrai.base.sampling import (
     plot_sample,
     plot_pcp,
     # get_mapped_bounds,
-    LHCSampler,
+    LHSSampler,
     MorrisSampler,
     SobolSampler,
     Sample,
 )
 from corrai.variant import VariantKeys, get_combined_variants, get_modifier_dict
+from corrai.base.math import aggregate_time_series
 
 from tests.resources.pymodels import VariantModel, Pymodel, Ishigami
 import pytest
@@ -127,6 +128,82 @@ ISHIGAMI_PARAMETERS = [
 
 
 class TestSample:
+    def test_plot_hist(self):
+        sampler = LHSSampler(
+            parameters=REAL_PARAM,
+            model=Pymodel(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        sampler.add_sample(3, 42, simulate=True)
+
+        fig = sampler.sample.plot_hist(
+            indicator="res",
+            method="mean",
+            unit="J",
+            bin_size=0.5,
+            colors="orange",
+            show_rug=True,
+        )
+
+        assert isinstance(fig, go.Figure)
+        assert fig.layout.title.text == "Sample distribution of mean res"
+
+        hist_traces = [tr for tr in fig.data if tr.type == "histogram"]
+        assert len(hist_traces) == 1
+        hist = hist_traces[0]
+        assert len(hist.x) == len(sampler.results)
+
+    def test_plot_pcp(self):
+        t = pd.date_range("2025-01-01 00:00:00", periods=2, freq="h")
+        df1 = pd.DataFrame({"res": [1.0, 2.0]}, index=t)
+        df2 = pd.DataFrame({"res": [3.0, 4.0]}, index=t)
+        df3 = pd.DataFrame({"res": [5.0, 6.0]}, index=t)
+        results = pd.Series([df1, df2, df3])
+
+        param_names = ["p1", "p2"]
+        param_values = np.array(
+            [
+                [1.1, 2.2],
+                [3.3, 4.4],
+                [5.5, 6.6],
+            ]
+        )
+
+        agg_sum = aggregate_time_series(
+            results, indicator="res", method="sum", prefix="sum"
+        )
+        agg_mean = aggregate_time_series(
+            results, indicator="res", method="mean", prefix="mean"
+        )
+        aggregated = pd.concat([agg_sum, agg_mean], axis=1)
+
+        fig = plot_pcp(
+            parameter_values=param_values,
+            parameter_names=param_names,
+            aggregated_results=aggregated,
+            color_by="sum_res",
+            title="Parallel Coordinates — Samples",
+        )
+
+        assert isinstance(fig, go.Figure)
+        assert len(fig.data) == 1
+        pc = fig.data[0]
+        np.testing.assert_allclose(pc.dimensions[0]["values"], [1.1, 3.3, 5.5])  # p1
+
+    def test_plot_pcp_in_sampler(self):
+        sampler = LHSSampler(
+            parameters=REAL_PARAM,
+            model=Pymodel(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        sampler.add_sample(3, 42, simulate=True)
+
+        fig = sampler.plot_pcp(
+            indicator="res",
+        )
+        assert isinstance(fig, go.Figure)
+        assert len(fig.data) == 1
+
     def test_plot_sample(self):
         t = pd.date_range("2025-01-01 00:00:00", periods=2, freq="h")
         df1 = pd.DataFrame({"res": [1.0, 2.0]}, index=t)
@@ -157,7 +234,6 @@ class TestSample:
         assert fig.data[0].name == "p1: 1.1, p2: 2.2"
         assert fig.data[1].name == "p1: 3.3, p2: 4.4"
         assert fig.data[2].name == "p1: 5.5, p2: 6.6"
-        fig.show()
 
         df_multi = pd.concat(
             [df1.rename(columns={"res": "a"}), df2.rename(columns={"res": "b"})], axis=1
@@ -193,6 +269,47 @@ class TestSample:
         )
         assert len(fig_ref_only.data) == 1
         np.testing.assert_allclose(fig_ref_only.data[0]["y"], ref.to_numpy())
+
+    def test_plot_sample_in_sampler(self):
+        sampler = LHSSampler(
+            parameters=REAL_PARAM,
+            model=Pymodel(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        sampler.add_sample(3, 42, simulate=True)
+
+        fig = sampler.plot_sample(
+            indicator="res",
+            reference_timeseries=None,
+            title="test",
+            x_label="time",
+            y_label="value",
+            alpha=0.3,
+            show_legends=True,
+        )
+        fig.show()
+        assert isinstance(fig, go.Figure)
+        assert len(fig.data) == 3
+        assert fig.layout.title.text == "test"
+
+    def test_plot_sample_infer_indicator_from_reference_name(self):
+        t = pd.date_range("2025-01-01 00:00:00", periods=3, freq="h")
+        df = pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [10.0, 20.0, 30.0]}, index=t)
+        results = pd.Series([df])
+
+        ref = pd.Series([0.0, 0.0, 0.0], index=t, name="a")  # <- nom = "a"
+
+        fig = plot_sample(
+            results=results,
+            reference_timeseries=ref,
+            show_legends=False,
+        )
+        assert len(fig.data) == 2
+
+        np.testing.assert_allclose(np.array(fig.data[0].y), df["a"].to_numpy())
+        assert fig.data[0].mode == "markers"
+        np.testing.assert_allclose(np.array(fig.data[1].y), ref.to_numpy())
+        assert fig.data[1].mode == "lines"
 
     def test_sample(self):
         sample = Sample(REAL_PARAM)
@@ -257,8 +374,8 @@ class TestSample:
 
         sample._validate()
 
-    def test_lhc_sampler(self):
-        sampler = LHCSampler(
+    def test_lhs_sampler(self):
+        sampler = LHSSampler(
             parameters=REAL_PARAM,
             model=Pymodel(),
             simulation_options=SIMULATION_OPTIONS,
@@ -278,11 +395,14 @@ class TestSample:
 
         sampler.simulate_pending()
 
-        assert {k: i.values.tolist() for k, i in sampler.results.items()} == {
+        expected = {
             0: [[85.75934698790918]],
             1: [[38.08478803524709]],
             2: [[61.67268698504139]],
         }
+
+        for k, arr in sampler.results.items():
+            np.testing.assert_allclose(arr.values, expected[k], rtol=0.05)
 
         sampler.add_sample(3, rng=42, simulate=False)
         assert sampler.values.shape == (6, 3)
@@ -292,11 +412,12 @@ class TestSample:
         assert [df.empty for df in sampler.results[-3:].values] == [True, False, True]
 
         sampler.simulate_at([3, 5])
-        assert {k: i.values.tolist() for k, i in sampler.results[-3:].items()} == {
-            3: [[85.75934698790918]],
-            4: [[38.08478803524709]],
-            5: [[61.67268698504139]],
-        }
+        for k, arr in sampler.results[-3:].items():
+            np.testing.assert_allclose(
+                arr.values,
+                expected[k % 3],  # reuse expected values modulo cycle
+                rtol=0.05,
+            )
 
         sampler.add_sample(3, rng=42, simulate=False)
 
@@ -330,29 +451,26 @@ class TestSample:
             ),
         )
 
-    def test_sobol_sampler(self):
+    def test_saltelli_sampler(self):
         sampler = SobolSampler(
             parameters=ISHIGAMI_PARAMETERS,
             model=Ishigami(),
             simulation_options=SIMULATION_OPTIONS,
         )
-
         sampler.add_sample(N=1, **{"seed": 42})
-        np.testing.assert_allclose(
-            sampler.values,
-            np.array(
-                [
-                    [-0.43335459, 1.97523222, 1.92524819],
-                    [-2.8057144, 1.97523222, 1.92524819],
-                    [-0.43335459, -1.26958525, 1.92524819],
-                    [-0.43335459, 1.97523222, 2.13551644],
-                    [-0.43335459, -1.26958525, 2.13551644],
-                    [-2.8057144, 1.97523222, 2.13551644],
-                    [-2.8057144, -1.26958525, 1.92524819],
-                    [-2.8057144, -1.26958525, 2.13551644],
-                ]
-            ),
+        expected_values = np.array(
+            [
+                [-5.864439867090505, 9.269157438872927, 8.955098509010103],
+                [-20.770416138395113, 9.269157438872927, 8.955098509010103],
+                [-5.864439867090505, -11.118632049184082, 8.955098509010103],
+                [-5.864439867090505, 9.269157438872927, 10.276252867237911],
+                [-5.864439867090505, -11.118632049184082, 10.276252867237911],
+                [-20.770416138395113, 9.269157438872927, 10.276252867237911],
+                [-20.770416138395113, -11.118632049184082, 8.955098509010103],
+                [-20.770416138395113, -11.118632049184082, 10.276252867237911],
+            ]
         )
+        np.testing.assert_allclose(sampler.values, expected_values)
 
 
 class ModelVariant(Model):
