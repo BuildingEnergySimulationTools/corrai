@@ -17,6 +17,7 @@ from corrai.base.sampling import (
     Sample,
 )
 from corrai.variant import VariantKeys, get_combined_variants, get_modifier_dict
+from corrai.base.math import aggregate_time_series
 
 from tests.resources.pymodels import VariantModel, Pymodel, Ishigami
 import pytest
@@ -167,20 +168,41 @@ class TestSample:
                 [5.5, 6.6],
             ]
         )
+
+        agg_sum = aggregate_time_series(
+            results, indicator="res", method="sum", prefix="sum"
+        )
+        agg_mean = aggregate_time_series(
+            results, indicator="res", method="mean", prefix="mean"
+        )
+        aggregated = pd.concat([agg_sum, agg_mean], axis=1)
+
         fig = plot_pcp(
-            results=results,
             parameter_values=param_values,
             parameter_names=param_names,
-            aggregations={"res": [np.sum, np.mean]},
-            color_by="res:sum",
+            aggregated_results=aggregated,
+            color_by="sum_res",
             title="Parallel Coordinates — Samples",
         )
-        fig.show()
 
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 1
         pc = fig.data[0]
         np.testing.assert_allclose(pc.dimensions[0]["values"], [1.1, 3.3, 5.5])  # p1
+
+    def test_plot_pcp_in_sampler(self):
+        sampler = LHSSampler(
+            parameters=REAL_PARAM,
+            model=Pymodel(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        sampler.add_sample(3, 42, simulate=True)
+
+        fig = sampler.plot_pcp(
+            indicator="res",
+        )
+        assert isinstance(fig, go.Figure)
+        assert len(fig.data) == 1
 
     def test_plot_sample(self):
         t = pd.date_range("2025-01-01 00:00:00", periods=2, freq="h")
@@ -247,6 +269,28 @@ class TestSample:
         )
         assert len(fig_ref_only.data) == 1
         np.testing.assert_allclose(fig_ref_only.data[0]["y"], ref.to_numpy())
+
+    def test_plot_sample_in_sampler(self):
+        sampler = LHSSampler(
+            parameters=REAL_PARAM,
+            model=Pymodel(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        sampler.add_sample(3, 42, simulate=True)
+
+        fig = sampler.plot_sample(
+            indicator="res",
+            reference_timeseries=None,
+            title="test",
+            x_label="time",
+            y_label="value",
+            alpha=0.3,
+            show_legends=True,
+        )
+        fig.show()
+        assert isinstance(fig, go.Figure)
+        assert len(fig.data) == 3
+        assert fig.layout.title.text == "test"
 
     def test_plot_sample_infer_indicator_from_reference_name(self):
         t = pd.date_range("2025-01-01 00:00:00", periods=3, freq="h")

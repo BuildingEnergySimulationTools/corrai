@@ -40,6 +40,141 @@ class Sanalysis(ABC):
     def results(self):
         return self.sampler.results
 
+    def plot_sample(
+        self,
+        indicator: str | None = None,
+        reference_timeseries: pd.Series | None = None,
+        title: str | None = None,
+        y_label: str | None = None,
+        x_label: str | None = None,
+        alpha: float = 0.5,
+        show_legends: bool = False,
+        parameter_values: np.ndarray | None = None,
+        parameter_names: list[str] | None = None,
+        round_ndigits: int = 2,
+    ) -> go.Figure:
+        """
+        Plot all available simulation runs against an optional reference time series.
+
+        This method wraps :meth:`Sampler.plot_sample` and plots the simulations
+        associated with this sensitivity analysis instance. Each run is displayed
+        as a scatter trace, optionally annotated with parameter values.
+
+        Parameters
+        ----------
+        indicator : str, optional
+            Column name to select if simulation outputs are DataFrames with multiple
+            columns. If None and a DataFrame has a single column, that column is used.
+        reference_timeseries : pd.Series, optional
+            A time series to plot as ground truth or reference, shown as a red line.
+        title : str, optional
+            Plot title.
+        y_label : str, optional
+            Label for the y-axis.
+        x_label : str, optional
+            Label for the x-axis.
+        alpha : float, default=0.5
+            Opacity for the sample markers.
+        show_legends : bool, default=False
+            Whether to display a legend entry for each sample.
+        parameter_values : np.ndarray, optional
+            Custom parameter values for legend annotation. If None, values from
+            this Sanalysis instance are used.
+        parameter_names : list of str, optional
+            Custom parameter names. If None, names from this Sanalysis instance are used.
+        round_ndigits : int, default=2
+            Number of decimal digits for rounding parameter values in legends.
+
+        Returns
+        -------
+        go.Figure
+            A Plotly Figure containing the sample simulations and optional reference.
+        """
+        return self.sampler.plot_sample(
+            indicator=indicator,
+            reference_timeseries=reference_timeseries,
+            title=title,
+            y_label=y_label,
+            x_label=x_label,
+            alpha=alpha,
+            show_legends=show_legends,
+            parameter_values=parameter_values,
+            parameter_names=parameter_names,
+            round_ndigits=round_ndigits,
+        )
+
+    def plot_pcp(
+        self,
+        indicator: str | None = None,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        prefix: str | None = None,
+        bounds: list[tuple[float, float]] | None = None,
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates - Samples",
+        html_file_path: str | None = None,
+    ) -> go.Figure:
+        """
+        Create a Parallel Coordinates Plot (PCP) of parameters and aggregated results.
+
+        Each vertical axis corresponds to a parameter or an aggregated indicator,
+        and each polyline represents one simulation. Useful for visualizing the
+        relationship between sampled parameters and performance metrics.
+
+        This method wraps :meth:`Sampler.plot_pcp`.
+
+        Parameters
+        ----------
+        indicator : str, optional
+            Indicator name to extract from simulation results before aggregation.
+            If None, only parameters are shown.
+        method : str, default="mean"
+            Aggregation method to apply. Supported values include:
+            - "mean"
+            - "sum"
+            - "nmbe"
+            - "cv_rmse"
+            - "mean_squared_error"
+            - "mean_absolute_error"
+        agg_method_kwarg : dict, optional
+            Extra keyword arguments passed to the aggregation function.
+        reference_time_series : pd.Series, optional
+            Required for error-based methods (e.g., "cv_rmse"). Must have the same
+            index and length as each simulation.
+        freq : str or pd.Timedelta or datetime.timedelta, optional
+            If provided, aggregation is performed per time bin.
+        prefix : str, optional
+            Custom prefix for naming aggregated columns. Defaults to the method name.
+        bounds : list of tuple(float, float), optional
+            Parameter bounds for each parameter axis.
+        color_by : str, optional
+            Column name (parameter or aggregate) used to color polylines.
+        title : str, optional
+            Figure title.
+        html_file_path : str, optional
+            If provided, saves the plot as an interactive HTML file.
+
+        Returns
+        -------
+        go.Figure
+            A Plotly Figure with the parallel coordinates visualization.
+        """
+
+        return self.sampler.plot_pcp(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
+            prefix=prefix,
+            bounds=bounds,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
+        )
+
     @abstractmethod
     def _set_sampler(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
@@ -175,46 +310,46 @@ class Sanalysis(ABC):
 
         return plot_dynamic_metric(metrics, sensitivity_metric, unit, title, stacked)
 
-    def plot_pcp(
-        self,
-        aggregations: dict | None = None,  # <= optionnel
-        *,
-        bounds: list[tuple[float, float]] | None = None,
-        color_by: str | None = None,
-        title: str | None = "Parallel Coordinates — Samples",
-        html_file_path: str | None = None,
-    ):
-        """
-        Parallel Coordinates Plot basé sur les échantillons et résultats présents dans l'analyse.
-
-        Parameters
-        ----------
-        aggregations : dict
-            {indicator: callable | [callable] | {label: callable}}
-            Ex. {"res": [np.sum, np.mean]}  -> colonnes "res:sum", "res:mean".
-        bounds : list[(float, float)] | None
-            Bornes (min, max) par paramètre (même ordre que les paramètres). Si None, autoscale.
-        color_by : str | None
-            Nom d'une dimension (paramètre ou indicateur agrégé) pour colorer les lignes.
-        title : str | None
-            Titre.
-        html_file_path : str | None
-            Si fourni, export HTML.
-        """
-        results = self.sampler.sample.results
-        parameter_values = self.sampler.sample.values
-        parameter_names = [p.name for p in self.sampler.sample.parameters]
-
-        return _plot_pcp(
-            results=results,
-            parameter_values=parameter_values,
-            parameter_names=parameter_names,
-            aggregations=aggregations,
-            bounds=bounds,
-            color_by=color_by,
-            title=title,
-            html_file_path=html_file_path,
-        )
+    # def plot_pcp(
+    #     self,
+    #     aggregations: dict | None = None,  # <= optionnel
+    #     *,
+    #     bounds: list[tuple[float, float]] | None = None,
+    #     color_by: str | None = None,
+    #     title: str | None = "Parallel Coordinates — Samples",
+    #     html_file_path: str | None = None,
+    # ):
+    #     """
+    #     Parallel Coordinates Plot basé sur les échantillons et résultats présents dans l'analyse.
+    #
+    #     Parameters
+    #     ----------
+    #     aggregations : dict
+    #         {indicator: callable | [callable] | {label: callable}}
+    #         Ex. {"res": [np.sum, np.mean]}  -> colonnes "res:sum", "res:mean".
+    #     bounds : list[(float, float)] | None
+    #         Bornes (min, max) par paramètre (même ordre que les paramètres). Si None, autoscale.
+    #     color_by : str | None
+    #         Nom d'une dimension (paramètre ou indicateur agrégé) pour colorer les lignes.
+    #     title : str | None
+    #         Titre.
+    #     html_file_path : str | None
+    #         Si fourni, export HTML.
+    #     """
+    #     results = self.sampler.sample.results
+    #     parameter_values = self.sampler.sample.values
+    #     parameter_names = [p.name for p in self.sampler.sample.parameters]
+    #
+    #     return _plot_pcp(
+    #         results=results,
+    #         parameter_values=parameter_values,
+    #         parameter_names=parameter_names,
+    #         aggregations=aggregations,
+    #         bounds=bounds,
+    #         color_by=color_by,
+    #         title=title,
+    #         html_file_path=html_file_path,
+    #     )
 
     def salib_plot_matrix(
         self,
@@ -248,6 +383,15 @@ class Sanalysis(ABC):
 
 
 class SobolSanalysis(Sanalysis):
+    """
+    Sobol sensitivity analysis class using Saltelli sampling.
+
+    This class extends :class:`Sanalysis` and provides variance-based global
+    sensitivity analysis following the Sobol method. Sampling of the parameter
+    space is performed using the Saltelli scheme, which ensures efficient
+    estimation of first-order, second-order, and total-order Sobol indices.
+    """
+
     def __init__(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
     ):
@@ -348,23 +492,6 @@ class SobolSanalysis(Sanalysis):
             calc_second_order=calc_second_order,
             stacked=True,
             title=title,
-        )
-
-    def plot_pcp(
-        self,
-        aggregations: dict | None = None,
-        *,
-        bounds: list[tuple[float, float]] | None = None,
-        color_by: str | None = None,
-        title: str | None = "Parallel Coordinates — Samples",
-        html_file_path: str | None = None,
-    ) -> go.Figure:
-        return super().plot_pcp(
-            aggregations=aggregations,
-            bounds=bounds,
-            color_by=color_by,
-            title=title,
-            html_file_path=html_file_path,
         )
 
     def plot_s2_matrix(
@@ -528,23 +655,6 @@ class MorrisSanalysis(Sanalysis):
             title,
         )
 
-    def plot_pcp(
-        self,
-        aggregations: dict | None = None,
-        *,
-        bounds: list[tuple[float, float]] | None = None,
-        color_by: str | None = None,
-        title: str | None = "Parallel Coordinates — Samples",
-        html_file_path: str | None = None,
-    ) -> go.Figure:
-        return super().plot_pcp(
-            aggregations=aggregations,
-            bounds=bounds,
-            color_by=color_by,
-            title=title,
-            html_file_path=html_file_path,
-        )
-
 
 class FASTSanalysis(Sanalysis):
     def __init__(
@@ -642,23 +752,6 @@ class FASTSanalysis(Sanalysis):
             title=title,
         )
 
-    def plot_pcp(
-        self,
-        aggregations: dict | None = None,
-        *,
-        bounds: list[tuple[float, float]] | None = None,
-        color_by: str | None = None,
-        title: str | None = "Parallel Coordinates — Samples",
-        html_file_path: str | None = None,
-    ) -> go.Figure:
-        return super().plot_pcp(
-            aggregations=aggregations,
-            bounds=bounds,
-            color_by=color_by,
-            title=title,
-            html_file_path=html_file_path,
-        )
-
 
 class RBDFASTSanalysis(Sanalysis):
     def __init__(
@@ -751,23 +844,6 @@ class RBDFASTSanalysis(Sanalysis):
             reference_time_series=reference_time_series,
             stacked=True,
             title=title,
-        )
-
-    def plot_pcp(
-        self,
-        aggregations: dict | None = None,
-        *,
-        bounds: list[tuple[float, float]] | None = None,
-        color_by: str | None = None,
-        title: str | None = "Parallel Coordinates — Samples",
-        html_file_path: str | None = None,
-    ) -> go.Figure:
-        return super().plot_pcp(
-            aggregations=aggregations,
-            bounds=bounds,
-            color_by=color_by,
-            title=title,
-            html_file_path=html_file_path,
         )
 
 
