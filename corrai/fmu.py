@@ -2,14 +2,13 @@ import datetime as dt
 import shutil
 import tempfile
 from pathlib import Path
-
+import warnings
 import fmpy
 from fmpy import simulate_fmu
 import pandas as pd
 from sklearn.pipeline import Pipeline
 
 from corrai.base.model import Model
-from corrai.base.parameter import Parameter
 
 
 def seconds_index_to_datetime_index(
@@ -194,11 +193,7 @@ def get_start_stop_year_tz_from_x(x: pd.DataFrame = None):
 
 class ModelicaFmuModel(Model):
     """
-    A wrapper class for FMU (Functional Mock-up Unit) simulations using fmpy.
-
-    This class integrates FMUs into the ``Model`` formalism of corrai and
-    provides convenience methods for setting boundary conditions, parameters,
-    and simulation options.
+    Wrap an FMU (Functional Mock-up Unit) in the corrai Model formalism.
 
     Parameters
     ----------
@@ -208,40 +203,31 @@ class ModelicaFmuModel(Model):
         Dictionary of simulation options including:
         ``startTime``, ``stopTime``, ``stepSize``, ``solver``,
         ``outputInterval``, ``tolerance``, ``fmi_type``.
-            Can also include key ``x`` with a DataFrame of boundary conditions.
+        Can also include ``boundary`` (pd.DataFrame) if the FMU
+        uses a CombiTimeTable.
     output_list : list of str, optional
-        List of output variable names to record.
-    x_combitimetable_name : str, optional
-        Name of the CombiTimeTable block in the Modelica model.
-    simulation_dir : Path, optional
-        Directory for simulation files (temporary dir if not given).
+        List of variables to record during simulation.
+    boundary_table : str or None, optional
+        Name of the CombiTimeTable object in the FMU that is used to
+        provide boundary conditions.
 
-    Attributes
-    ----------
-    parameters : dict
-        Dictionary of FMU parameters to be set before simulation.
-    simulation_options : dict
-        Dictionary of simulation options.
-    output_list : list of str
-        Variables to output from the FMU.
-    model_path : Path
-        Path to the FMU file.
-    simulation_dir : Path
-        Directory for temporary simulation artifacts.
+        - If a string is provided, boundary data can be passed through
+          ``simulation_options["boundary"]``.
+        - If None (default), no CombiTimeTable will be set and any
+          provided ``boundary`` will be ignored.
+    simulation_dir : Path, optional
+        Directory for simulation files. A temporary directory is created
+        if not provided.
 
     Examples
     --------
+    >>> import pandas as pd
     >>> from corrai.fmu import ModelicaFmuModel
-    >>> model = ModelicaFmuModel(
-    ...     fmu_path="rosen.fmu",
-    ...     simulation_options={"startTime": 0, "stopTime": 10, "stepSize": 1},
-    ...     output_list=["res.showNumber"]
-    ... )
-    >>> result = model.simulate()
-    >>> result.head()
-                       res.showNumber
-    1970-01-01 00:00:00+00:00        401.0
-    1970-01-01 00:00:01+00:00        401.0
+    >>> model = ModelicaFmuModel("boundary_test.fmu",
+    ...     output_list=["Boundaries.y[1]"],
+    ...     boundary_table="Boundaries")
+    >>> x = pd.DataFrame({"Boundaries.y[1]": [1, 2, 3]}, index=[0, 1, 2])
+    >>> res = model.simulate(simulation_options={"boundary": x, "stepSize": 1})
     """
 
     def __init__(
@@ -249,9 +235,13 @@ class ModelicaFmuModel(Model):
         fmu_path: Path,
         simulation_options: dict[str, float | str | int] = None,
         output_list: list[str] = None,
-        x_combitimetable_name: str = None,
+        boundary_table: str | None = None,
         simulation_dir: Path = None,
     ):
+        fmu_path = Path(fmu_path)
+        if not fmu_path.exists() or not fmu_path.is_file():
+            raise FileNotFoundError(f"FMU file not found at {fmu_path}")
+
         self._x = pd.DataFrame()
         self.simulation_options = {
             "startTime": 0,
@@ -270,31 +260,79 @@ class ModelicaFmuModel(Model):
         self.parameters = {}
         self._begin_year = None
         self._tz = None
-        self.x_combitimetable_name = (
-            x_combitimetable_name if x_combitimetable_name is not None else "Boundaries"
-        )
-        if simulation_options is not None:
-            self._set_x_sim_options(simulation_options=simulation_options)
+        self.boundary_table = boundary_table
 
-    def set_x(self, df: pd.DataFrame):
+        if simulation_options is not None:
+            self.set_simulation_options(simulation_options)
+
+    def set_simulation_options(
+        self,
+        simulation_options: dict[
+            str, float | str | int | dt.datetime | pd.Timestamp
+        ] = None,
+    ):
         """
-        Set input boundary data for the simulation and update the FMU parameters.
+        Set simulation options and boundary data if provided.
 
         Parameters
         ----------
-        df : pd.DataFrame
-            DataFrame with a DatetimeIndex or seconds index containing boundary conditions.
-
-        Examples
-        --------
-        >>> import pandas as pd
-        >>> x = pd.DataFrame({"u": [1, 2, 3]}, index=[0, 1, 2])
-        >>> model.set_x(x)
+        simulation_options : dict, optional
+            May include:
+            - ``startTime``, ``stopTime`` : float or datetime
+            - ``stepSize``, ``solver``, ``outputInterval``, ``tolerance``, ``fmi_type``
+            - ``boundary`` : pd.DataFrame, boundary data for the CombiTimeTable
         """
+
+        if simulation_options is None:
+            return
+
+        if "boundary" in simulation_options:
+            if self.boundary_table is None:
+                warnings.warn(
+                    "Boundary provided but no combitimetable name set -> ignoring."
+                )
+            else:
+                model_description = fmpy.read_model_description(
+                    self.model_path.as_posix()
+                )
+                varnames = [v.name for v in model_description.modelVariables]
+                if f"{self.boundary_table}.fileName" not in varnames:
+                    warnings.warn(
+                        f"Boundary combitimetable '{self.boundary_table}' "
+                        f"not found in FMU -> ignoring boundary.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                else:
+                    self.set_boundary(simulation_options["boundary"])
+
+        to_update = {
+            k: v
+            for k, v in simulation_options.items()
+            if k not in ["startTime", "stopTime"]
+        }
+        self.simulation_options.update(to_update)
+
+        simo = {}
+        for key in ["startTime", "stopTime"]:
+            if key in simulation_options:
+                if isinstance(simulation_options[key], (dt.datetime, pd.Timestamp)):
+                    simo[key] = datetime_to_second(simulation_options[key])
+                    if key == "startTime":
+                        self._begin_year = simulation_options["startTime"].year
+                else:
+                    simo[key] = simulation_options[key]
+            else:
+                simo[key] = self.simulation_options[key]
+        self.simulation_options["startTime"] = simo["startTime"]
+        self.simulation_options["stopTime"] = simo["stopTime"]
+
+    def set_boundary(self, df: pd.DataFrame):
+        """Set boundary data and update parameters accordingly."""
         if not self._x.equals(df):
             new_bounds_path = self.simulation_dir / "boundaries.txt"
             df_to_combitimetable(df, new_bounds_path)
-            self.parameters[f"{self.x_combitimetable_name}.fileName"] = (
+            self.parameters[f"{self.boundary_table}.fileName"] = (
                 new_bounds_path.as_posix()
             )
             self._x = df
@@ -304,71 +342,6 @@ class ModelicaFmuModel(Model):
             self.simulation_options["stopTime"] = stop
             self._begin_year = year
             self._tz = tz
-
-    def _set_x_sim_options(
-        self,
-        simulation_options: dict[
-            str, float | str | int | dt.datetime | pd.Timestamp
-        ] = None,
-    ):
-        """
-        Update simulation options and handle boundary data if passed.
-
-        Parameters
-        ----------
-        simulation_options : dict, optional
-            Dictionary of simulation options. If key ``x`` is present,
-            it is treated as boundary condition data (pd.DataFrame).
-
-        Examples
-        --------
-        >>> import pandas as pd
-        >>> from corrai.fmu import ModelicaFmuModel
-        >>> model = ModelicaFmuModel(
-        ...     fmu_path="boundary_test.fmu",
-        ...     output_list=["Boundaries.y[1]", "Boundaries.y[2]"]
-        ... )
-        >>> x = pd.DataFrame(
-        ...     {"Boundaries.y[1]": [1, 2, 3], "Boundaries.y[2]": [3, 4, 5]},
-        ...     index=[3, 4, 5]
-        ... )
-        >>> model._set_x_sim_options({
-        ...     "x": x,
-        ...     "stepSize": 1,
-        ...     "outputInterval": 1,
-        ...     "solver": "CVode"
-        ... })
-        """
-        if simulation_options is None:
-            return
-
-        if "x" in simulation_options:
-            self.set_x(simulation_options["x"])
-            simulation_options = {
-                k: v for k, v in simulation_options.items() if k != "x"
-            }
-
-        to_update = {
-            key: val
-            for key, val in simulation_options.items()
-            if key not in ["startTime", "stopTime"]
-        }
-        self.simulation_options.update(to_update)
-
-        if "x" not in simulation_options:
-            simo = {}
-            for key in ["startTime", "stopTime"]:
-                if key in simulation_options:
-                    if isinstance(simulation_options[key], (dt.datetime, pd.Timestamp)):
-                        simo[key] = datetime_to_second(simulation_options[key])
-                        if key == "startTime":
-                            self._begin_year = simulation_options["startTime"].year
-                    else:
-                        simo[key] = simulation_options[key]
-                else:
-                    simo[key] = self.simulation_options[key]
-            self.simulation_options["startTime"] = simo["startTime"]
-            self.simulation_options["stopTime"] = simo["stopTime"]
 
     def get_property_values(
         self, property_list: str | tuple[str, ...] | list[str]
@@ -409,47 +382,10 @@ class ModelicaFmuModel(Model):
                 values.append(None)
         return values
 
-    def simulate_parameter(
-        self,
-        parameter_value_pairs: list[tuple["Parameter", str | int | float]],
-        simulation_options: dict = None,
-        simulation_kwargs: dict = None,
-    ) -> pd.DataFrame:
-        """
-        Run a simulation by providing parameters as (Parameter, value) pairs.
-
-        Parameters
-        ----------
-        parameter_value_pairs : list of tuple
-            Each element is a (Parameter, value) pair.
-        simulation_options : dict, optional
-            Simulation options (see ``simulate``).
-        simulation_kwargs : dict, optional
-            Additional keyword arguments (see ``simulate``).
-
-        Returns
-        -------
-        pd.DataFrame
-            Simulation results.
-
-        Examples
-        --------
-        >>> from corrai.base.parameter import Parameter
-        >>> p = Parameter(name="x", model_property="x.k", interval=(0, 5))
-        >>> model.simulate_parameter([(p, 3)])
-           res.showNumber
-        0            401.0
-        1            401.0
-        2            401.0
-        """
-        property_dict = self.get_property_from_param(parameter_value_pairs)
-        return self.simulate(property_dict, simulation_options, simulation_kwargs)
-
     def simulate(
         self,
         property_dict: dict[str, float | int | str] = None,
         simulation_options: dict = None,
-        x: pd.DataFrame = None,
         solver_duplicated_keep: str = "last",
         post_process_pipeline: Pipeline = None,
         debug_param: bool = False,
@@ -457,68 +393,59 @@ class ModelicaFmuModel(Model):
         logger=None,
     ) -> pd.DataFrame:
         """
-        Run an FMU simulation with given parameters, options, and boundary conditions.
+        Run FMU simulation for the given parameters and simulation options.
 
         Parameters
         ----------
-        property_dict : dict of {str: float or int or str}, optional
-            Dictionary of FMU parameter values to override before simulation.
-            Keys are FMU variable names (e.g., ``{"x.k": 3, "y.k": 4}``).
+        property_dict : dict, optional
+            Dictionary of FMU parameter values to set before simulation.
+            Can include "boundary" (pd.DataFrame) if boundary data must override
+            simulation_options.
         simulation_options : dict, optional
-            Dictionary of simulation options. It may include:
-            - ``startTime`` : float or datetime
-            - ``stopTime`` : float or datetime
-            - ``stepSize`` : float
-            - ``solver`` : str
-            - ``outputInterval`` : float
-            - ``tolerance`` : float
-            - ``fmi_type`` : {"ModelExchange", "CoSimulation"}
-            - ``x`` : pd.DataFrame, optional
-                Boundary conditions to inject as a CombiTimeTable
-                (alternative to passing via ``simulation_kwargs``).
-            - ``x`` : pd.DataFrame
-                Boundary conditions.
-            - ``solver_duplicated_keep`` : {"first", "last"}, default="last"
-                Which duplicated index to keep if solver returns duplicate timesteps.
-            - ``post_process_pipeline`` : sklearn.Pipeline, optional
-                Pipeline applied to the results (e.g. resampling).
-            - ``debug_logging`` : bool, default False
-                Enable verbose logging from fmpy.
-            - ``logger`` : callable, optional
-                Logger function passed to fmpy.
+            Simulation options. May include:
+            - ``startTime``, ``stopTime``, ``stepSize``, ``solver``,
+              ``outputInterval``, ``tolerance``, ``fmi_type``.
+            - ``boundary`` : pd.DataFrame of boundary conditions.
+        solver_duplicated_keep : {"first", "last"}, default "last"
+            Which value to keep if solver outputs duplicated indices.
+        post_process_pipeline : sklearn.Pipeline, optional
+            Pipeline applied to simulation results.
+        debug_param : bool, default False
+            If True, prints `property_dict`.
+        debug_logging : bool, default False
+            Enable verbose logging from fmpy.
+        logger : callable, optional
+            Logger for fmpy.
 
         Returns
         -------
         pd.DataFrame
-            Simulation results indexed by time (as `DatetimeIndex` if a year was inferred,
-            otherwise numeric seconds). Columns are the variables in ``output_list``.
+            Simulation results, indexed by time.
 
-        Examples
-        --------
-        Basic simulation with default parameters:
+        Notes
+        -----
+        - If boundary is provided both in `property_dict` and `simulation_options`,
+          the one from `property_dict` takes precedence, with a warning.
 
-        >>> from corrai.fmu import ModelicaFmuModel
-        >>> model = ModelicaFmuModel(
-        ...     fmu_path="rosen.fmu",
-        ...     simulation_options={"startTime": 0, "stopTime": 2, "stepSize": 1},
-        ...     output_list=["res.showNumber"]
-        ... )
-        >>> result = model.simulate()
-        >>> result
-           res.showNumber
-        0            401.0
-        1            401.0
-        2            401.0
         """
 
         if debug_param:
             print(property_dict)
 
-        self.parameters.update(property_dict or {})
-        if x is not None:
-            self.set_x(x)
+        if property_dict and "boundary" in property_dict:
+            if simulation_options and "boundary" in simulation_options:
+                warnings.warn(
+                    "Boundary specified in both property_dict and simulation_options. "
+                    "The one in property_dict will be used.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            self.set_boundary(property_dict["boundary"])
+            property_dict = {k: v for k, v in property_dict.items() if k != "boundary"}
 
-        self._set_x_sim_options(simulation_options)
+        self.parameters.update(property_dict or {})
+
+        self.set_simulation_options(simulation_options)
 
         result = simulate_fmu(
             filename=self.model_path,
@@ -539,25 +466,16 @@ class ModelicaFmuModel(Model):
 
         if self._begin_year is not None:
             df.index = seconds_index_to_datetime_index(df["time"], self._begin_year)
-            # Weird solver behavior
             df.index = df.index.round("s")
             df = df.tz_localize(self._tz)
             df.index.freq = df.index.inferred_freq
         else:
-            # solver can do funny things. Round time
             df.index = round(df["time"], 2)
 
         df.drop(columns=["time"], inplace=True)
 
-        # First values are often duplicates...
-        # For some reason, it appears that values of first timestep is often off
-        # A bit dirty, so we let you choose
-
         df = df.loc[~df.index.duplicated(keep=solver_duplicated_keep)]
 
-        # If all previous operations failed to provide good results
-        # You can use you own correction pipeline.
-        # Be sure to use pd.DatetimeIndex if you want to resample
         if post_process_pipeline is not None:
             df = post_process_pipeline.fit_transform(df)
 

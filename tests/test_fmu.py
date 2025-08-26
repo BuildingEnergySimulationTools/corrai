@@ -3,6 +3,7 @@ import os
 import platform
 import tempfile
 from pathlib import Path
+import pytest
 
 import numpy as np
 import pandas as pd
@@ -45,6 +46,7 @@ class TestFmu:
             simu = ModelicaFmuModel(
                 fmu_path=PACKAGE_DIR / "boundary_test.fmu",
                 output_list=["Boundaries.y[1]", "Boundaries.y[2]"],
+                boundary_table="Boundaries",
             )
 
             new_bounds = pd.DataFrame(
@@ -56,11 +58,11 @@ class TestFmu:
             new_bounds = new_bounds.astype(float)
 
             res = simu.simulate(
-                x=new_bounds,
                 simulation_options={
                     "solver": "CVode",
                     "outputInterval": 1,
                     "stepSize": 1,
+                    "boundary": new_bounds,
                 },
                 solver_duplicated_keep="last",
             )
@@ -90,10 +92,10 @@ class TestFmu:
             x_datetime = x_datetime.astype(float)
 
             res = simu.simulate(
-                x=x_datetime,
                 simulation_options={
                     "outputInterval": 3600,
                     "stepSize": 3600,
+                    "boundary": x_datetime,
                 },
                 solver_duplicated_keep="last",
             )
@@ -110,16 +112,6 @@ class TestFmu:
             )
 
             pd.testing.assert_frame_equal(res, x_datetime.loc[:"2009-7-13 03:00:00", :])
-
-            res2 = simu.simulate(
-                simulation_options={
-                    "outputInterval": 3600,
-                    "stepSize": 3600,
-                    "x": x_datetime,
-                },
-                solver_duplicated_keep="last",
-            )
-            pd.testing.assert_frame_equal(res, res2)
 
     def test_save(self):
         simu = ModelicaFmuModel(
@@ -177,3 +169,31 @@ class TestFmu:
             ]
         )
         assert res1["res.showNumber"].equals(res2["res.showNumber"])
+
+    def test_boundary_warning(self):
+        simu = ModelicaFmuModel(
+            fmu_path=PACKAGE_DIR / "rosen.fmu",
+            output_list=["res.showNumber"],
+            boundary_table="Boundaries",
+        )
+
+        fake_boundary = pd.DataFrame({"u": [1, 2, 3]}, index=[0, 1, 2])
+
+        with pytest.warns(
+            UserWarning,
+            match="Boundary combitimetable 'Boundaries' "
+            "not found in FMU -> ignoring boundary.",
+        ):
+            res = simu.simulate(
+                simulation_options={
+                    "startTime": 0,
+                    "stopTime": 2,
+                    "stepSize": 1,
+                    "boundary": fake_boundary,
+                }
+            )
+
+        ref = pd.DataFrame({"res.showNumber": [401.0, 401.0, 401.0]})
+        np.testing.assert_allclose(
+            res["res.showNumber"].values, ref["res.showNumber"].values
+        )
