@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from corrai.base.parameter import Parameter
+from corrai.base.model import Ishigami
 from corrai.sensitivity import (
     SobolSanalysis,
     MorrisSanalysis,
@@ -9,7 +10,6 @@ from corrai.sensitivity import (
     RBDFASTSanalysis,
 )
 
-from tests.resources.pymodels import Ishigami
 
 SIMULATION_OPTIONS = {
     "start": "2009-01-01 00:00:00",

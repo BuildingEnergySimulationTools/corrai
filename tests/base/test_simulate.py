@@ -2,7 +2,7 @@ import pandas as pd
 
 from corrai.base.parameter import Parameter
 from corrai.base.simulate import run_simulations
-from tests.resources.pymodels import Ishigami
+from corrai.base.model import Ishigami
 
 SIMULATION_OPTIONS = {
     "start": "2009-01-01 00:00:00",

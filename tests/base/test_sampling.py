@@ -13,8 +13,9 @@ from corrai.base.sampling import (
 )
 
 from corrai.base.math import aggregate_time_series
+from corrai.base.model import Ishigami
+from tests.resources.pymodels import Pymodel
 
-from tests.resources.pymodels import Pymodel, Ishigami
 import pytest
 
 import plotly.graph_objects as go

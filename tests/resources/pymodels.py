@@ -1,7 +1,6 @@
 from corrai.base.model import Model
 
 import pandas as pd
-import numpy as np
 from pathlib import Path
 
 
@@ -26,44 +25,6 @@ class Pymodel(Model):
 
         return pd.DataFrame(
             {"res": [self.prop_1 * self.prop_2 + self.prop_3]},
-            index=pd.date_range(
-                simulation_options["start"],
-                simulation_options["end"],
-                freq=simulation_options["timestep"],
-            ),
-        )
-
-
-class Ishigami(Model):
-    def __init__(self):
-        self.x1 = 1
-        self.x2 = 2
-        self.x3 = 3
-
-    def get_property_values(self, property_list: list):
-        return [getattr(self, name) for name in property_list]
-
-    def set_property_values(self, property_dict: dict):
-        for prop, val in property_dict.items():
-            setattr(self, prop, val)
-
-    def simulate(
-        self,
-        property_dict: dict[str, str | int | float] = None,
-        simulation_options: dict = None,
-        simulation_kwargs: dict = None,
-    ) -> pd.DataFrame:
-        if property_dict is not None:
-            self.set_property_values(property_dict)
-
-        res = (
-            np.sin(self.x1)
-            + 7.0 * np.power(np.sin(self.x2), 2)
-            + 0.1 * np.power(self.x3, 4) * np.sin(self.x1)
-        )
-
-        return pd.DataFrame(
-            {"res": [res]},
             index=pd.date_range(
                 simulation_options["start"],
                 simulation_options["end"],
