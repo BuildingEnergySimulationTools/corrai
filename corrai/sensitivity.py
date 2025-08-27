@@ -7,7 +7,6 @@ import plotly.graph_objects as go
 from SALib.analyze import morris, sobol, fast, rbd_fast
 from corrai.base.parameter import Parameter
 from corrai.base.sampling import (
-    SaltelliSampler,
     SobolSampler,
     MorrisSampler,
     FASTSampler,
@@ -384,7 +383,7 @@ class Sanalysis(ABC):
 
 class SobolSanalysis(Sanalysis):
     """
-    Sobol sensitivity analysis class using Saltelli sampling.
+    Sobol sensitivity analysis class.
 
     This class extends :class:`Sanalysis` and provides variance-based global
     sensitivity analysis following the Sobol method. Sampling of the parameter
@@ -397,20 +396,13 @@ class SobolSanalysis(Sanalysis):
         parameters: list[Parameter],
         model: Model,
         simulation_options: dict = None,
-        sampler: str = "saltelli",
     ):
-        self._sampler_choice = sampler
         super().__init__(parameters, model, simulation_options)
 
     def _set_sampler(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
     ):
-        if self._sampler_choice == "saltelli":
-            return SaltelliSampler(parameters, model, simulation_options)
-        elif self._sampler_choice == "sobol":
-            return SobolSampler(parameters, model, simulation_options)
-        else:
-            raise ValueError("sampler must be 'saltelli' or 'sobol'")
+        return SobolSampler(parameters, model, simulation_options)
 
     def _set_analyser(self):
         return sobol

@@ -12,7 +12,6 @@ from scipy.stats.qmc import LatinHypercube
 from SALib.sample import morris as morris_sampler
 from SALib.sample import sobol as sobol_sampler
 from SALib.sample import fast_sampler, latin
-from SALib.sample import saltelli
 
 from corrai.base.parameter import Parameter
 from corrai.base.model import Model
@@ -464,34 +463,6 @@ class SobolSampler(RealSampler):
             **sobol_kwargs,
         )
         self._post_draw_sample(new_sample, simulate, n_cpu, sample_is_dimless=False)
-
-
-class SaltelliSampler(RealSampler):
-    def __init__(
-        self,
-        parameters: list[Parameter],
-        model: Model,
-        simulation_options: dict = None,
-    ):
-        super().__init__(parameters, model, simulation_options)
-
-    def add_sample(
-        self,
-        N: int,
-        simulate: bool = True,
-        n_cpu: int = 1,
-        *,
-        calc_second_order: bool = True,
-        **saltelli_kwargs,
-    ):
-        new_sample = saltelli.sample(
-            problem=self.get_salib_problem(),
-            N=N,
-            calc_second_order=calc_second_order,
-            **saltelli_kwargs,
-        )
-        self._post_draw_sample(new_sample, simulate, n_cpu, sample_is_dimless=False)
-
 
 def plot_sample(
     results: pd.Series,

@@ -25,44 +25,11 @@ PARAMETER_LIST = [
 
 
 class TestSensitivity:
-    def test_sanalysis_sobol_with_saltelli_sampler(self):
-        sobol_analysis = SobolSanalysis(
-            parameters=PARAMETER_LIST,
-            model=Ishigami(),
-            simulation_options=SIMULATION_OPTIONS,
-            sampler="saltelli",
-        )
-
-        sobol_analysis.add_sample(N=1000, n_cpu=1, calc_second_order=True)
-        res = sobol_analysis.analyze("res", calc_second_order=True, seed=42)
-
-        np.testing.assert_almost_equal(
-            res["mean_res"]["S1"],
-            np.array([0.31234581102948833, 0.4429936089111491, 0.009030856634835067]),
-        )
-
-        res = sobol_analysis.analyze("res", freq="h", calc_second_order=True, seed=42)
-        assert res.index.tolist() == [
-            pd.Timestamp("2009-01-01 00:00:00"),
-            pd.Timestamp("2009-01-01 01:00:00"),
-            pd.Timestamp("2009-01-01 02:00:00"),
-            pd.Timestamp("2009-01-01 03:00:00"),
-            pd.Timestamp("2009-01-01 04:00:00"),
-            pd.Timestamp("2009-01-01 05:00:00"),
-        ]
-
-        np.testing.assert_almost_equal(
-            res["2009-01-01 00:00:00"]["S1"],
-            np.array([0.31234581102948833, 0.4429936089111491, 0.009030856634835067]),
-            decimal=3,
-        )
-
     def test_sanalysis_sobol_with_sobol_sampler(self):
         sobol_analysis = SobolSanalysis(
             parameters=PARAMETER_LIST,
             model=Ishigami(),
             simulation_options=SIMULATION_OPTIONS,
-            sampler="sobol",
         )
 
         sobol_analysis.add_sample(N=1000, n_cpu=1, calc_second_order=True, seed=42)

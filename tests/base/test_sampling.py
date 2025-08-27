@@ -2,7 +2,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from corrai.base.model import Model
 from corrai.base.parameter import Parameter
 from corrai.base.sampling import (
     plot_sample,
@@ -366,79 +365,26 @@ class TestSample:
             ),
         )
 
-    def test_saltelli_sampler(self):
+    def test_sobol_sampler(self):
         sampler = SobolSampler(
             parameters=ISHIGAMI_PARAMETERS,
             model=Ishigami(),
             simulation_options=SIMULATION_OPTIONS,
         )
+
         sampler.add_sample(N=1, **{"seed": 42})
-        expected_values = np.array(
-            [
-                [-5.864439867090505, 9.269157438872927, 8.955098509010103],
-                [-20.770416138395113, 9.269157438872927, 8.955098509010103],
-                [-5.864439867090505, -11.118632049184082, 8.955098509010103],
-                [-5.864439867090505, 9.269157438872927, 10.276252867237911],
-                [-5.864439867090505, -11.118632049184082, 10.276252867237911],
-                [-20.770416138395113, 9.269157438872927, 10.276252867237911],
-                [-20.770416138395113, -11.118632049184082, 8.955098509010103],
-                [-20.770416138395113, -11.118632049184082, 10.276252867237911],
-            ]
-        )
-        np.testing.assert_allclose(sampler.values, expected_values)
-
-
-class ModelVariant(Model):
-    def __init__(self):
-        self.y1 = 1
-        self.z1 = 2
-        self.multiplier = 1
-
-    def simulate(
-        self, property_dict: dict = None, simulation_options: dict = None
-    ) -> pd.DataFrame:
-        if property_dict is None:
-            property_dict = {"discrete1": 1, "discrete2": 2}
-
-        result = (
-            self.y1 * property_dict["discrete1"] + self.z1 * property_dict["discrete2"]
-        ) * self.multiplier
-
-        df = pd.DataFrame(
-            {"result": [result]},
-            index=pd.date_range(
-                simulation_options["start"],
-                simulation_options["end"],
-                freq=simulation_options["timestep"],
+        np.testing.assert_allclose(
+            sampler.values,
+            np.array(
+                [
+                    [-0.43335459, 1.97523222, 1.92524819],
+                    [-2.8057144, 1.97523222, 1.92524819],
+                    [-0.43335459, -1.26958525, 1.92524819],
+                    [-0.43335459, 1.97523222, 2.13551644],
+                    [-0.43335459, -1.26958525, 2.13551644],
+                    [-2.8057144, 1.97523222, 2.13551644],
+                    [-2.8057144, -1.26958525, 1.92524819],
+                    [-2.8057144, -1.26958525, 2.13551644],
+                ]
             ),
         )
-
-        return df
-
-    def save(self, file_path: Path):
-        pass
-
-
-class Simul(Model):
-    def simulate(
-        self, property_dict: dict = None, simulation_options: dict = None
-    ) -> pd.DataFrame:
-        Parameter1, Parameter2, Parameter3, Parameter4 = map(
-            float, property_dict.values()
-        )
-        df = Parameter1 + Parameter2 - Parameter3 + 2 * Parameter4
-        df_out = pd.DataFrame({"df": [df]})
-        return df_out
-
-    def save(self, file_path: Path):
-        pass
-
-
-def modifier_1(model, description, multiplier=None):
-    model.y1 = description["y1"]
-    if multiplier is not None:
-        model.multiplier = multiplier
-
-
-def modifier_2(model, description):
-    model.z1 = description["z1"]
