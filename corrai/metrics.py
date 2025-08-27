@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.utils import check_consistent_length
 
+
 def nmbe(y_pred, y_true):
     """Normalized Mean Biased Error
 
