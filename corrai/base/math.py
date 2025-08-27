@@ -36,7 +36,7 @@ def aggregate_time_series(
       inconsistent shapes.
 
     Example usage:
-        >>> result_df = pd.DataFrame({'A': [1, 2, 3], 'B': [4, 5, 6]})
+        >>> result_df = pd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
         >>> agg_series = aggregate_time_series(result_df)
         >>> print(agg_series)
     A    2

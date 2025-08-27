@@ -966,9 +966,17 @@ class ObjectiveFunction:
     >>> from sklearn.metrics import mean_squared_error
     >>> model = SomeModel()
     >>> simulation_options = {"duration": 100}
-    >>> param_list = [{Parameter.NAME: "param1", Parameter.INTERVAL: [0, 1], Parameter.INIT_VALUE: 0.5}]
+    >>> param_list = [
+    ...     {
+    ...         Parameter.NAME: "param1",
+    ...         Parameter.INTERVAL: [0, 1],
+    ...         Parameter.INIT_VALUE: 0.5,
+    ...     }
+    ... ]
     >>> indicators_config = {"res": (mean_squared_error, reference_series)}
-    >>> obj_func = ObjectiveFunction(model, simulation_options, param_list, indicators_config)
+    >>> obj_func = ObjectiveFunction(
+    ...     model, simulation_options, param_list, indicators_config
+    ... )
     >>> obj_func.function({"param1": 0.8})
     {'indicator1': 0.123}
     >>> obj_func.scipy_obj_function([0.8])
