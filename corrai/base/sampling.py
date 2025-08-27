@@ -464,6 +464,7 @@ class SobolSampler(RealSampler):
         )
         self._post_draw_sample(new_sample, simulate, n_cpu, sample_is_dimless=False)
 
+
 def plot_sample(
     results: pd.Series,
     indicator: str | None = None,

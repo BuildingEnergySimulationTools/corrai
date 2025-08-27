@@ -1,4 +1,4 @@
-from multiprocessing import Pool, cpu_count
+from multiprocessing import cpu_count
 
 from joblib import Parallel, delayed
 from fastprogress.fastprogress import progress_bar
