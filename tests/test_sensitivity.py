@@ -255,7 +255,7 @@ class TestPlots:
             fig_bar["layout"]["title"]["text"] == "Morris euclidian_distance mean res"
         )
 
-        res_euclidian = morris_analysis.analyze("res")[f"mean_res"]
+        res_euclidian = morris_analysis.analyze("res")["mean_res"]
         fig_data = fig_bar.data[0]
         expected_x = [p.name for p in PARAMETER_LIST]
         expected_y = res_euclidian["euclidian_distance"].tolist()

@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from SALib.analyze import morris, sobol, fast, rbd_fast
-from corrai.base.sampling import plot_pcp as _plot_pcp
 from corrai.base.parameter import Parameter
 from corrai.base.sampling import (
     SaltelliSampler,

@@ -6,6 +6,8 @@ import pandas as pd
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Integer, Real, Choice, Binary
 
+from corrai.base.parameter import Parameter
+
 
 class Problem(ElementwiseProblem):
     """
@@ -150,7 +152,7 @@ class Problem(ElementwiseProblem):
         out["G"] = G
 
 
-def _check_duplicate_params(params: list["Parameter"]) -> None:
+def _check_duplicate_params(params: list[Parameter]) -> None:
     seen = set()
     for p in params:
         if p.name in seen:
