@@ -1,0 +1,49 @@
+
+[project]
+name = "corrai"
+version = "0.4.0"
+description = "Data correction and Machine Learning"
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = [
+    "LICENSE.md",
+]
+authors = [
+  { name = "Nobatek/INEF4", email = "bdurandestebe@nobatek.inef4.com" },
+]
+urls = { "Homepage" = "https://github.com/BuildingEnergySimulationTools/corrai" }
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.22.4,<2.0",
+    "pandas>=2.1.0,<3.0",
+    "scipy>=1.9.1,<2.0",
+    "scikit-learn>=1.2.2,<2.0",
+    "pymoo>=0.6.0.1",
+    "salib>=1.4.7",
+    "fmpy>=0.3.6",
+    "matplotlib>=3.5.1",
+    "plotly>=5.3.1",
+    "fastprogress>=1.0.3",
+]
+
+[build-system]
+requires = ["flit_core<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.ruff]
+fix = true
+
+[tool.ruff.format]
+docstring-code-format = true
+
