@@ -1,14 +1,8 @@
-from typing import Callable, Iterable
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-# from copy import deepcopy
-# from pathlib import Path
-# from itertools import product
 
 import numpy as np
 import pandas as pd
-import plotly.io as pio
 import plotly.graph_objects as go
 import datetime as dt
 
@@ -24,7 +18,6 @@ from corrai.base.parameter import Parameter
 from corrai.base.model import Model
 from corrai.base.math import aggregate_time_series
 from corrai.base.simulate import run_simulations
-# from corrai.variant import simulate_variants, get_combined_variants
 
 
 @dataclass
