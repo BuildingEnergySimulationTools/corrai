@@ -7,7 +7,7 @@ from fastprogress.fastprogress import progress_bar
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 from corrai.base.utils import check_datetime_index
-from corrai.metrics import nmbe, cv_rmse
+from corrai.base.metrics import nmbe, cv_rmse
 
 METHODS = {
     "mean": np.mean,

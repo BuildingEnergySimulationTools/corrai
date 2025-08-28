@@ -1,6 +1,6 @@
 import numpy as np
-from corrai.metrics import nmbe
-from corrai.metrics import cv_rmse
+from corrai.base.metrics import nmbe
+from corrai.base.metrics import cv_rmse
 
 
 class TestMetrics:
