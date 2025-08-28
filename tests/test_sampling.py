@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from corrai.base.parameter import Parameter
-from corrai.base.sampling import (
+from corrai.sampling import (
     plot_sample,
     plot_pcp,
     LHSSampler,

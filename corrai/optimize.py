@@ -44,7 +44,7 @@ class Problem(ElementwiseProblem):
             raise ValueError("evaluators must be provided")
 
         self.parameters = list(parameters)
-        _check_duplicate_params(parameters)
+        check_duplicate_params(parameters)
         self.param_names = [p.name for p in self.parameters]
         self.evaluators = list(evaluators)
         self.objective_ids = list(objective_ids)
@@ -152,7 +152,7 @@ class Problem(ElementwiseProblem):
         out["G"] = G
 
 
-def _check_duplicate_params(params: list[Parameter]) -> None:
+def check_duplicate_params(params: list[Parameter]) -> None:
     seen = set()
     for p in params:
         if p.name in seen:

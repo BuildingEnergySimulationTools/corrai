@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from SALib.analyze import morris, sobol, fast, rbd_fast
 from corrai.base.parameter import Parameter
-from corrai.base.sampling import (
+from corrai.sampling import (
     SobolSampler,
     MorrisSampler,
     FASTSampler,
