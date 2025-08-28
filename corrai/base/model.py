@@ -1,5 +1,5 @@
 import pandas as pd
-import numpy  as np
+import numpy as np
 
 from abc import ABC, abstractmethod
 from pathlib import Path

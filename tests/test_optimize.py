@@ -13,7 +13,7 @@ from corrai.base.parameter import Parameter
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.soo.nonconvex.de import DE
 from pymoo.operators.sampling.lhs import LHS
-from pymoo.optimize import minimize
+# from pymoo.optimize import minimize as pymoo
 
 from corrai.surrogate import ObjectiveFunction
 
