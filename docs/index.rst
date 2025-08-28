@@ -79,6 +79,14 @@ Quick Example
     # Obviously, in this example indexes value do not vary
     sobol.plot_dynamic_metric('res', sensitivity_metric="ST", freq="h")
 
+
+
+.. toctree::
+   :maxdepth: 2
+   :caption: User Guide
+
+   api_reference/index
+
 Dependencies
 ------------
 

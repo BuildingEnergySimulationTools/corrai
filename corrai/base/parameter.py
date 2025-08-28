@@ -6,6 +6,17 @@ RELABS = ["Absolute", "Relative"]
 
 @dataclass
 class Parameter:
+    name: str
+    interval: tuple[int | float, int | float] | None = None
+    values: tuple[str | int | float, ...] | None = None
+    ptype: str = "Real"
+    relabs: str = "Absolute"
+    init_value: str | int | float | tuple[str | int | float] | None = None
+    min_max_interval: (
+        tuple[int | float, int | float] | list[tuple[int | float, int | float]] | None
+    ) = None
+    model_property: str | tuple[str, ...] = None
+
     """
     A parameter definition for models. Can Affect a single model property or a list
     of properties
@@ -83,17 +94,6 @@ class Parameter:
     ...     init_value="TARP"
     ... )
     """
-
-    name: str
-    interval: tuple[int | float, int | float] | None = None
-    values: tuple[str | int | float, ...] | None = None
-    ptype: str = "Real"
-    relabs: str = "Absolute"
-    init_value: str | int | float | tuple[str | int | float] | None = None
-    min_max_interval: (
-        tuple[int | float, int | float] | list[tuple[int | float, int | float]] | None
-    ) = None
-    model_property: str | tuple[str, ...] = None
 
     def __post_init__(self):
         if self.interval is not None and self.values is not None:

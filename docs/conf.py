@@ -10,10 +10,9 @@ copyright = "Nobatek"
 author = "Baptiste Durand-Estebe"
 
 # The full version, including alpha/beta/rc tags
-# try:
-#     version = release = importlib.metadata.version("corrai")
-# except importlib.metadata.PackageNotFoundError:
-version = release = "0.0.0"  # or read from a file like pyproject.toml
+version = release = importlib.metadata.version("corrai")
+if version is None:
+    version = release = "0.0.0"  # only for local dev
 
 # General configuration
 extensions = [
