@@ -1,13 +1,13 @@
-Welcome to python-tide's documentation!
+Welcome to Corrai's documentation!
 ====================================
 
 .. image:: ../logo_corrai.svg
    :width: 200px
    :align: center
 
+
 **Corrai** is a Python library for efficient model exploration and sampling.
 It provides tools to:
-
 - Define parameters and generate samples
 - Perform sensitivity and uncertainty analysis
 - Explore parameter spaces through single-objective and multi-objective optimization
@@ -29,36 +29,55 @@ The recommended way to install corrai is via pip:
 This will install python-tide and all its dependencies.
 
 Quick Example
-------------
+-------------
 
 .. code-block:: python
 
-   import pandas as pd
-   import numpy as np
-   from tide.plumbing import Plumber
+    import pandas as pd
 
-   # Create sample data
-   data = pd.DataFrame({
-       "temp__°C__zone1": [20, 21, np.nan, 23],
-       "humid__%HR__zone1": [50, 55, 60, np.nan]
-   }, index=pd.date_range("2023", freq="h", periods=4))
+    from corrai.base.parameter import Parameter
+    from corrai.sensitivity import SobolSanalysis, MorrisSanalysis
+    from corrai.base.model import Ishigami
 
-   # Define pipeline
-   pipe_dict = {
-       "pre_processing": {"°C": [["ReplaceThreshold", {"upper": 25}]]},
-       "common": [["Interpolate", ["linear"]]]
-   }
+    SIMULATION_OPTIONS = {
+        "start": "2009-01-01 00:00:00",
+        "end": "2009-01-01 05:00:00",
+        "timestep": "h",
+    }
 
-   # Create plumber and process data
-   plumber = Plumber(data, pipe_dict)
-   corrected = plumber.get_corrected_data()
+    PARAMETER_LIST = [
+        Parameter("par_x1", (-3.14159265359, 3.14159265359), model_property="x1"),
+        Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
+        Parameter("par_x3", (-3.14159265359, 3.14159265359), model_property="x3"),
+    ]
 
-   # Analyze gaps
-   gaps = plumber.get_gaps_description()
+    # Configure a Sobol sensitivity analysis
+    sobol = SobolSanalysis(
+        parameters=PARAMETER_LIST,
+        model=Ishigami(),
+        simulation_options=SIMULATION_OPTIONS,
+    )
 
-   # Plot data
-   fig = plumber.plot(plot_gaps=True)
-   fig.show()
+    # Draw sample, and run simulations
+    sobol.add_sample(15**2, simulate=True, n_cpu=1, calc_second_order=True)
+
+    # Corrai works for models that returns time series
+    # Ishigami model here will return the same value for the given parameters
+    # from START to END at 1h timestep
+    sobol.analyze('res', method="mean")["mean_res"]
+
+    # Default aggregation method is mean value of the timeseries
+    sobol.plot_bar('res')
+
+    # Display 2nd order matrix for parameters interaction
+    sobol.plot_s2_matrix('res')
+
+    # Display mean output values of the sample as hist
+    sobol.sampler.sample.plot_hist('res')
+
+    # Compute dynamic sensitivity analisys at plot
+    # Obviously, in this example indexes value do not vary
+    sobol.plot_dynamic_metric('res', sensitivity_metric="ST", freq="h")
 
 Dependencies
 ------------
