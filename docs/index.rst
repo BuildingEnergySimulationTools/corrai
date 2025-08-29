@@ -5,21 +5,54 @@ Welcome to Corrai's documentation!
    :width: 200px
    :align: center
 
+**Corrai** is a Python library for scientific exploration of complex systems.
+It provides a unified framework for **model definition**, **parameterization**, **sampling**, **optimization**, **sensitivity analysis**, and **surrogate modeling**.
 
-**Corrai** is a Python library for efficient model exploration and sampling.
-It provides tools to:
-- Define parameters and generate samples
-- Perform sensitivity and uncertainty analysis
-- Explore parameter spaces through single-objective and multi-objective optimization
-- Build surrogate models with state-of-the-art machine learning techniques to reduce computation time
+While originally motivated by building energy research, Corrai is **domain-independent** and can be applied to any problem requiring model calibration, uncertainty quantification, or reduced-order modeling.
 
-Corrai is built on top of popular libraries such as **scikit-learn**, **pandas**, **SALib**, and **pymoo**.
-The source code for python-tide is available on `GitHub <https://github.com/BuildingEnergySimulationTools/corrai>`_
+Main Features
+-------------
+
+- **Model abstraction**
+
+  * Define analytical, external simulator, numerical, or FMU-driven models (classes ``Model`` and ``ModelicaFmuModel``).
+  * Associate parameters with model properties such as domain, initial values, continuity, and path (class ``Parameter``).
+
+- **Sampling methods**
+
+  * Generate experimental designs using built-in samplers: Sobol, Latin Hypercube, FAST, Morris, random, or custom samplers (``Sample`` and ``Sampler``).
+  * Easily connect samples with model parameters to prepare sensitivity or optimization studies.
+
+- **Sensitivity & uncertainty analysis**
+
+  * Built-in analyzers for variance-based (Sobol), screening (Morris), and FAST methods (``sensitivity.py``). See `SAlib <https://salib.readthedocs.io/en/latest/>`_.
+  * Quantify the influence of each parameter on model outputs.
+
+- **Optimization and calibration**
+
+  * Multi-objective parameter identification and model calibration (``optimize.py``).
+  * Integrated with evolutionary and gradient-based optimizers (`pymoo <https://pymoo.org/>`_).
+
+- **Surrogate modeling**
+
+  * Train ML-based surrogates (linear, polynomial, SVR, random forest, MLP, …).
+  * Grid-search hyperparameter tuning (`scikit-learn <https://scikit-learn.org/stable/>`_).
+  * Evaluate accuracy with statistical metrics (``nmbe``, ``cv_rmse``).
+
+- **Clustering and learning tools**
+
+  * KDE-based clustering (``KdeSetPoint``) to detect steady states and set points in time series.
+  * Set point identification in full datasets or moving windows.
+
+- **Visualization support**
+
+  * Plotting utilities to inspect results, sensitivity indices, surrogate accuracy, etc.
+
 
 Installation
 ------------
 
-Corrai requires Python 3.10 or later.
+Corrai requires Python 3.10 or above.
 The recommended way to install corrai is via pip:
 
 .. code-block:: bash
