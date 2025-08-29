@@ -21,6 +21,29 @@ from corrai.base.simulate import run_simulations
 
 @dataclass
 class Sample:
+    """
+    Container for simulation samples and results.
+
+    Each `Sample` instance stores parameter values and the corresponding
+    simulation results. It supports indexing, aggregation, plotting, and
+    integration with sampling strategies.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        List of model parameters used to generate the samples.
+
+    Attributes
+    ----------
+    parameters : list of Parameter
+        Parameters associated with this sample.
+    values : ndarray of shape (n_samples, n_parameters)
+        Numerical values of the sampled parameters.
+    results : Series of DataFrames
+        Simulation results for each sample. Each element is typically a
+        pandas DataFrame indexed by time, containing model outputs.
+    """
+
     parameters: list[Parameter]
     values: np.ndarray = field(init=False)
     results: pd.Series = field(default_factory=lambda: pd.Series(dtype=object))
@@ -55,9 +78,33 @@ class Sample:
         ), f"Mismatch: {len(self.values)} values vs {len(self.results)} results"
 
     def get_pending_index(self) -> np.ndarray:
+        """
+        Identify which samples have not yet been simulated.
+
+        Returns
+        -------
+        ndarray of bool
+            Boolean mask of length `len(self)`, where True
+            indicates a sample without results.
+        """
         return self.results.apply(lambda df: df.empty).values
 
     def get_parameters_intervals(self):
+        """
+        Return parameter intervals.
+
+        Returns
+        -------
+        ndarray of shape (n_parameters, 2)
+            Lower and upper bounds for each parameter.
+
+        Raises
+        ------
+        NotImplementedError
+            If any parameter has type 'Integer'.
+        ValueError
+            If parameters are not of type 'Real'.
+        """
         if all(param.ptype == "Real" for param in self.parameters):
             return np.array([param.interval for param in self.parameters])
         elif any(param.ptype == "Integer" for param in self.parameters):
@@ -70,6 +117,19 @@ class Sample:
     def get_list_parameter_value_pairs(
         self, idx: int | list[int] | np.ndarray | slice = None
     ):
+        """
+        Map parameter objects to their sampled values.
+
+        Parameters
+        ----------
+        idx : int, list of int, ndarray, or slice, optional
+            Indices of samples to retrieve. Defaults to all.
+
+        Returns
+        -------
+        list of list of (Parameter, value)
+            Nested list where each inner list corresponds to a sample.
+        """
         selected_values = self[idx]["values"]
 
         if selected_values.ndim == 1:
@@ -83,11 +143,41 @@ class Sample:
     def get_dimension_less_values(
         self, idx: int | list[int] | np.ndarray | slice = slice(None)
     ):
+        """
+        Normalize parameter values to [0, 1].
+
+        Parameters
+        ----------
+        idx : int, list, ndarray, or slice, optional
+            Indices of samples to normalize. Defaults to all.
+
+        Returns
+        -------
+        ndarray of shape (n_selected, n_parameters)
+            Dimensionless parameter values, scaled using
+            their defined intervals.
+        """
         values = self[idx]["values"]
         intervals = self.get_parameters_intervals()
         return (values - intervals[:, 0]) / (intervals[:, 1] - intervals[:, 0])
 
     def add_samples(self, values: np.ndarray, results: list[pd.DataFrame] = None):
+        """
+        Add new samples and optionally their results.
+
+        Parameters
+        ----------
+        values : ndarray of shape (n_samples, n_parameters)
+            Sampled parameter values to add.
+        results : list of DataFrame, optional
+            Simulation results corresponding to `values`.
+            If None, empty DataFrames are stored.
+
+        Raises
+        ------
+        AssertionError
+            If `results` length does not match `values` length.
+        """
         n_samples, n_params = values.shape
         assert n_params == len(self.parameters), "Mismatch in number of parameters"
 
@@ -132,6 +222,35 @@ class Sample:
         show_rug: bool = False,
         title: str = None,
     ):
+        """
+        Plot histogram of aggregated results.
+
+        Parameters
+        ----------
+        indicator : str
+            Name of the indicator column to plot.
+        method : str, default="mean"
+            Aggregation method.
+        unit : str, optional
+            Unit of the indicator.
+        agg_method_kwarg : dict, optional
+            Additional kwargs for aggregation.
+        reference_time_series : Series, optional
+            Reference time series.
+        bin_size : float, default=1.0
+            Histogram bin size.
+        colors : str, default="orange"
+            Color of the histogram.
+        show_rug : bool, default=False
+            If True, display rug plot below histogram.
+        title : str, optional
+            Custom title.
+
+        Returns
+        -------
+        go.Figure
+            Plotly histogram figure.
+        """
         res = self.get_aggregate_time_series(
             indicator,
             method,
@@ -188,6 +307,27 @@ class Sample:
 
 
 class Sampler(ABC):
+    """
+    Abstract base class for parameter samplers.
+
+    A `Sampler` generates parameter sets according to a chosen
+    sampling method and runs simulations of a given model.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        List of parameters to be sampled.
+    model : Model
+        The model to simulate for each sample.
+    simulation_options : dict, optional
+        Options passed to the simulation (e.g., time range, timestep).
+
+    Attributes
+    ----------
+    sample : Sample
+        Container holding parameter values and simulation results.
+    """
+
     def __init__(
         self,
         parameters: list[Parameter],
@@ -214,6 +354,16 @@ class Sampler(ABC):
 
     @abstractmethod
     def add_sample(self, *args, **kwargs) -> np.ndarray:
+        """
+        Generate new samples and optionally run simulations.
+
+        Must be implemented in subclasses.
+
+        Returns
+        -------
+        ndarray
+            The newly generated sample values.
+        """
         pass
 
     def _post_draw_sample(
@@ -345,6 +495,31 @@ class Sampler(ABC):
 
 
 class RealSampler(Sampler, ABC):
+    """
+    Abstract base class for samplers that only support real-valued parameters.
+
+    Provides utilities for interoperability with SALib.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        Parameters to sample. All must have `ptype='Real'`.
+    model : Model
+        Model to simulate.
+    simulation_options : dict, optional
+        Simulation options to pass to the model.
+
+    Raises
+    ------
+    ValueError
+        If any parameter is not of type 'Real'.
+
+    Methods
+    -------
+    get_salib_problem()
+        Returns a SALib-compatible problem definition.
+    """
+
     def __init__(
         self,
         parameters: list[Parameter],
@@ -369,6 +544,26 @@ class RealSampler(Sampler, ABC):
 
 
 class MorrisSampler(RealSampler):
+    """
+    Elementary Effects (Morris) sampler.
+
+    Uses SALib's Morris method to generate trajectories and samples.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        Real-valued parameters to sample.
+    model : Model
+        Model to simulate.
+    simulation_options : dict, optional
+        Simulation options for the model.
+
+    Methods
+    -------
+    add_sample(N, num_levels=4, simulate=True, n_cpu=1, **kwargs)
+        Generate samples using the Morris method.
+    """
+
     def __init__(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
     ):
@@ -390,6 +585,26 @@ class MorrisSampler(RealSampler):
 
 
 class FASTSampler(RealSampler):
+    """
+    FAST sampler.
+
+    Uses the Fourier Amplitude Sensitivity Test (FAST) to generate samples.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        Real-valued parameters.
+    model : Model
+        Model to simulate.
+    simulation_options : dict, optional
+        Options for simulation.
+
+    Methods
+    -------
+    add_sample(N, M=4, simulate=True, n_cpu=1, **kwargs)
+        Generate samples using FAST.
+    """
+
     def __init__(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
     ):
@@ -408,6 +623,27 @@ class FASTSampler(RealSampler):
 
 
 class RBDFASTSampler(RealSampler):
+    """
+    RBD-FAST sampler.
+
+    Generates samples for the Random Balance Designs Fourier Amplitude
+    Sensitivity Test (RBD-FAST).
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        Real-valued parameters.
+    model : Model
+        Model to simulate.
+    simulation_options : dict, optional
+        Options for simulation.
+
+    Methods
+    -------
+    add_sample(N, simulate=True, n_cpu=1, **kwargs)
+        Generate samples using RBD-FAST.
+    """
+
     def __init__(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
     ):
@@ -425,6 +661,27 @@ class RBDFASTSampler(RealSampler):
 
 
 class LHSSampler(RealSampler):
+    """
+    Latin Hypercube sampler.
+
+    Uses `scipy.stats.qmc.LatinHypercube` to generate stratified
+    samples in the unit hypercube.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        Real-valued parameters.
+    model : Model
+        Model to simulate.
+    simulation_options : dict, optional
+        Options for simulation.
+
+    Methods
+    -------
+    add_sample(n, rng=None, simulate=True, **kwargs)
+        Generate `n` samples using LHS.
+    """
+
     def __init__(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
     ):
@@ -437,6 +694,28 @@ class LHSSampler(RealSampler):
 
 
 class SobolSampler(RealSampler):
+    """
+    Sobol sequence sampler.
+
+    Generates low-discrepancy quasi-random samples using SALib's
+    Sobol generator.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        Real-valued parameters.
+    model : Model
+        Model to simulate.
+    simulation_options : dict, optional
+        Options for simulation.
+
+    Methods
+    -------
+    add_sample(N, simulate=True, n_cpu=1, scramble=True,
+               calc_second_order=True, **kwargs)
+        Generate Sobol samples.
+    """
+
     def __init__(
         self,
         parameters: list[Parameter],

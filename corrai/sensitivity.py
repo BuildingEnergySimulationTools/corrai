@@ -16,6 +16,51 @@ from corrai.base.model import Model
 
 
 class Sanalysis(ABC):
+    """
+    Abstract base class for Sensitivity Analysis workflows.
+
+    A `Sanalysis` combines:
+    - A **Sampler**, which generates parameter samples and runs simulations.
+    - An **Analyser**, which processes aggregated outputs to compute sensitivity
+      indices using SALib or other frameworks.
+
+    This class provides methods to:
+    - Generate samples and run simulations (`add_sample`).
+    - Aggregate simulation results (`analyze`).
+    - Visualize results via bar plots, dynamic plots, or parallel coordinates.
+
+    Subclasses must implement:
+    - `_set_sampler`: to choose the sampling strategy (Sobol, Morris, FAST, ...).
+    - `_set_analyser`: to choose the analysis backend (SALib, custom).
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        Parameters that define the sampling space.
+    model : Model
+        Model instance to be simulated.
+    simulation_options : dict, optional
+        Options passed to the model simulation.
+    x_needed : bool, default=False
+        If True, the analyser requires access to the normalized design
+        matrix (`X`) in addition to outputs (`Y`).
+
+    Attributes
+    ----------
+    sampler : Sampler
+        Sampling and simulation manager.
+    analyser : object
+        Sensitivity analysis backend (e.g., SALib analyser).
+    x_needed : bool
+        Whether the analyser requires explicit input matrix `X`.
+
+    Notes
+    -----
+    This class is abstract and not meant to be instantiated directly.
+    Use a concrete subclass such as `SobolSanalysis`, `MorrisSanalysis`,
+    or `FASTSanalysis`.
+    """
+
     def __init__(
         self,
         parameters: list[Parameter],
@@ -191,6 +236,23 @@ class Sanalysis(ABC):
         n_cpu: int = 1,
         **sample_kwargs,
     ):
+        """
+        Generate and add new parameter samples.
+
+        Parameters
+        ----------
+        simulate : bool, default=True
+            If True, run model simulations for the new samples.
+        n_cpu : int, default=1
+            Number of CPUs to use for parallel simulations.
+        **sample_kwargs
+            Additional arguments passed to the sampler's `add_sample`.
+
+        Examples
+        --------
+        >>> sa = SobolSanalysis(parameters, model)
+        >>> sa.add_sample(N=256)
+        """
         self.sampler.add_sample(simulate=simulate, n_cpu=n_cpu, **sample_kwargs)
 
     def analyze(
@@ -202,6 +264,37 @@ class Sanalysis(ABC):
         freq: str = None,
         **analyse_kwargs,
     ):
+        """
+        Run sensitivity analysis on aggregated simulation results.
+
+        Parameters
+        ----------
+        indicator : str
+            Column name in results to analyze.
+        method : str, default="mean"
+            Aggregation method to apply to each sample's time series
+            (e.g., "mean", "sum", "cv_rmse").
+        agg_method_kwarg : dict, optional
+            Extra kwargs passed to the aggregation function.
+        reference_time_series : Series, optional
+            Required for error-based metrics (e.g., "cv_rmse").
+        freq : str or pd.Timedelta, optional
+            If provided, perform analysis per time bin.
+        **analyse_kwargs
+            Additional arguments for the analyser.
+
+        Returns
+        -------
+        Series
+            - If `freq` is None: sensitivity metrics for the aggregated result.
+            - If `freq` is set: a Series indexed by time bins, each containing
+              sensitivity metrics.
+
+        Notes
+        -----
+        - If `x_needed=True`, the analyser will receive both `X` and `Y`.
+        - The analyser is typically an object from SALib.
+        """
         agg_result = self.sampler.sample.get_aggregate_time_series(
             indicator,
             method,
@@ -241,6 +334,33 @@ class Sanalysis(ABC):
         title: str = None,
         **analyse_kwarg,
     ):
+        """
+        Bar plot of sensitivity metrics.
+
+        Parameters
+        ----------
+        indicator : str
+            Name of the indicator.
+        sensitivity_metric : str
+            Metric to plot (e.g., "S1", "ST").
+        sensitivity_method_name : str
+            Method name ("Sobol", "Morris", ...).
+        method : str, default="mean"
+            Aggregation method.
+        unit : str, optional
+            Unit to display in axis labels.
+        reference_time_series : Series, optional
+            Required for error-based aggregation.
+        agg_method_kwarg : dict, optional
+            Extra kwargs for aggregation.
+        title : str, optional
+            Custom figure title.
+
+        Returns
+        -------
+        go.Figure
+            A bar chart of sensitivity indices per parameter.
+        """
         title = (
             f"{sensitivity_method_name} {sensitivity_metric} {method} {indicator}"
             if title is None
@@ -278,6 +398,16 @@ class Sanalysis(ABC):
         stacked: bool = False,
         **analyse_kwarg,
     ):
+        """
+        Dynamic sensitivity plot across time bins.
+
+        Useful for time-dependent analysis of parameter influence.
+
+        Returns
+        -------
+        go.Figure
+            Stacked or line plot of sensitivity metrics over time.
+        """
         title = (
             f"{sensitivity_method_name} dynamic {sensitivity_metric} {method} {indicator}"
             if title is None
@@ -361,6 +491,31 @@ class Sanalysis(ABC):
         title: str = None,
         **analyse_kwarg,
     ):
+        """
+        Plot 2nd-order interaction matrix of sensitivity indices.
+
+        Parameters
+        ----------
+        indicator : str
+            Name of the indicator.
+        sensitivity_method_name : str
+            Method name ("Sobol", "FAST").
+        method : str, default="mean"
+            Aggregation method.
+        unit : str, optional
+            Unit to display.
+        reference_time_series : Series, optional
+            Required for error-based aggregation.
+        agg_method_kwarg : dict, optional
+            Extra kwargs for aggregation.
+        title : str, optional
+            Custom figure title.
+
+        Returns
+        -------
+        go.Figure
+            Heatmap or matrix visualization of 2nd-order indices.
+        """
         title = (
             f"{sensitivity_method_name} {method} {indicator} "
             f"- 2nd order interactions"
