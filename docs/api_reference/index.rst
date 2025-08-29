@@ -6,6 +6,8 @@ API Reference
    :caption: API Reference
 
    base/parameter
+   base/model
+   base/simulate
    sampling
    sensitivity
    fmu
@@ -13,3 +15,4 @@ API Reference
    surrogate
    base/math
    base/metrics
+   base/utils
