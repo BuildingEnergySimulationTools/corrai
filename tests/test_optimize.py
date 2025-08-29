@@ -11,6 +11,8 @@ from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.soo.nonconvex.de import DE
 from pymoo.operators.sampling.lhs import LHS
 from pymoo.optimize import minimize
+from pymoo.core.mixed import MixedVariableGA
+from pymoo.termination import get_termination
 
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
@@ -138,6 +140,27 @@ class TestProblem:
                 parameters=parameters,
                 objective_ids=["f1"],
             )
+
+    def test_Problem_mixed_variable_ga(self):
+        param = [
+            Parameter(name="b", values=(0, 1), ptype="Binary"),
+            Parameter(name="x", values=("nothing", "multiply"), ptype="Choice"),
+            Parameter(name="y", interval=(-2, 2.5), ptype="Integer"),
+            Parameter(name="z", interval=(-5, 5), ptype="Real"),
+        ]
+
+        obj = MyObjectMixed()
+
+        problem = Problem(
+            parameters=param,
+            evaluators=[obj],
+            objective_ids=["f1"],
+        )
+
+        algorithm = MixedVariableGA(pop_size=20)
+        termination = get_termination("n_gen", 5)
+        res = minimize(problem, algorithm, termination, seed=42, verbose=False)
+        assert res.F.shape[0] == 1
 
 
 PARAMETERS = [
