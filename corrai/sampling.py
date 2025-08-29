@@ -41,7 +41,7 @@ class Sample:
             self.values[idx] = item["values"]
         if "results" in item:
             if isinstance(idx, int):
-                self.results.iloc[idx] = item["results"]
+                self.results.at[idx] = item["results"]
             else:
                 self.results.iloc[idx] = pd.Series(
                     item["results"], index=self.results.index[idx]
