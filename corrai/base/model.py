@@ -57,7 +57,7 @@ class Model(ABC):
         )
 
     def get_property_values(
-        self, property_list: tuple[str, ...]
+        self, property_list: list[str]
     ) -> list[str | int | float]:
         raise NotImplementedError(
             "No get_property_values method was defined for this model."
