@@ -8,10 +8,53 @@ from corrai.base.parameter import Parameter
 
 
 class Model(ABC):
+    """
+    Abstract base class for models in Corrai.
+
+    A `Model` defines the interface for simulation-based, analytical,
+    or FMU-driven systems. It provides utilities to map high-level
+    `Parameter` objects to model-specific properties and to run simulations
+    given parameter-value pairs.
+
+    Subclasses must implement the :meth:`simulate` method.
+
+    Methods
+    -------
+    get_property_from_param(parameter_value_pairs)
+        Convert (Parameter, value) pairs into a dictionary of model
+        property assignments, handling relative and absolute values.
+    simulate(property_dict, simulation_options, simulation_kwargs)
+        Abstract method. Run the simulation and return a pandas DataFrame.
+    simulate_parameter(parameter_value_pairs, simulation_options, simulation_kwargs)
+        Helper that combines :meth:`get_property_from_param` and :meth:`simulate`.
+    get_property_values(property_list)
+        Retrieve current values of given model properties. Must be
+        implemented in subclasses if relative parameters are used.
+    save(file_path)
+        Persist the model state or parameters to disk. Optional.
+    """
+
     def get_property_from_param(
         self,
         parameter_value_pairs: list[tuple[Parameter, str | int | float]],
     ) -> dict[str, int | float | str]:
+        """
+        Map (Parameter, value) pairs to a dictionary of model properties.
+
+        Handles both absolute and relative parameter definitions. For
+        relative parameters, the initial property value is used as a baseline.
+
+        Parameters
+        ----------
+        parameter_value_pairs : list of (Parameter, int | float | str)
+            List of tuples linking a :class:`Parameter` object with the
+            value assigned for this simulation.
+
+        Returns
+        -------
+        property_dict : dict
+            Mapping from property names (str) to updated values.
+        """
         property_dict = {}
         for param, value in parameter_value_pairs:
             props = (
@@ -38,9 +81,25 @@ class Model(ABC):
         simulation_kwargs: dict = None,
     ) -> pd.DataFrame:
         """
-        Run simulation for given parameter_dict and simulation options.
-        Return simulation results in the form of a Pandas DataFrame with
-        DateTime index.
+        Run a simulation for given properties and options.
+
+        Must be implemented in subclasses.
+
+        Parameters
+        ----------
+        property_dict : dict, optional
+            Mapping from model property names to values to override.
+        simulation_options : dict, optional
+            Options controlling the simulation (e.g., start/end times,
+            timestep, solver parameters).
+        simulation_kwargs : dict, optional
+            Extra keyword arguments for the simulation routine.
+
+        Returns
+        -------
+        pd.DataFrame
+            Simulation results as a DataFrame with a DateTimeIndex and one
+            or more output columns.
         """
         pass
 
@@ -50,6 +109,26 @@ class Model(ABC):
         simulation_options: dict = None,
         simulation_kwargs: dict = None,
     ) -> pd.DataFrame:
+        """
+        Simulate the model given a set of parameter-value pairs.
+
+        This combines :meth:`get_property_from_param` and :meth:`simulate`.
+
+        Parameters
+        ----------
+        parameter_value_pairs : list of (Parameter, int | float | str)
+            The parameters and their assigned values for this run.
+        simulation_options : dict, optional
+            Options passed to the simulation routine.
+        simulation_kwargs : dict, optional
+            Additional arguments for the simulation routine.
+
+        Returns
+        -------
+        pd.DataFrame
+            Simulation results as a DataFrame with a DateTimeIndex and one
+            or more output columns.
+        """
         return self.simulate(
             self.get_property_from_param(parameter_value_pairs),
             simulation_options,
@@ -59,6 +138,26 @@ class Model(ABC):
     def get_property_values(
         self, property_list: list[str]
     ) -> list[str | int | float]:
+        """
+        Retrieve current values of given properties from the model.
+
+        Must be implemented in subclasses if relative parameters are used.
+
+        Parameters
+        ----------
+        property_list : tuple of str
+            Names of model properties.
+
+        Returns
+        -------
+        list of int | float | str
+            Current values of the requested properties.
+
+        Raises
+        ------
+        NotImplementedError
+            If not overridden in a subclass.
+        """
         raise NotImplementedError(
             "No get_property_values method was defined for this model."
             "If you use Relative values for parameters, consider switching to absolute,"
@@ -67,14 +166,43 @@ class Model(ABC):
 
     def save(self, file_path: Path):
         """
-        Save the current parameters of the model to a file.
+        Save model state or parameters to disk.
 
-        :param file_path: The file path where the parameters will be saved.
+        Parameters
+        ----------
+        file_path : Path
+            Destination path.
+
+        Raises
+        ------
+        NotImplementedError
+            If not overridden in a subclass.
         """
         raise NotImplementedError("No save method was defined for this model")
 
 
 class Ishigami(Model):
+    """
+    Example implementation of the Ishigami function.
+
+    The Ishigami function is a standard benchmark for sensitivity analysis:
+        f(x) = sin(x1) + 7 sin^2(x2) + 0.1 x3^4 sin(x1)
+
+    Attributes
+    ----------
+    x1, x2, x3 : float
+        Model parameters controlling the output.
+
+    Methods
+    -------
+    get_property_values(property_list)
+        Retrieve current values of x1, x2, x3.
+    set_property_values(property_dict)
+        Set properties from a dictionary.
+    simulate(property_dict, simulation_options, simulation_kwargs)
+        Evaluate the Ishigami function and return as a time series DataFrame.
+    """
+
     def __init__(self):
         self.x1 = 1
         self.x2 = 2
