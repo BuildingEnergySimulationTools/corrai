@@ -214,14 +214,16 @@ class Problem(ElementwiseProblem):
         """
         acc = {}
         total_ids = len(self.objective_ids) + len(self.constraint_ids)
+        if isinstance(x, dict):
+            pairs = [(p, self._cast_value(p, x[p.name])) for p in self.parameters]
+        else:
+            pairs = [(p, self._cast_value(p, v)) for p, v in zip(self.parameters, x)]
+        param_dict = {p.name: v for p, v in pairs}
 
         for block in self.evaluators:
-            pairs = [(p, self._cast_value(p, v)) for p, v in zip(self.parameters, x)]
-            param_dict = {p.name: v for p, v in pairs}
-
             if hasattr(block, "function"):
                 res = block.function(parameter_value_pairs=pairs)
-            else:  # plain function
+            else:
                 try:
                     res = block(param_dict)
                 except TypeError:
