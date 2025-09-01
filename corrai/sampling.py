@@ -528,11 +528,12 @@ class RealSampler(Sampler, ABC):
     ):
         super().__init__(parameters, model, simulation_options)
 
-        if not all(param.ptype == "Real" for param in parameters):
+        bad_params = [
+            (par.name, par.ptype) for par in parameters if par.ptype != "Real"
+        ]
+        if bad_params:
             raise ValueError(
-                f"All parameters must have a ptype 'Real'"
-                f"Found {
-                [(par.name, par.ptype) for par in parameters if par.ptype != "Real"]}"
+                f"All parameters must have a ptype 'Real'. Found {bad_params}"
             )
 
     def get_salib_problem(self):
