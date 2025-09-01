@@ -13,11 +13,6 @@ While originally motivated by building energy research, Corrai is **domain-indep
 Main Features
 -------------
 
-- **Model abstraction**
-
-  * Define analytical, external simulator, numerical, or FMU-driven models (classes ``Model`` and ``ModelicaFmuModel``).
-  * Associate parameters with model properties such as domain, initial values, continuity, and path (class ``Parameter``).
-
 - **Sampling methods**
 
   * Generate experimental designs using built-in samplers: Sobol, Latin Hypercube, FAST, Morris, random, or custom samplers (``Sample`` and ``Sampler``).
@@ -39,15 +34,14 @@ Main Features
   * Grid-search hyperparameter tuning (`scikit-learn <https://scikit-learn.org/stable/>`_).
   * Evaluate accuracy with statistical metrics (``nmbe``, ``cv_rmse``).
 
-- **Clustering and learning tools**
-
-  * KDE-based clustering (``KdeSetPoint``) to detect steady states and set points in time series.
-  * Set point identification in full datasets or moving windows.
-
 - **Visualization support**
 
   * Plotting utilities to inspect results, sensitivity indices, surrogate accuracy, etc.
 
+- **Model abstraction**
+
+  * Define analytical, external simulator, numerical, or FMU-driven models (classes ``Model`` and ``ModelicaFmuModel``).
+  * Associate parameters with model properties such as domain, initial values, continuity (class ``Parameter``).
 
 Installation
 ------------
