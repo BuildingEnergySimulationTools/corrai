@@ -3,11 +3,13 @@ import os
 import platform
 import tempfile
 from pathlib import Path
+import pytest
 
 import numpy as np
 import pandas as pd
 
 from corrai.fmu import ModelicaFmuModel
+from corrai.base.parameter import Parameter
 
 system = platform.system()
 
@@ -44,6 +46,7 @@ class TestFmu:
             simu = ModelicaFmuModel(
                 fmu_path=PACKAGE_DIR / "boundary_test.fmu",
                 output_list=["Boundaries.y[1]", "Boundaries.y[2]"],
+                boundary_table="Boundaries",
             )
 
             new_bounds = pd.DataFrame(
@@ -55,11 +58,11 @@ class TestFmu:
             new_bounds = new_bounds.astype(float)
 
             res = simu.simulate(
-                x=new_bounds,
                 simulation_options={
                     "solver": "CVode",
                     "outputInterval": 1,
                     "stepSize": 1,
+                    "boundary": new_bounds,
                 },
                 solver_duplicated_keep="last",
             )
@@ -89,10 +92,10 @@ class TestFmu:
             x_datetime = x_datetime.astype(float)
 
             res = simu.simulate(
-                x=x_datetime,
                 simulation_options={
                     "outputInterval": 3600,
                     "stepSize": 3600,
+                    "boundary": x_datetime,
                 },
                 solver_duplicated_keep="last",
             )
@@ -122,3 +125,75 @@ class TestFmu:
             simu.save(Path(file_path))
             assert os.path.exists(temp_dir)
             assert "test_model.fmu" in os.listdir(temp_dir)
+
+    def test_get_property_values(self):
+        simu = ModelicaFmuModel(
+            fmu_path=PACKAGE_DIR / "rosen.fmu",
+            output_list=["res.showNumber"],
+        )
+        values = simu.get_property_values(("res.showNumber",))
+        assert isinstance(values, list)
+        assert len(values) == 1
+
+        vals = simu.get_property_values("x.k")
+        assert vals == ["2.0"]
+
+        vals = simu.get_property_values(("x.k",))
+        assert vals == ["2.0"]
+
+        vals = simu.get_property_values(["x.k", "y.k"])
+        assert vals == ["2.0", "2.0"]
+
+    def test_simulate_parameter(self):
+        simu = ModelicaFmuModel(
+            fmu_path=PACKAGE_DIR / "rosen.fmu",
+            simulation_options={"startTime": 0, "stopTime": 2, "stepSize": 1},
+            output_list=["res.showNumber"],
+        )
+
+        param = [
+            Parameter(name="x", model_property="x.k", interval=(0, 5), init_value=2),
+            Parameter(
+                name="y",
+                model_property="y.k",
+                interval=(0, 5),
+                init_value=2,
+            ),
+        ]
+
+        res1 = simu.simulate({"y.k": 4, "x.k": 3})
+        res2 = simu.simulate_parameter(
+            [
+                (param[0], 3),
+                (param[1], 4),
+            ]
+        )
+        assert res1["res.showNumber"].equals(res2["res.showNumber"])
+
+    def test_boundary_warning(self):
+        simu = ModelicaFmuModel(
+            fmu_path=PACKAGE_DIR / "rosen.fmu",
+            output_list=["res.showNumber"],
+            boundary_table="Boundaries",
+        )
+
+        fake_boundary = pd.DataFrame({"u": [1, 2, 3]}, index=[0, 1, 2])
+
+        with pytest.warns(
+            UserWarning,
+            match="Boundary combitimetable 'Boundaries' "
+            "not found in FMU -> ignoring boundary.",
+        ):
+            res = simu.simulate(
+                simulation_options={
+                    "startTime": 0,
+                    "stopTime": 2,
+                    "stepSize": 1,
+                    "boundary": fake_boundary,
+                }
+            )
+
+        ref = pd.DataFrame({"res.showNumber": [401.0, 401.0, 401.0]})
+        np.testing.assert_allclose(
+            res["res.showNumber"].values, ref["res.showNumber"].values
+        )

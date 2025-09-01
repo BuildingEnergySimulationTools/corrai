@@ -1,8 +1,8 @@
 
 [project]
 name = "corrai"
-version = "0.4.0"
-description = "Data correction and Machine Learning"
+version = "1.0.0"
+description = "Model sampling, sensitivity analisys, uncertainty, surrogates"
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = [

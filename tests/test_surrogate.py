@@ -1,14 +1,9 @@
-from pathlib import Path
-
 import itertools
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import make_pipeline
-from corrai.learning.model_selection import ModelTrainer, MultiModelSO
-
-
-FILES_PATH = Path(__file__).parent / "resources"
+from corrai.surrogate import ModelTrainer, MultiModelSO
 
 
 class TestLearning:

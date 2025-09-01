@@ -3,10 +3,10 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 
-from corrai.learning.cluster import KdeSetPoint
-from corrai.learning.cluster import get_hours_switch
-from corrai.learning.cluster import plot_kde_predict, plot_kde_hist
-from corrai.learning.cluster import (
+from corrai.cluster import KdeSetPoint
+from corrai.cluster import get_hours_switch
+from corrai.cluster import plot_kde_predict, plot_kde_hist
+from corrai.cluster import (
     set_point_identifier,
     moving_window_set_point_identifier,
 )
@@ -14,7 +14,7 @@ from corrai.learning.cluster import (
 import datetime as dt
 from pathlib import Path
 
-FILES_PATH = Path(__file__).parent.parent / "resources"
+FILES_PATH = Path(__file__).parent / "resources"
 
 
 class TestLearning:

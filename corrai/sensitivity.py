@@ -1,1065 +1,1183 @@
-import enum
-from typing import Any, Callable
+from abc import ABC, abstractmethod
 
+import datetime as dt
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.io as pio
-from SALib.analyze import fast, morris, sobol, rbd_fast
-from SALib.sample import sobol as sobol_sampler
-from SALib.sample import fast_sampler, latin
-from SALib.sample import morris as morris_sampler
-
+from SALib.analyze import morris, sobol, fast, rbd_fast
 from corrai.base.parameter import Parameter
+from corrai.sampling import (
+    SobolSampler,
+    MorrisSampler,
+    FASTSampler,
+    RBDFASTSampler,
+)
 from corrai.base.model import Model
-from corrai.base.simulate import run_simulations
-from corrai.base.math import aggregate_time_series
-from corrai.multi_optimize import plot_parcoord
 
 
-class Method(enum.Enum):
-    FAST = "FAST"
-    MORRIS = "MORRIS"
-    SOBOL = "SOBOL"
-    RBD_FAST = "RBD_FAST"
-
-
-METHOD_SAMPLER_DICT = {
-    Method.FAST: {
-        "method": fast,
-        "sampling": fast_sampler,
-    },
-    Method.MORRIS: {"method": morris, "sampling": morris_sampler},
-    Method.SOBOL: {
-        "method": sobol,
-        "sampling": sobol_sampler,
-    },
-    Method.RBD_FAST: {
-        "method": rbd_fast,
-        "sampling": latin,
-    },
-}
-
-
-class SAnalysis:
+class Sanalysis(ABC):
     """
-    This class is designed to perform sensitivity analysis on a given model using
-    various sensitivity methods,  Global Sensitivity Analysis (GSA) methods such as
-    Sobol and FAST.
+    Abstract base class for Sensitivity Analysis workflows.
 
-    Parameters:
-    - parameters_list (list of dict): A list of dictionaries describing the model
-        parameters to be analyzed. Each dictionary should contain 'name', 'interval',
-        and 'type' keys to define the parameter name, its range (interval),
-        and its data type (Real, integer).
-    - method (str): The sensitivity analysis method to be used.
-        Supported methods are specified in METHOD_SAMPLER_DICT.keys().
+    A `Sanalysis` combines:
+    - A **Sampler**, which generates parameter samples and runs simulations.
+    - An **Analyser**, which processes aggregated outputs to compute sensitivity
+      indices using SALib or other frameworks.
 
-    Attributes:
-    - method (str): The selected sensitivity analysis method.
-    - parameters_list (list of dict): The list of model parameters for analysis.
-    - _salib_problem (dict): Problem definition for the sensitivity analysis library
-        SAlib.
-    - sample (DataFrame): The generated parameter samples.
-    - sensitivity_results (dict): The sensitivity analysis results.
-    - sample_results (list): List of results obtained from model evaluations.
+    This class provides methods to:
+    - Generate samples and run simulations (`add_sample`).
+    - Aggregate simulation results (`analyze`).
+    - Visualize results via bar plots, dynamic plots, or parallel coordinates.
 
-    Methods:
-    - set_parameters_list(parameters_list): Sets the parameters list and updates
-        the _salib_problem.
-    - draw_sample(n, sampling_kwargs=None): Draws a sample of parameter values for
-        sensitivity analysis.
-    - evaluate(model, simulation_options, n_cpu=1): Evaluates the model for the
-        generated parameter samples.
-    - analyze(indicator, agg_method=np.mean, agg_method_kwarg={}, reference_df=None,
-        sensitivity_method_kwargs={}): Performs sensitivity analysis on the model
-        outputs using the selected method and indicator.
+    Subclasses must implement:
+    - `_set_sampler`: to choose the sampling strategy (Sobol, Morris, FAST, ...).
+    - `_set_analyser`: to choose the analysis backend (SALib, custom).
 
+    Parameters
+    ----------
+    parameters : list of Parameter
+        Parameters that define the sampling space.
+    model : Model
+        Model instance to be simulated.
+    simulation_options : dict, optional
+        Options passed to the model simulation.
+    x_needed : bool, default=False
+        If True, the analyser requires access to the normalized design
+        matrix (`X`) in addition to outputs (`Y`).
+
+    Attributes
+    ----------
+    sampler : Sampler
+        Sampling and simulation manager.
+    analyser : object
+        Sensitivity analysis backend (e.g., SALib analyser).
+    x_needed : bool
+        Whether the analyser requires explicit input matrix `X`.
+
+    Notes
+    -----
+    This class is abstract and not meant to be instantiated directly.
+    Use a concrete subclass such as `SobolSanalysis`, `MorrisSanalysis`,
+    or `FASTSanalysis`.
     """
 
-    def __init__(self, parameters_list: list[dict[Parameter, Any]], method: Method):
-        self.method = method
-        self.parameters_list = parameters_list
-        self._salib_problem = None
-        self.set_parameters_list(parameters_list)
-        self.sample = None
-        self.sensitivity_results = None
-        self.sample_results = []
-        self.static = True  # Flag to indicate if the analysis is static or dynamic
+    def __init__(
+        self,
+        parameters: list[Parameter],
+        model: Model,
+        simulation_options: dict = None,
+        x_needed: bool = False,
+    ):
+        self.sampler = self._set_sampler(parameters, model, simulation_options)
+        self.analyser = self._set_analyser()
+        self.x_needed = x_needed
 
-    def set_parameters_list(self, parameters_list: list[dict[Parameter, Any]]):
+    @property
+    def parameters(self):
+        return self.sampler.parameters
+
+    @property
+    def values(self):
+        return self.sampler.values
+
+    @property
+    def results(self):
+        return self.sampler.results
+
+    def plot_sample(
+        self,
+        indicator: str | None = None,
+        reference_timeseries: pd.Series | None = None,
+        title: str | None = None,
+        y_label: str | None = None,
+        x_label: str | None = None,
+        alpha: float = 0.5,
+        show_legends: bool = False,
+        parameter_values: np.ndarray | None = None,
+        parameter_names: list[str] | None = None,
+        round_ndigits: int = 2,
+    ) -> go.Figure:
         """
-        Set the list of model parameters and update the _salib_problem definition.
+        Plot all available simulation runs against an optional reference time series.
 
-        Parameters:
-        - parameters_list (list of dict): A list of dictionaries describing the model
-            parameters to be analyzed. Each dictionary should contain 'name',
-             'interval', and 'type' keys.
+        This method wraps :meth:`Sampler.plot_sample` and plots the simulations
+        associated with this sensitivity analysis instance. Each run is displayed
+        as a scatter trace, optionally annotated with parameter values.
+
+        Parameters
+        ----------
+        indicator : str, optional
+            Column name to select if simulation outputs are DataFrames with multiple
+            columns. If None and a DataFrame has a single column, that column is used.
+        reference_timeseries : pd.Series, optional
+            A time series to plot as ground truth or reference, shown as a red line.
+        title : str, optional
+            Plot title.
+        y_label : str, optional
+            Label for the y-axis.
+        x_label : str, optional
+            Label for the x-axis.
+        alpha : float, default=0.5
+            Opacity for the sample markers.
+        show_legends : bool, default=False
+            Whether to display a legend entry for each sample.
+        parameter_values : np.ndarray, optional
+            Custom parameter values for legend annotation. If None, values from
+            this Sanalysis instance are used.
+        parameter_names : list of str, optional
+            Custom parameter names. If None, names from this Sanalysis instance are used.
+        round_ndigits : int, default=2
+            Number of decimal digits for rounding parameter values in legends.
+
+        Returns
+        -------
+        go.Figure
+            A Plotly Figure containing the sample simulations and optional reference.
         """
-        self._salib_problem = {
-            "num_vars": len(parameters_list),
-            "names": [p[Parameter.NAME] for p in parameters_list],
-            "bounds": list(map(lambda p: p[Parameter.INTERVAL], parameters_list)),
-        }
-
-    def draw_sample(self, n: int, sampling_kwargs: dict = None):
-        """
-        Samples the parameters for sensitivity analysis.
-
-        Parameters:
-        - n (int): The number of samples to generate.
-        - sampling_kwargs (dict, optional): Additional keyword arguments for the
-            sampling method.
-        """
-        # Erase previous result to prevent false indicator
-        self.sample_results = []
-
-        if sampling_kwargs is None:
-            sampling_kwargs = {}
-
-        sampler = METHOD_SAMPLER_DICT[self.method]["sampling"]
-        sample_temp = sampler.sample(
-            N=n, problem=self._salib_problem, **sampling_kwargs
+        return self.sampler.plot_sample(
+            indicator=indicator,
+            reference_timeseries=reference_timeseries,
+            title=title,
+            y_label=y_label,
+            x_label=x_label,
+            alpha=alpha,
+            show_legends=show_legends,
+            parameter_values=parameter_values,
+            parameter_names=parameter_names,
+            round_ndigits=round_ndigits,
         )
 
-        for index, param in enumerate(self.parameters_list):
-            vtype = param[Parameter.TYPE]
-            if vtype == "Integer":
-                sample_temp[:, index] = np.round(sample_temp[:, index])
-                sample_temp = np.unique(sample_temp, axis=0)
-
-        self.sample = pd.DataFrame(sample_temp, columns=self._salib_problem["names"])
-
-    def evaluate(
+    def plot_pcp(
         self,
-        model,
-        simulation_options: dict = None,
+        indicator: str | None = None,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        prefix: str | None = None,
+        bounds: list[tuple[float, float]] | None = None,
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates - Samples",
+        html_file_path: str | None = None,
+    ) -> go.Figure:
+        """
+        Create a Parallel Coordinates Plot (PCP) of parameters and aggregated results.
+
+        Each vertical axis corresponds to a parameter or an aggregated indicator,
+        and each polyline represents one simulation. Useful for visualizing the
+        relationship between sampled parameters and performance metrics.
+
+        This method wraps :meth:`Sampler.plot_pcp`.
+
+        Parameters
+        ----------
+        indicator : str, optional
+            Indicator name to extract from simulation results before aggregation.
+            If None, only parameters are shown.
+        method : str, default="mean"
+            Aggregation method to apply. Supported values include:
+            - "mean"
+            - "sum"
+            - "nmbe"
+            - "cv_rmse"
+            - "mean_squared_error"
+            - "mean_absolute_error"
+        agg_method_kwarg : dict, optional
+            Extra keyword arguments passed to the aggregation function.
+        reference_time_series : pd.Series, optional
+            Required for error-based methods (e.g., "cv_rmse"). Must have the same
+            index and length as each simulation.
+        freq : str or pd.Timedelta or datetime.timedelta, optional
+            If provided, aggregation is performed per time bin.
+        prefix : str, optional
+            Custom prefix for naming aggregated columns. Defaults to the method name.
+        bounds : list of tuple(float, float), optional
+            Parameter bounds for each parameter axis.
+        color_by : str, optional
+            Column name (parameter or aggregate) used to color polylines.
+        title : str, optional
+            Figure title.
+        html_file_path : str, optional
+            If provided, saves the plot as an interactive HTML file.
+
+        Returns
+        -------
+        go.Figure
+            A Plotly Figure with the parallel coordinates visualization.
+        """
+
+        return self.sampler.plot_pcp(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
+            prefix=prefix,
+            bounds=bounds,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
+        )
+
+    @abstractmethod
+    def _set_sampler(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        """Return a method-specific sampler."""
+        pass
+
+    @abstractmethod
+    def _set_analyser(self):
+        pass
+
+    def add_sample(
+        self,
+        simulate: bool = True,
         n_cpu: int = 1,
-        simulate_kwargs: dict = None,
+        **sample_kwargs,
     ):
         """
-        Evaluate the model for the generated samples.
+        Generate and add new parameter samples.
 
-        Parameters:
-        - model: The model to be evaluated.
-        - simulation_options (dict): Options for running the model simulations.
-        - n_cpu (int, optional): Number of CPU cores to use for parallel evaluation.
+        Parameters
+        ----------
+        simulate : bool, default=True
+            If True, run model simulations for the new samples.
+        n_cpu : int, default=1
+            Number of CPUs to use for parallel simulations.
+        **sample_kwargs
+            Additional arguments passed to the sampler's `add_sample`.
+
+        Examples
+        --------
+        >>> sa = SobolSanalysis(parameters, model)
+        >>> sa.add_sample(N=256)
         """
-        if self.sample is None:
-            raise ValueError(
-                "Cannot perform evaluation, no sample was found. "
-                "draw sample using draw_sample() method"
-            )
+        self.sampler.add_sample(simulate=simulate, n_cpu=n_cpu, **sample_kwargs)
 
-        self.sample_results = run_simulations(
-            model=model,
-            parameter_samples=self.sample,
-            simulation_options=simulation_options,
+    def analyze(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str = None,
+        **analyse_kwargs,
+    ):
+        """
+        Run sensitivity analysis on aggregated simulation results.
+
+        Parameters
+        ----------
+        indicator : str
+            Column name in results to analyze.
+        method : str, default="mean"
+            Aggregation method to apply to each sample's time series
+            (e.g., "mean", "sum", "cv_rmse").
+        agg_method_kwarg : dict, optional
+            Extra kwargs passed to the aggregation function.
+        reference_time_series : Series, optional
+            Required for error-based metrics (e.g., "cv_rmse").
+        freq : str or pd.Timedelta, optional
+            If provided, perform analysis per time bin.
+        **analyse_kwargs
+            Additional arguments for the analyser.
+
+        Returns
+        -------
+        Series
+            - If `freq` is None: sensitivity metrics for the aggregated result.
+            - If `freq` is set: a Series indexed by time bins, each containing
+              sensitivity metrics.
+
+        Notes
+        -----
+        - If `x_needed=True`, the analyser will receive both `X` and `Y`.
+        - The analyser is typically an object from SALib.
+        """
+        agg_result = self.sampler.sample.get_aggregate_time_series(
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq,
+            prefix=method,
+        )
+
+        if self.x_needed:
+            analyse_kwargs["X"] = self.sampler.sample.get_dimension_less_values()
+
+        analyse_kwargs["problem"] = self.sampler.get_salib_problem()
+
+        if freq is None:
+            analyse_kwargs["Y"] = agg_result.to_numpy().flatten()
+            res = self.analyser.analyze(**analyse_kwargs)
+            return pd.Series({f"{method}_{indicator}": res})
+
+        else:
+            result_dict = {}
+            for tstamp in agg_result:
+                analyse_kwargs["Y"] = agg_result[tstamp].to_numpy().flatten()
+                res = self.analyser.analyze(**analyse_kwargs)
+                result_dict[tstamp] = res
+            return pd.Series(result_dict)
+
+    def salib_plot_bar(
+        self,
+        indicator: str,
+        sensitivity_metric: str,
+        sensitivity_method_name: str,
+        method: str = "mean",
+        unit: str = "",
+        reference_time_series: pd.Series = None,
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwarg,
+    ):
+        """
+        Bar plot of sensitivity metrics.
+
+        Parameters
+        ----------
+        indicator : str
+            Name of the indicator.
+        sensitivity_metric : str
+            Metric to plot (e.g., "S1", "ST").
+        sensitivity_method_name : str
+            Method name ("Sobol", "Morris", ...).
+        method : str, default="mean"
+            Aggregation method.
+        unit : str, optional
+            Unit to display in axis labels.
+        reference_time_series : Series, optional
+            Required for error-based aggregation.
+        agg_method_kwarg : dict, optional
+            Extra kwargs for aggregation.
+        title : str, optional
+            Custom figure title.
+
+        Returns
+        -------
+        go.Figure
+            A bar chart of sensitivity indices per parameter.
+        """
+        title = (
+            f"{sensitivity_method_name} {sensitivity_metric} {method} {indicator}"
+            if title is None
+            else title
+        )
+        res = self.analyze(
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq=None,
+            **analyse_kwarg,
+        )[f"{method}_{indicator}"]
+
+        return plot_bars(
+            pd.Series(
+                data=res[sensitivity_metric],
+                index=[par.name for par in self.sampler.sample.parameters],
+                name=f"{sensitivity_metric} {unit}",
+            ),
+            title=title,
+        )
+
+    def salib_plot_dynamic_metric(
+        self,
+        indicator: str,
+        sensitivity_metric: str,
+        sensitivity_method_name: str,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        method: str = "mean",
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        title: str = None,
+        stacked: bool = False,
+        **analyse_kwarg,
+    ):
+        """
+        Dynamic sensitivity plot across time bins.
+
+        Useful for time-dependent analysis of parameter influence.
+
+        Returns
+        -------
+        go.Figure
+            Stacked or line plot of sensitivity metrics over time.
+        """
+        title = (
+            f"{sensitivity_method_name} dynamic {sensitivity_metric} {method} {indicator}"
+            if title is None
+            else title
+        )
+
+        if freq is None:
+            freq = pd.infer_freq(self.sampler.results[0].index)
+            if freq is None:
+                raise ValueError(
+                    "freq is not specified and cannot be inferred"
+                    "from results. Specify freq for analyse"
+                )
+
+        res = self.analyze(
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq,
+            **analyse_kwarg,
+        )
+
+        metrics = pd.DataFrame(
+            data=[val[sensitivity_metric] for val in res],
+            columns=[par.name for par in self.sampler.sample.parameters],
+            index=res.index,
+        )
+
+        return plot_dynamic_metric(metrics, sensitivity_metric, unit, title, stacked)
+
+    # def plot_pcp(
+    #     self,
+    #     aggregations: dict | None = None,  # <= optionnel
+    #     *,
+    #     bounds: list[tuple[float, float]] | None = None,
+    #     color_by: str | None = None,
+    #     title: str | None = "Parallel Coordinates — Samples",
+    #     html_file_path: str | None = None,
+    # ):
+    #     """
+    #     Parallel Coordinates Plot basé sur les échantillons et résultats présents dans l'analyse.
+    #
+    #     Parameters
+    #     ----------
+    #     aggregations : dict
+    #         {indicator: callable | [callable] | {label: callable}}
+    #         Ex. {"res": [np.sum, np.mean]}  -> colonnes "res:sum", "res:mean".
+    #     bounds : list[(float, float)] | None
+    #         Bornes (min, max) par paramètre (même ordre que les paramètres). Si None, autoscale.
+    #     color_by : str | None
+    #         Nom d'une dimension (paramètre ou indicateur agrégé) pour colorer les lignes.
+    #     title : str | None
+    #         Titre.
+    #     html_file_path : str | None
+    #         Si fourni, export HTML.
+    #     """
+    #     results = self.sampler.sample.results
+    #     parameter_values = self.sampler.sample.values
+    #     parameter_names = [p.name for p in self.sampler.sample.parameters]
+    #
+    #     return _plot_pcp(
+    #         results=results,
+    #         parameter_values=parameter_values,
+    #         parameter_names=parameter_names,
+    #         aggregations=aggregations,
+    #         bounds=bounds,
+    #         color_by=color_by,
+    #         title=title,
+    #         html_file_path=html_file_path,
+    #     )
+
+    def salib_plot_matrix(
+        self,
+        indicator: str,
+        sensitivity_method_name: str,
+        method: str = "mean",
+        unit: str = "",
+        reference_time_series: pd.Series = None,
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwarg,
+    ):
+        """
+        Plot 2nd-order interaction matrix of sensitivity indices.
+
+        Parameters
+        ----------
+        indicator : str
+            Name of the indicator.
+        sensitivity_method_name : str
+            Method name ("Sobol", "FAST").
+        method : str, default="mean"
+            Aggregation method.
+        unit : str, optional
+            Unit to display.
+        reference_time_series : Series, optional
+            Required for error-based aggregation.
+        agg_method_kwarg : dict, optional
+            Extra kwargs for aggregation.
+        title : str, optional
+            Custom figure title.
+
+        Returns
+        -------
+        go.Figure
+            Heatmap or matrix visualization of 2nd-order indices.
+        """
+        title = (
+            f"{sensitivity_method_name} {method} {indicator} "
+            f"- 2nd order interactions"
+            if title is None
+            else title
+        )
+
+        result = self.analyze(
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq=None,
+            **analyse_kwarg,
+        )[f"{method}_{indicator}"]
+
+        parameter_names = [p.name for p in self.sampler.sample.parameters]
+        return plot_s2_matrix(result, parameter_names, title=title)
+
+
+class SobolSanalysis(Sanalysis):
+    """
+    Sobol sensitivity analysis class.
+
+    This class extends :class:`Sanalysis` and provides variance-based global
+    sensitivity analysis following the Sobol method. Sampling of the parameter
+    space is performed using the Saltelli scheme, which ensures efficient
+    estimation of first-order, second-order, and total-order Sobol indices.
+    """
+
+    def __init__(
+        self,
+        parameters: list[Parameter],
+        model: Model,
+        simulation_options: dict = None,
+    ):
+        super().__init__(parameters, model, simulation_options)
+
+    def _set_sampler(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        return SobolSampler(parameters, model, simulation_options)
+
+    def _set_analyser(self):
+        return sobol
+
+    # noinspection PyMethodOverriding
+    def add_sample(
+        self,
+        N: int,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        *,
+        calc_second_order: bool = True,
+        **sample_kwargs,
+    ):
+        super().add_sample(
+            N=N,
+            simulate=simulate,
             n_cpu=n_cpu,
-            simulate_kwargs=simulate_kwargs,
+            calc_second_order=calc_second_order,
+            **sample_kwargs,
         )
 
     def analyze(
         self,
         indicator: str,
-        agg_method=np.mean,
+        method: str = "mean",
         agg_method_kwarg: dict = None,
-        reference_df: pd.DataFrame = None,
-        sensitivity_method_kwargs: dict = None,
-        freq: str = None,
-        absolute: bool = False,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        calc_second_order: bool = True,
+        **analyse_kwargs,
     ):
-        """
-        Perform sensitivity analysis on the model outputs using the selected method
-        and indicator. Supports both static and dynamic analysis.
-
-        Parameters:
-        ----------
-        indicator : str
-            The name of the model output to analyze (must match a column name in the
-            simulation results).
-
-        agg_method : Callable, optional
-            Aggregation method to reduce time series to a single value per simulation.
-            Default is numpy.mean.
-
-        agg_method_kwarg : dict, optional
-            Additional keyword arguments passed to the aggregation method.
-
-        reference_df : pd.DataFrame, optional
-            Optional reference data (e.g., measured values) to use with error-based
-            aggregation methods (e.g., RMSE, NMBE). If provided, must align in time
-            with the simulation output.
-
-        sensitivity_method_kwargs : dict, optional
-            Additional keyword arguments passed to the sensitivity analysis method
-            from SALib.
-
-        freq : str, optional
-            If provided (e.g., "6h", "1D"), enables dynamic sensitivity analysis by
-            aggregating results over time intervals. Uses pandas frequency strings.
-
-        absolute : bool, optional
-            If True, multiplies sensitivity indices by the variance of the aggregated
-            output at each timestep. This gives absolute contributions to output
-            variability, not normalized indices.
-
-        Returns:
-        -------
-        None
-            Stores results in `self.sensitivity_results` (static)
-            or `self.sensitivity_dynamic_results` (dynamic).
-        """
-        self.static = freq is None  # static becomes True if freq is given
-        self.sensitivity_dynamic_results = {}  # here so that it's emptied when reran for new frequencies
-
-        if sensitivity_method_kwargs is None:
-            sensitivity_method_kwargs = {}
-
-        if agg_method_kwarg is None:
-            agg_method_kwarg = {}
-
-        if not self.sample_results:
-            raise ValueError(
-                "No simulation results were found. Use evaluate() method to run "
-                "the model."
-            )
-
-        if agg_method_kwarg is None:
-            agg_method_kwarg = {}
-
-        if indicator not in self.sample_results[0][2].columns:
-            raise ValueError("Specified indicator not in computed outputs")
-
-        analyser = METHOD_SAMPLER_DICT[self.method]["method"]
-
-        if freq is not None:
-            aggregated_list = []
-            for result in self.sample_results:
-                series = result[2][indicator]
-                grouped = series.groupby(pd.Grouper(freq=freq))
-
-                if reference_df is not None:
-                    ref_grouped = reference_df.groupby(pd.Grouper(freq=freq))
-                    vals = [
-                        agg_method(g, r, **agg_method_kwarg)
-                        for (_, g), (_, r) in zip(grouped, ref_grouped)
-                    ]
-                else:
-                    vals = [agg_method(g, **agg_method_kwarg) for _, g in grouped]
-
-                aggregated_list.append(pd.Series(vals, index=[i for i, _ in grouped]))
-
-            index = aggregated_list[0].index
-            numpy_res = np.array([s.values for s in aggregated_list]).T
-
-            for t_idx, values in zip(index, numpy_res):
-                if self.method.value in ["SOBOL", "FAST"]:
-                    res = analyser.analyze(
-                        problem=self._salib_problem,
-                        Y=values,
-                        **sensitivity_method_kwargs,
-                    )
-                else:
-                    res = analyser.analyze(
-                        problem=self._salib_problem,
-                        X=self.sample.to_numpy(),
-                        Y=values,
-                        **sensitivity_method_kwargs,
-                    )
-
-                res["names"] = self._salib_problem["names"]
-                if absolute:
-                    res["_absolute"] = True
-                self.sensitivity_dynamic_results[t_idx] = res
-
-            # Option "absolute"
-            if absolute:
-                var_t = np.var(numpy_res, axis=1)
-
-                for key, res, var in zip(
-                    self.sensitivity_dynamic_results.keys(),
-                    self.sensitivity_dynamic_results.values(),
-                    var_t,
-                ):
-                    if self.method.value in ["SOBOL", "FAST"]:
-                        for k in list(res.keys()):
-                            if k == "names":
-                                continue
-                            try:
-                                res[k] = np.array(res[k], dtype=float) * var
-                            except (TypeError, ValueError):
-                                continue  # ignore non-numeric fields
-                    else:
-                        if "names" in res:
-                            del res["names"]
-                        for k in list(res.keys()):
-                            try:
-                                res[k] = np.array(res[k], dtype=float) * var
-                            except (TypeError, ValueError):
-                                continue
-
-        else:
-            results_2d = pd.concat(
-                [s_res[2][indicator] for s_res in self.sample_results], axis=1
-            )
-            if reference_df is not None:
-                reference_df_duplicated = pd.concat(
-                    [reference_df] * len(results_2d.columns), axis=1
-                )
-            else:
-                reference_df_duplicated = None
-            y_array = np.array(
-                aggregate_time_series(
-                    results_2d, agg_method, agg_method_kwarg, reference_df_duplicated
-                )
-            )
-
-            if self.method.value in ["SOBOL", "FAST"]:
-                self.sensitivity_results = analyser.analyze(
-                    problem=self._salib_problem, Y=y_array, **sensitivity_method_kwargs
-                )
-            elif self.method.value in ["MORRIS", "RBD_FAST"]:
-                self.sensitivity_results = analyser.analyze(
-                    problem=self._salib_problem,
-                    X=self.sample.to_numpy(),
-                    Y=y_array,
-                    **sensitivity_method_kwargs,
-                )
-
-    def calculate_sensitivity_indicators(self):
-        """
-        Returns sensitivity indicators based on the method used.
-
-        Returns:
-        - dict: A dictionary containing the calculated sensitivity summary.
-
-        If the method is FAST or RBD_FAST:
-            - sum_st (float): Sum of the sensitivity indices (ST or S1).
-            - mean_conf (float): Mean confidence level of the sensitivity indices.
-
-        If the method is SOBOL:
-            - sum_st (float): Sum of the first-order sensitivity indices (ST).
-            - mean_conf (float): Mean confidence level of the first-order
-            sensitivity indices (ST_conf).
-            - sum_s1 (float): Sum of the first-order sensitivity indices (S1).
-            - mean_conf1 (float): Mean confidence level of the first-order
-            sensitivity indices (S1_conf).
-            - sum_s2 (float): Sum of the second-order sensitivity indices (S2).
-            - mean_conf2 (float): Mean confidence level of the second-order
-            sensitivity indices (S2_conf).
-
-        If the method is MORRIS:
-            - euclidian distance (array-like): Euclidian distance
-             between mu_star and sigma.
-            Mu_star represents the average elementary effects of the outputs
-            with respect to each input factor, while sigma measures the total
-            variability induced by each input factor.
-            - normalized euclidian distance (array-like): Normalized euclidian
-             distance between mu_star and sigma. The normalized euclidian distance
-             is the euclidian distance divided by its maximum value, providing a
-             relative measure of the variability induced by each input factor.
-
-        """
-
-        def average_dynamic_index(index_name):
-            df = pd.DataFrame(
-                {
-                    t: res[index_name]
-                    for t, res in self.sensitivity_dynamic_results.items()
-                    if index_name in res
-                }
-            ).T
-            return df.mean()
-
-        if not self.static:
-            if not self.sensitivity_dynamic_results:
-                raise ValueError("No dynamic sensitivity results found.")
-
-            if self.method in [Method.SOBOL, Method.FAST]:
-                st_mean = average_dynamic_index("ST")
-                s1_mean = (
-                    average_dynamic_index("S1")
-                    if "S1" in next(iter(self.sensitivity_dynamic_results.values()))
-                    else None
-                )
-                return {
-                    "ST": st_mean,
-                    "S1": s1_mean,
-                }
-
-            elif self.method == Method.RBD_FAST:
-                s1_mean = average_dynamic_index("S1")
-                return {"S1": s1_mean}
-
-            elif self.method == Method.MORRIS:
-                raise NotImplementedError(
-                    "Dynamic MORRIS indicators not supported yet."
-                )
-
-            else:
-                raise ValueError("Unknown method for dynamic sensitivity.")
-
-        if self.sensitivity_results is None:
-            raise ValueError("No static sensitivity results available.")
-
-        if self.method == Method.FAST:
-            sum_st = sum(self.sensitivity_results["ST"])
-            conf = self.sensitivity_results["ST_conf"]
-            mean_conf = sum(conf) / len(conf)
-
-            return {"sum_st": sum_st, "mean_conf": mean_conf}
-
-        elif self.method == Method.RBD_FAST:
-            sum_st = sum(self.sensitivity_results["S1"])
-            conf = self.sensitivity_results["S1_conf"]
-            mean_conf = sum(conf) / len(conf)
-
-            return {"sum_st": sum_st, "mean_conf": mean_conf}
-
-        elif self.method == Method.SOBOL:
-            sum_st = self.sensitivity_results.to_df()[0].sum().loc["ST"]
-            mean_conf = self.sensitivity_results.to_df()[0].mean().loc["ST_conf"]
-            sum_s1 = self.sensitivity_results.to_df()[1].sum().loc["S1"]
-            mean_conf1 = self.sensitivity_results.to_df()[1].mean().loc["S1_conf"]
-            sum_s2 = self.sensitivity_results.to_df()[2].sum().loc["S2"]
-            mean_conf2 = self.sensitivity_results.to_df()[2].mean().loc["S2_conf"]
-
-            return {
-                "sum_st": sum_st,
-                "mean_conf": mean_conf,
-                "sum_s1": sum_s1,
-                "mean_conf1": mean_conf1,
-                "sum_s2": sum_s2,
-                "mean_conf2": mean_conf2,
-            }
-
-        elif self.method == Method.MORRIS:
-            morris_res = self.sensitivity_results
-            morris_res["euclidian distance"] = np.sqrt(
-                morris_res["mu_star"] ** 2 + morris_res["sigma"] ** 2
-            )
-            morris_res["normalized euclidian distance"] = (
-                morris_res["euclidian distance"]
-                / morris_res["euclidian distance"].max()
-            )
-
-            return {
-                "euclidian distance": morris_res["euclidian distance"].data,
-                "normalized euclidian distance": morris_res[
-                    "normalized euclidian distance"
-                ].data,
-            }
-
-        else:
-            raise ValueError("Invalid method")
-
-
-def plot_sobol_st_bar(salib_res, normalize_dynamic=False):
-    """
-    Plot Sobol total sensitivity indices (ST) as a bar chart or a dynamic line chart.
-
-    This function automatically detects whether the input is a static or dynamic result,
-    and adjusts the plot accordingly. For dynamic results, it also detects if the indices
-    are absolute (i.e., multiplied by output variance) and adapts the y-axis label.
-
-    Parameters
-    ----------
-    salib_res : SALib.analyze._results.SobolResults | dict
-        The result object returned by a SALib Sobol analysis.
-        - For static analysis: a SobolResults object (e.g., `sanalysis.sensitivity_results`)
-        - For dynamic analysis: a dictionary of time-indexed results (e.g., `sanalysis.sensitivity_dynamic_results`),
-          where each value must contain keys "ST" and "names", and optionally "_absolute" to indicate absolute mode.
-    normalize_dynamic : bool, optional
-        If True, normalizes dynamic results to percentages and plots a cumulative graph (0 to 1).
-    """
-
-    if isinstance(salib_res, dict) and isinstance(next(iter(salib_res.values())), dict):
-        try:
-            df_to_plot = pd.DataFrame(
-                {
-                    t: pd.Series(res["ST"], index=res["names"])
-                    for t, res in salib_res.items()
-                }
-            ).T
-        except KeyError:
-            raise ValueError(
-                "ST index not found in dynamic results. Ensure 'ST' and 'names' are present."
-            )
-        absolute = "_absolute" in next(iter(salib_res.values()))
-
-        if normalize_dynamic:
-            df_to_plot = df_to_plot.div(df_to_plot.sum(axis=1), axis=0)
-
-        df_to_plot.index.name = "Time"
-        df_to_plot.columns.name = "Parameter"
-
-        fig = go.Figure()
-        for param in df_to_plot.columns:
-            fig.add_trace(
-                go.Scatter(
-                    x=df_to_plot.index,
-                    y=df_to_plot[param],
-                    name=param,
-                    mode="lines",
-                    stackgroup="one" if normalize_dynamic else None,
-                )
-            )
-
-        yaxis_title = (
-            "Cumulative percentage [0-1]"
-            if normalize_dynamic
-            else (
-                "Absolute Sobol contribution"
-                if absolute
-                else "Sobol total index value [0-1]"
-            )
+        return super().analyze(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
+            calc_second_order=calc_second_order,
+            **analyse_kwargs,
         )
 
-        fig.update_layout(
-            title="Sobol ST indices (dynamic)",
-            xaxis_title="Time",
-            yaxis_title=yaxis_title,
+    def plot_bar(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "ST",
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        calc_second_order: bool = True,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwargs,
+    ):
+        return super().salib_plot_bar(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="Sobol",
+            method=method,
+            unit=unit,
+            reference_time_series=reference_time_series,
+            agg_method_kwarg=agg_method_kwarg,
+            title=title,
+            calc_second_order=calc_second_order,
+            **analyse_kwargs,
         )
-        return fig
 
-    sobol_ind = salib_res.to_df()[0]
-    sobol_ind.sort_values(by="ST", ascending=True, inplace=True)
+    def plot_dynamic_metric(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "ST",
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        calc_second_order: bool = True,
+        title: str = None,
+    ):
+        return super().salib_plot_dynamic_metric(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="Sobol",
+            freq=freq,
+            method=method,
+            unit=unit,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            calc_second_order=calc_second_order,
+            stacked=True,
+            title=title,
+        )
 
-    absolute = sobol_ind.ST.max() > 1.0
+    def plot_s2_matrix(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "S2",
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        calc_second_order: bool = True,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwargs,
+    ):
+        return super().salib_plot_matrix(
+            indicator=indicator,
+            sensitivity_method_name="Sobol",
+            method=method,
+            unit=unit,
+            reference_time_series=reference_time_series,
+            agg_method_kwarg=agg_method_kwarg,
+            title=title,
+            calc_second_order=calc_second_order,
+            **analyse_kwargs,
+        )
 
+
+class MorrisSanalysis(Sanalysis):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options, x_needed=True)
+        self._analysis_cache = {}
+
+    def _set_sampler(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        return MorrisSampler(parameters, model, simulation_options)
+
+    def _set_analyser(self):
+        return morris
+
+    # noinspection PyMethodOverriding
+    def add_sample(
+        self,
+        N: int,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        num_levels: int = 4,
+        **sample_kwargs,
+    ):
+        super().add_sample(
+            N=N,
+            simulate=simulate,
+            n_cpu=n_cpu,
+            num_levels=num_levels,
+            **sample_kwargs,
+        )
+
+    def analyze(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        **analyse_kwargs: object,
+    ) -> pd.Series:
+        res = super().analyze(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
+            **analyse_kwargs,
+        )
+
+        for idx in res.index:
+            res[idx]["euclidian_distance"] = np.sqrt(
+                res[idx]["mu_star"] ** 2 + res[idx]["sigma"] ** 2
+            )
+
+        return res
+
+    def plot_scatter(
+        self,
+        indicator: str = "res",
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        agg_method_kwarg: dict = None,
+        title: str = "Morris Sensitivity Analysis",
+        unit: str = "",
+        scaler: float = 100,
+        autosize: bool = True,
+        **analyse_kwargs,
+    ):
+        cache_key = (indicator, method, "None")
+        if cache_key in self._analysis_cache:
+            result = self._analysis_cache[cache_key][f"{method}_{indicator}"]
+        else:
+            result = self.analyze(
+                indicator=indicator,
+                method=method,
+                reference_time_series=reference_time_series,
+                agg_method_kwarg=agg_method_kwarg,
+                **analyse_kwargs,
+            )[f"{method}_{indicator}"]
+            self._analysis_cache[cache_key] = {f"{method}_{indicator}": result}
+
+        return plot_morris_scatter(
+            result,
+            title=title,
+            unit=unit,
+            scaler=scaler,
+            autosize=autosize,
+        )
+
+    def plot_bar(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "euclidian_distance",
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwargs,
+    ):
+        return super().salib_plot_bar(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="Morris",
+            method=method,
+            unit=unit,
+            reference_time_series=reference_time_series,
+            agg_method_kwarg=agg_method_kwarg,
+            title=title,
+            **analyse_kwargs,
+        )
+
+    def plot_dynamic_metric(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "euclidian_distance",
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+    ):
+        return super().salib_plot_dynamic_metric(
+            indicator,
+            sensitivity_metric,
+            "Morris",
+            freq,
+            method,
+            unit,
+            agg_method_kwarg,
+            reference_time_series,
+            title,
+        )
+
+
+class FASTSanalysis(Sanalysis):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options, x_needed=False)
+        self._analysis_cache = {}
+
+    def _set_sampler(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        return FASTSampler(parameters, model, simulation_options)
+
+    def _set_analyser(self):
+        return fast
+
+    def add_sample(
+        self,
+        N: int,
+        M: int = 4,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        **sample_kwargs,
+    ):
+        super().add_sample(
+            N=N,
+            simulate=simulate,
+            n_cpu=n_cpu,
+            M=M,
+            **sample_kwargs,
+        )
+
+    def analyze(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        **analyse_kwargs,
+    ):
+        return super().analyze(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
+            **analyse_kwargs,
+        )
+
+    def plot_bar(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "ST",
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwargs,
+    ):
+        return super().salib_plot_bar(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="FAST",
+            method=method,
+            unit=unit,
+            reference_time_series=reference_time_series,
+            agg_method_kwarg=agg_method_kwarg,
+            title=title,
+            **analyse_kwargs,
+        )
+
+    def plot_dynamic_metric(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "ST",
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+    ):
+        return super().salib_plot_dynamic_metric(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="FAST",
+            freq=freq,
+            method=method,
+            unit=unit,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            stacked=True,
+            title=title,
+        )
+
+
+class RBDFASTSanalysis(Sanalysis):
+    def __init__(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        super().__init__(parameters, model, simulation_options, x_needed=True)
+
+    def _set_sampler(
+        self, parameters: list[Parameter], model: Model, simulation_options: dict = None
+    ):
+        return RBDFASTSampler(parameters, model, simulation_options)
+
+    def _set_analyser(self):
+        return rbd_fast
+
+    def add_sample(
+        self,
+        N: int,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        **sample_kwargs,
+    ):
+        super().add_sample(
+            N=N,
+            simulate=simulate,
+            n_cpu=n_cpu,
+            **sample_kwargs,
+        )
+
+    def analyze(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        **analyse_kwargs,
+    ):
+        return super().analyze(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
+            **analyse_kwargs,
+        )
+
+    def plot_bar(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "S1",
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+        **analyse_kwargs,
+    ):
+        return super().salib_plot_bar(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="RBD_FAST",
+            method=method,
+            unit=unit,
+            reference_time_series=reference_time_series,
+            agg_method_kwarg=agg_method_kwarg,
+            title=title,
+            **analyse_kwargs,
+        )
+
+    def plot_dynamic_metric(
+        self,
+        indicator: str = "res",
+        sensitivity_metric: str = "S1",
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        method: str = "mean",
+        reference_time_series: pd.Series = None,
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        title: str = None,
+    ):
+        return super().salib_plot_dynamic_metric(
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="RBD_FAST",
+            freq=freq,
+            method=method,
+            unit=unit,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            stacked=True,
+            title=title,
+        )
+
+
+def plot_dynamic_metric(
+    metrics: pd.DataFrame,
+    metric_name: str = "",
+    unit: str = "",
+    title: str = None,
+    stacked: bool = False,
+):
     fig = go.Figure()
-    fig.add_trace(
-        go.Bar(
-            x=sobol_ind.index,
-            y=sobol_ind.ST,
-            name="Sobol Total Indices",
-            marker_color="orange",
-            error_y=dict(type="data", array=sobol_ind.ST_conf.to_numpy()),
-            yaxis="y1",
+    for param in metrics.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=metrics.index,
+                y=metrics[param],
+                name=param,
+                mode="lines",
+                stackgroup="one" if stacked else None,
+            )
         )
-    )
 
     fig.update_layout(
-        title="Sobol Total indices",
-        xaxis_title="Parameters",
-        yaxis_title="Absolute Sobol contribution"
-        if absolute
-        else "Sobol total index value [0-1]",
+        title=title,
+        xaxis_title="Time",
+        yaxis_title=f"{metric_name} {unit}",
     )
 
     return fig
 
 
-def plot_morris_st_bar(salib_res, distance_metric="normalized"):
-    if distance_metric not in ["absolute", "normalized"]:
-        raise ValueError("Distance metric must be either 'absolute'" " or 'normalized'")
-
-    salib_res = salib_res.to_df()
-    if distance_metric == "absolute":
-        dist = "euclidian distance"
-    else:
-        dist = "normalized euclidian distance"
-    salib_res.sort_values(by=dist, ascending=True, inplace=True)
-
-    if distance_metric == "absolute":
-        distance_values = salib_res["euclidian distance"]
-        distance_conf = None
-        title = "Morris Sensitivity Analysis - euclidian Distance"
-    else:
-        distance_values = salib_res["normalized euclidian distance"]
-        distance_conf = None
-        title = "Morris Sensitivity Analysis - Normalized euclidian Distance"
-
-    figure = go.Figure()
-    figure.add_trace(
+def plot_bars(
+    sensitivity_results: pd.Series, title: str = None, error: pd.Series = None
+):
+    error = {} if error is None else dict(type="data", array=error.values)
+    fig = go.Figure()
+    fig.add_trace(
         go.Bar(
-            x=salib_res.index,
-            y=distance_values,
-            name=distance_metric.capitalize(),
+            x=sensitivity_results.index,
+            y=sensitivity_results.values,
+            error_y=error,
+            name=sensitivity_results.name,
             marker_color="orange",
-            error_y=dict(
-                type="data",
-                array=distance_conf.to_numpy() if distance_conf is not None else None,
-            ),
-            yaxis="y1",
         )
     )
 
-    figure.update_layout(
+    fig.update_layout(
         title=title,
         xaxis_title="Parameters",
-        yaxis_title=f"{distance_metric.capitalize()} (d)",
+        yaxis_title=f"{sensitivity_results.name}",
     )
 
-    return figure
+    return fig
 
 
 def plot_morris_scatter(
-    salib_res,
-    title: str = None,
+    morris_result,
+    title: str = "Morris Sensitivity Analysis",
     unit: str = "",
-    scaler: int = 100,
+    scaler: float = 100,
     autosize: bool = True,
-):
+) -> go.Figure:
     """
-    This function generates a scatter plot for Morris sensitivity analysis results.
-    It displays the mean of elementary effects (μ*) on the x-axis and the standard
-    deviation of elementary effects (σ) on the y-axis.
-    Marker sizes and colors represent the 'distance' to the origin.
+    Plot a Morris sensitivity analysis scatter plot using μ* and σ.
 
-    Parameters:
-    - salib_res (pandas DataFrame): DataFrame containing sensitivity analysis results.
-    - title (str, optional): Title for the plot. If not provided, a default title
-    is used.
-    - unit (str, optional): Unit for the axes labels.
-    - scaler (int, optional): A scaling factor for marker sizes in the plot.
-    - autosize (bool, optional): Whether to automatically adjust the y-axis range.
-
+    Parameters
+    ----------
+    morris_result : MorrisResult or pd.DataFrame
+        Result from a Morris analysis (SALib or internal format).
+    title : str, optional
+        Plot title.
+    unit : str, optional
+        Unit for axis labels.
+    scaler : float, optional
+        Scaling factor for marker size.
+    autosize : bool, optional
+        Whether to autoscale y-axis (True: based on σ, False: based on μ*).
     """
-    morris_res = salib_res.to_df()
-    morris_res["distance"] = np.sqrt(morris_res.mu_star**2 + morris_res.sigma**2)
-    morris_res["dimless_distance"] = morris_res.distance / morris_res.distance.max()
+    if hasattr(morris_result, "to_df"):
+        morris_df = morris_result.to_df()
+    elif isinstance(morris_result, pd.DataFrame):
+        morris_df = morris_result
+    else:
+        raise ValueError("Expected `MorrisResult` or `pd.DataFrame`.")
 
-    import plotly.graph_objects as go
+    morris_df["distance"] = np.sqrt(morris_df.mu_star**2 + morris_df.sigma**2)
+    morris_df["dimless_distance"] = morris_df["distance"] / morris_df["distance"].max()
 
     fig = go.Figure()
 
     fig.add_trace(
         go.Scatter(
-            x=morris_res.mu_star,
-            y=morris_res.sigma,
-            name="Morris index",
+            x=morris_df["mu_star"],
+            y=morris_df["sigma"],
             mode="markers+text",
-            text=list(morris_res.index),
+            name="Morris index",
+            text=list(morris_df.index),
             textposition="top center",
             marker=dict(
-                size=morris_res.dimless_distance * scaler,
-                color=np.arange(morris_res.shape[0]),
+                size=morris_df["dimless_distance"] * scaler,
+                color=np.arange(len(morris_df)),
             ),
             error_x=dict(
-                type="data",  # value of error bar given in data coordinates
-                array=morris_res.mu_star_conf,
+                type="data",
+                array=morris_df["mu_star_conf"],
                 color="#696969",
                 visible=True,
             ),
         )
     )
 
+    x_max = morris_df["mu_star"].max() * 1.1
     fig.add_trace(
         go.Scatter(
-            x=np.array([0, morris_res.mu_star.max() * 1.1]),
-            y=np.array([0, 0.1 * morris_res.mu_star.max() * 1.1]),
-            name="linear_lim",
+            x=[0, x_max],
+            y=[0, 0.1 * x_max],
+            name="linear",
             mode="lines",
-            line=dict(color="grey", dash="dash"),
+            line=dict(dash="dash", color="grey"),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[0, x_max],
+            y=[0, 0.5 * x_max],
+            name="monotonic",
+            mode="lines",
+            line=dict(dash="dot", color="grey"),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[0, x_max],
+            y=[0, x_max],
+            name="non-linear",
+            mode="lines",
+            line=dict(dash="dashdot", color="grey"),
         )
     )
 
-    fig.add_trace(
-        go.Scatter(
-            x=np.array([0, morris_res.mu_star.max() * 1.1]),
-            y=np.array([0, 0.5 * morris_res.mu_star.max() * 1.1]),
-            name="Monotonic limit",
-            mode="lines",
-            line=dict(color="grey", dash="dot"),
-        )
+    y_max = morris_df["sigma"].max() * 1.5 if autosize else x_max
+    fig.update_layout(
+        title=title,
+        xaxis_title=f"Absolute mean of elementary effects μ* [{unit}]",
+        yaxis_title=f"Standard deviation of elementary effects σ [{unit}]",
+        yaxis_range=[-0.1 * y_max, y_max],
     )
 
-    fig.add_trace(
-        go.Scatter(
-            x=np.array([0, morris_res.mu_star.max() * 1.1]),
-            y=np.array([0, 1 * morris_res.mu_star.max() * 1.1]),
-            name="Non linear limit",
-            mode="lines",
-            line=dict(color="grey", dash="dashdot"),
+    return fig
+
+
+def plot_s2_matrix(
+    result: dict,
+    param_names: list[str],
+    title: str = "Sobol 2nd-order interactions (S2)",
+    colorscale: str = "Reds",
+):
+    df_S2 = pd.DataFrame(result["S2"], index=param_names, columns=param_names)
+
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=df_S2.values,
+            x=df_S2.columns,
+            y=df_S2.index,
+            colorscale=colorscale,
+            zmin=0,
+            zmax=df_S2.values.max(),
+            colorbar=dict(title="S2"),
+            text=df_S2.round(3).astype(str),
+            texttemplate="%{text}",
         )
     )
-
-    # Edit the layout
-    if title is not None:
-        title = title
-    else:
-        title = "Morris Sensitivity Analysis"
-
-    if autosize:
-        y_lim = [-morris_res.sigma.max() * 0.1, morris_res.sigma.max() * 1.5]
-    else:
-        y_lim = [-morris_res.sigma.max() * 0.1, morris_res.mu_star.max() * 1.1]
-
-    x_label = f"Absolute mean of elementary effects μ* [{unit}]"
-    y_label = f"Standard deviation of elementary effects σ [{unit}]"
 
     fig.update_layout(
         title=title,
-        xaxis_title=x_label,
-        yaxis_title=y_label,
-        yaxis_range=y_lim,
+        xaxis_title="Parameter",
+        yaxis_title="Parameter",
     )
 
     return fig
-
-
-def plot_sample(
-    sample_results,
-    indicator=None,
-    ref=None,
-    title=None,
-    y_label=None,
-    x_label=None,
-    alpha=0.5,
-    loc=None,
-    show_legends=False,
-    html_file_path=None,
-):
-    """
-    Plot sample results for a given indicator.
-
-    Parameters:
-    - sample_results (list): List of tuples, each containing parameters,
-    simulation options, and results.
-    - indicator (str): The model output indicator to plot.
-    - ref (pd.Series or pd.DataFrame, optional): Reference data for comparison.
-    - title (str, optional): Title for the plot.
-    - y_label (str, optional): Label for the y-axis.
-    - x_label (str, optional): Label for the x-axis.
-    - alpha (float, optional): Opacity of the markers.
-    - loc (tuple, optional): Tuple specifying the time range to plot,
-        e.g., (start_time, end_time).
-    - show_legends (bool, optional): Whether to display legends with parameter values.
-    - html_file_path (str, optional): If provided, save the plot as an HTML file.
-    """
-    if indicator is None:
-        raise ValueError("Please specify at least the model output name as 'indicator'")
-
-    fig = go.Figure()
-
-    for _, result in enumerate(sample_results):
-        parameters, simulation_options, simulation_results = result
-
-        to_plot_indicator = simulation_results[indicator]
-
-        if loc is not None:
-            to_plot_indicator = to_plot_indicator.loc[loc[0] : loc[1]]
-
-        rounded_parameters = {key: round(value, 2) for key, value in parameters.items()}
-        parameter_names = [
-            param.split(".")[-1] if "." in param else param
-            for param in rounded_parameters.keys()
-        ]
-        legend_str = ", ".join(
-            [
-                f"{name}: {value}"
-                for name, value in zip(parameter_names, rounded_parameters.values())
-            ]
-        )
-
-        fig.add_trace(
-            go.Scattergl(
-                name=legend_str if show_legends else "Simulations",
-                mode="markers",
-                x=to_plot_indicator.index,
-                y=np.array(to_plot_indicator),
-                marker=dict(
-                    color=f"rgba(135, 135, 135, {alpha})",
-                ),
-            )
-        )
-
-    if ref is not None:
-        if loc is not None:
-            to_plot_ref = ref.loc[loc[0] : loc[1]]
-        else:
-            to_plot_ref = ref
-
-        fig.add_trace(
-            go.Scattergl(
-                name="Reference",
-                mode="lines",
-                x=to_plot_ref.index,
-                y=np.array(to_plot_ref),
-                marker=dict(
-                    color="red",
-                ),
-            )
-        )
-
-    if title is not None:
-        fig.update_layout(title=title)
-
-    if x_label is not None:
-        fig.update_layout(xaxis_title=x_label)
-
-    if y_label is not None:
-        fig.update_layout(yaxis_title=y_label)
-
-    fig.update_layout(showlegend=show_legends)
-
-    if html_file_path:
-        pio.write_html(fig, html_file_path)
-    return fig
-
-
-def plot_pcp(
-    sample_results,
-    parameters,
-    indicators,
-    aggregation_method=np.mean,
-    bounds=False,
-    html_file_path=None,
-    plot_unselected=True,
-):
-    """
-    Plots a parallel coordinate plot for sensitivity analysis results.
-
-    Parameters
-    ----------
-    sample_results : list
-        A list of results from sensitivity analysis simulations. Each element
-        in the list should be a tuple containing three components:
-        1. A dictionary representing the parameter values used in the simulation.
-        2. A dictionary representing simulation options.
-        3. A DataFrame containing the results of the simulation.
-
-    parameters : list
-        A list of dictionaries, where each dictionary represents a parameter and
-        contains its name, interval, and type.
-
-    indicators : list
-        A list of strings representing the indicators (columns) in the simulation
-        results DataFrame to be plotted.
-
-    aggregation_method : function, optional
-        The aggregation method used to summarize indicator values across multiple
-        simulations. Default is numpy.mean.
-
-    bounds : bool, optional
-        If True, includes the bounds of the parameters in the plot. Default is False.
-
-    html_file_path : str, optional
-        If provided, save the plot as an HTML file.
-
-
-    Returns
-    -------
-    None
-        The function displays the parallel coordinate plot using Plotly.
-
-    Notes
-    -----
-    The parallel coordinate plot visualizes the relationships between parameters
-    and indicators across multiple simulations. Each line in the plot represents a
-    simulation, and the position of each line along the axes corresponds to the
-    parameter values. The color of the lines can be determined by an indicator.
-    """
-
-    data_dict = {
-        param[Parameter.NAME]: np.array(
-            [res[0][param[Parameter.NAME]] for res in sample_results]
-        )
-        for param in parameters
-    }
-
-    if isinstance(indicators, str):
-        indicators = [indicators]
-
-    for indicator in indicators:
-        data_dict[indicator] = np.array(
-            [aggregation_method(res[2][indicator]) for res in sample_results]
-        )
-
-    colorby = indicators[0] if indicators else None
-
-    plot_parcoord(
-        data_dict=data_dict,
-        bounds=bounds,
-        parameters=parameters,
-        colorby=colorby,
-        obj_res=np.array([res[2][indicators] for res in sample_results]),
-        html_file_path=html_file_path,
-        plot_unselected=plot_unselected,
-    )
-
-
-class ObjectiveFunction:
-    """
-    A class to represent configure an objective function for model calibration
-    and optimization.
-    A specific method is designed for scipy compatibility.
-
-    Parameters
-    ----------
-    model : Model
-        The model to be calibrated.
-    simulation_options : dict
-        Dictionary containing simulation options.
-    param_list : list of dict
-        List of dictionaries specifying the parameters to be calibrated,
-        including bounds and initial values.
-    indicators_config : dict[str, tuple[Callable, pd.Series | pd.DataFrame | None] | Callable]
-        Dictionary where keys are indicator names corresponding to Model simulation
-         output names, and values are either:
-        - A aggregation function to compute the indicator (ex: np.mean, np.sum).
-        - A tuple (function, reference data) if comparison when reference is needed.
-        (ex. sklearn.metrics.mean_squared_error, corrai.metrics.mae)
-    scipy_obj_indicator : str, optional
-        The indicator to be used as the objective function for scipy optimization.
-        Defaults to the first key in `indicators_config`.
-
-    Attributes
-    ----------
-    model : Model
-        The simulation model being calibrated.
-    simulation_options : dict
-        Options for running the simulation.
-    param_list : list of dict
-        List of parameter dictionaries, each containing:
-        - `Parameter.NAME`: Name of the parameter.
-        - `Parameter.INTERVAL`: Bounds for the parameter.
-        - `Parameter.INIT_VALUE`: Initial value (optional).
-    indicators_config : dict
-        Dictionary mapping indicator names to their computation functions and optional reference data.
-    scipy_obj_indicator : str
-        The indicator used as the objective function in `scipy.optimize`.
-
-    Properties
-    ----------
-    bounds : list[tuple[float, float]]
-        List of parameter bounds extracted from `param_list`.
-    init_values : list[float] or None
-        List of initial values for parameters if provided; otherwise, None.
-
-    Methods
-    -------
-    function(param_dict, kwargs: dict = None) -> dict[str, float]
-        Runs the model simulation and computes indicator values.
-
-        Parameters
-        ----------
-        param_dict : dict
-            Dictionary containing parameter names and their values.
-        kwargs : dict, optional
-            Additional arguments for the model simulation.
-
-        Returns
-        -------
-        dict[str, float]
-            Dictionary containing computed indicator values.
-
-    scipy_obj_function(x, kwargs: dict = None) -> float
-        Computes the objective function value for scipy optimization.
-
-        Parameters
-        ----------
-        x : float or list of float
-            List of parameter values or a single parameter value.
-        kwargs : dict, optional
-            Additional arguments for the model simulation.
-
-        Returns
-        -------
-        float
-            The calculated value of the objective function based on `scipy_obj_indicator`.
-
-    Examples
-    --------
-    >>> from sklearn.metrics import mean_squared_error
-    >>> model = SomeModel()
-    >>> simulation_options = {"duration": 100}
-    >>> param_list = [
-    ...     {
-    ...         Parameter.NAME: "param1",
-    ...         Parameter.INTERVAL: [0, 1],
-    ...         Parameter.INIT_VALUE: 0.5,
-    ...     }
-    ... ]
-    >>> indicators_config = {"res": (mean_squared_error, reference_series)}
-    >>> obj_func = ObjectiveFunction(
-    ...     model, simulation_options, param_list, indicators_config
-    ... )
-    >>> obj_func.function({"param1": 0.8})
-    {'indicator1': 0.123}
-    >>> obj_func.scipy_obj_function([0.8])
-    0.123
-    """
-
-    def __init__(
-        self,
-        model: Model,
-        simulation_options: dict,
-        param_list: list[dict],
-        indicators_config: dict[
-            str, tuple[Callable, pd.Series | pd.DataFrame | None] | Callable
-        ],
-        scipy_obj_indicator: str = None,
-    ):
-        self.model = model
-        self.param_list = param_list
-        self.indicators_config = indicators_config
-        self.simulation_options = simulation_options
-        self.scipy_obj_indicator = (
-            list(indicators_config.keys())[0]
-            if scipy_obj_indicator is None
-            else scipy_obj_indicator
-        )
-
-    @property
-    def bounds(self):
-        return [param[Parameter.INTERVAL] for param in self.param_list]
-
-    @property
-    def init_values(self):
-        if all(Parameter.INIT_VALUE in param for param in self.param_list):
-            return [param[Parameter.INIT_VALUE] for param in self.param_list]
-        else:
-            return None
-
-    def function(self, param_dict, kwargs: dict = None):
-        """
-        Calculate the objective function for given parameter values.
-
-        Parameters
-        ----------
-        x_dict : dict
-            Dictionary containing parameter names and their values.
-
-        Returns
-        -------
-        pd.Series
-            A series containing the calculated values for each indicator.
-        """
-        kwargs = {} if kwargs is None else kwargs
-        res = self.model.simulate(param_dict, self.simulation_options, **kwargs)
-
-        function_results = {}
-        for ind, (func, ref) in self.indicators_config.items():
-            function_results[ind] = (
-                func(res[ind]) if ref is None else func(res[ind], ref)
-            )
-        return function_results
-
-    def scipy_obj_function(self, x, kwargs: dict = None):
-        """
-        Wrapper for scipy.optimize that calculates the
-        objective function for given parameter values.
-
-        Parameters
-        ----------
-        x : float or list of float
-            List of parameter values or a single parameter value.
-
-        Returns
-        -------
-        float
-            The calculated value of the objective function.
-        """
-        x = [x] if isinstance(x, (float, int)) else x
-        if len(x) != len(self.param_list):
-            raise ValueError("Length of x does not match length of param_list")
-
-        param_dict = {
-            self.param_list[i][Parameter.NAME]: x[i]
-            for i in range(len(self.param_list))
-        }
-        result = self.function(param_dict, kwargs)
-        return result[self.scipy_obj_indicator]
