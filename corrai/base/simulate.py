@@ -64,30 +64,39 @@ def run_simulations(
     >>> from corrai.base.simulate import run_simulations
     >>> import pandas as pd
 
+
     >>> class SimpleModel(Model):
-    ...     def __init__(self):
-    ...         self.prop = 1
+    ...    def __init__(self):
+    ...        self.prop = 1
     ...
-    ...     def simulate(self, property_dict=None, simulation_options=None, **kwargs):
-    ...         if property_dict is not None:
-    ...             for prop, val in property_dict.items():
-    ...                 setattr(self, prop, val)
-    ...         return pd.DataFrame(
-    ...             {"output": self.prop * 2},
-    ...             index=pd.date_range("2020-01-01", periods=5, freq="h")
-    ...         )
+    ...    def simulate(
+    ...        self, property_dict=None, simulation_options=None, **simulation_kwargs
+    ...    ):
+    ...        if property_dict is not None:
+    ...            for prop, val in property_dict.items():
+    ...                setattr(self, prop, val)
+    ...        return pd.DataFrame(
+    ...            {"output": self.prop * 2},
+    ...            index=pd.date_range("2020-01-01", periods=5, freq="h"),
+    ...        )
 
-    >>> param_x = Parameter(name="x", interval=(0, 1), model_property="prop")
+
     >>> model = SimpleModel()
+    >>> param_x = Parameter(name="x", interval=(0, 1), model_property="prop")
     >>> param_sets = [[(param_x, 0.1)], [(param_x, 0.5)], [(param_x, 0.9)]]
+    >>> results = run_simulations(model, param_sets, n_cpu=-1, simulation_options={})
 
-    >>> results = run_simulations(model, param_sets, simulation_options={})
-    >>> len(results)
+    >>>len(results)
     3
-    >>> results[0].head()
-                       output
-    2020-01-01 00:00:00     0
-    2020-01-01 01:00:00     0
+
+    >>> results[1].head()
+                         output
+    2020-01-01 00:00:00     1.0
+    2020-01-01 01:00:00     1.0
+    2020-01-01 02:00:00     1.0
+    2020-01-01 03:00:00     1.0
+    2020-01-01 04:00:00     1.0
+
     """
     simulation_kwargs = simulation_kwargs or {}
 
