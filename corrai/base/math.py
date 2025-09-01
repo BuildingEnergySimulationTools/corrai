@@ -96,10 +96,19 @@ def aggregate_time_series(
     --------
     >>> import pandas as pd
     >>> from corrai.base.math import aggregate_time_series
-    >>> sim_res = pd.Series([
-    ...     pd.DataFrame({"a": [1, 2]}, index=pd.date_range("2009-01-01", freq="h", periods=2)),
-    ...     pd.DataFrame({"a": [3, 4]}, index=pd.date_range("2009-01-01", freq="h", periods=2)),
-    ... ], index=[101, 102])
+    >>> sim_res = pd.Series(
+    ...     [
+    ...         pd.DataFrame(
+    ...             {"a": [1, 2]},
+    ...             index=pd.date_range("2009-01-01", freq="h", periods=2),
+    ...         ),
+    ...         pd.DataFrame(
+    ...             {"a": [3, 4]},
+    ...             index=pd.date_range("2009-01-01", freq="h", periods=2),
+    ...         ),
+    ...     ],
+    ...     index=[101, 102],
+    ... )
 
     >>> ref = pd.Series([1, 1], index=pd.date_range("2009-01-01", freq="h", periods=2))
 
@@ -110,7 +119,13 @@ def aggregate_time_series(
     Name: aggregated_a, dtype: float64
 
     >>> # With frequency aggregation: one value per time bin per simulation
-    >>> aggregate_time_series(sim_res, indicator="a", method="mean_absolute_error", reference_time_series=ref, freq="h")
+    >>> aggregate_time_series(
+    ...     sim_res,
+    ...     indicator="a",
+    ...     method="mean_absolute_error",
+    ...     reference_time_series=ref,
+    ...     freq="h",
+    ... )
          2009-01-01 00:00:00  2009-01-01 01:00:00
     101                  0.0                  1.0
     102                  2.0                  3.0

@@ -122,7 +122,9 @@ def df_to_combitimetable(df: pd.DataFrame, filename):
     Examples
     --------
     >>> import pandas as pd
-    >>> df = pd.DataFrame({"val": [1, 2]}, index=pd.date_range("2020-01-01", periods=2, freq="H"))
+    >>> df = pd.DataFrame(
+    ...     {"val": [1, 2]}, index=pd.date_range("2020-01-01", periods=2, freq="H")
+    ... )
     >>> df_to_combitimetable(df, "boundaries.txt")
     # produces a text file compatible with Modelica
     """
@@ -174,7 +176,7 @@ def get_start_stop_year_tz_from_x(x: pd.DataFrame = None):
     --------
     >>> import pandas as pd
     >>> idx = pd.date_range("2020-01-01", periods=3, freq="H", tz="UTC")
-    >>> x = pd.DataFrame({"val": [1,2,3]}, index=idx)
+    >>> x = pd.DataFrame({"val": [1, 2, 3]}, index=idx)
     >>> get_start_stop_year_tz_from_x(x)
     (0.0, 7200.0, 2020, datetime.timezone.utc)
     """
@@ -223,9 +225,11 @@ class ModelicaFmuModel(Model):
     --------
     >>> import pandas as pd
     >>> from corrai.fmu import ModelicaFmuModel
-    >>> model = ModelicaFmuModel("boundary_test.fmu",
+    >>> model = ModelicaFmuModel(
+    ...     "boundary_test.fmu",
     ...     output_list=["Boundaries.y[1]"],
-    ...     boundary_table="Boundaries")
+    ...     boundary_table="Boundaries",
+    ... )
     >>> x = pd.DataFrame({"Boundaries.y[1]": [1, 2, 3]}, index=[0, 1, 2])
     >>> res = model.simulate(simulation_options={"boundary": x, "stepSize": 1})
     """

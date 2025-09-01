@@ -147,7 +147,7 @@ def apply_transformation(x, function):
     >>> apply_transformation(np.array([1, 2, 3]), lambda x: x + 1)
     array([2, 3, 4])
     >>> import pandas as pd
-    >>> apply_transformation(pd.Series([1, 2]), lambda x: x*10)
+    >>> apply_transformation(pd.Series([1, 2]), lambda x: x * 10)
     0    10
     1    20
     dtype: int64

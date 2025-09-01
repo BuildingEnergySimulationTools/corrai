@@ -66,19 +66,19 @@ def run_simulations(
 
 
     >>> class SimpleModel(Model):
-    ...    def __init__(self):
-    ...        self.prop = 1
+    ...     def __init__(self):
+    ...         self.prop = 1
     ...
-    ...    def simulate(
-    ...        self, property_dict=None, simulation_options=None, **simulation_kwargs
-    ...    ):
-    ...        if property_dict is not None:
-    ...            for prop, val in property_dict.items():
-    ...                setattr(self, prop, val)
-    ...        return pd.DataFrame(
-    ...            {"output": self.prop * 2},
-    ...            index=pd.date_range("2020-01-01", periods=5, freq="h"),
-    ...        )
+    ...     def simulate(
+    ...         self, property_dict=None, simulation_options=None, **simulation_kwargs
+    ...     ):
+    ...         if property_dict is not None:
+    ...             for prop, val in property_dict.items():
+    ...                 setattr(self, prop, val)
+    ...         return pd.DataFrame(
+    ...             {"output": self.prop * 2},
+    ...             index=pd.date_range("2020-01-01", periods=5, freq="h"),
+    ...         )
 
 
     >>> model = SimpleModel()

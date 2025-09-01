@@ -201,9 +201,13 @@ class MultiModelSO(BaseEstimator, RegressorMixin):
     >>> data = load_diabetes(as_frame=True)
     >>> X = data.data
     >>> y = data.target
-    >>> X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    >>> X_train, X_test, y_train, y_test = train_test_split(
+    ...     X, y, test_size=0.2, random_state=42
+    ... )
     >>>
-    >>> model = MultiModelSO(models=["LINEAR_REGRESSION", "RANDOM_FOREST"], cv=5, fine_tuning=False)
+    >>> model = MultiModelSO(
+    ...     models=["LINEAR_REGRESSION", "RANDOM_FOREST"], cv=5, fine_tuning=False
+    ... )
     >>> model.fit(X_train, y_train, verbose=True)
     === Training results ===
     Cross validation neg_mean_squared_error scores of 5 folds

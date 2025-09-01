@@ -202,7 +202,7 @@ class Problem(ElementwiseProblem):
         >>> problem = Problem(
         ...     parameters=[param_a, param_b],
         ...     evaluators=[line_model],
-        ...     objective_ids=["y"]
+        ...     objective_ids=["y"],
         ... )
         >>>
         >>> x = [1.0, 5.0]
@@ -269,8 +269,8 @@ def check_duplicate_params(params: list["Parameter"]) -> None:
     Examples
     --------
     >>> from corrai.base.parameter import Parameter
-    >>> p1 = Parameter(name="x1", model_property="a", interval=(0,1))
-    >>> p2 = Parameter(name="x1", model_property="b", interval=(0,1))
+    >>> p1 = Parameter(name="x1", model_property="a", interval=(0, 1))
+    >>> p2 = Parameter(name="x1", model_property="b", interval=(0, 1))
     >>> check_duplicate_params([p1, p2])
     Traceback (most recent call last):
         ...
@@ -421,10 +421,12 @@ class ObjectiveFunction:
         >>> from tests.resources.pymodels import Ishigami
         >>>
         >>> model = Ishigami()
-        >>> param_x = Parameter(name="x", model_property="x",
-        ...                     interval=(-np.pi, np.pi), init_value=2.0)
-        >>> param_y = Parameter(name="y", model_property="y",
-        ...                     interval=(-np.pi, np.pi), init_value=1.0)
+        >>> param_x = Parameter(
+        ...     name="x", model_property="x", interval=(-np.pi, np.pi), init_value=2.0
+        ... )
+        >>> param_y = Parameter(
+        ...     name="y", model_property="y", interval=(-np.pi, np.pi), init_value=1.0
+        ... )
         >>>
         >>> simulation_options = {
         ...     "start": "2000-01-01",
@@ -436,7 +438,7 @@ class ObjectiveFunction:
         ...     model,
         ...     simulation_options,
         ...     parameters=[param_x, param_y],
-        ...     indicators_config={"res": np.mean}
+        ...     indicators_config={"res": np.mean},
         ... )
         >>>
         >>> obj_fun.function(parameter_value_pairs=[(param_x, 2.0), (param_y, 2.0)])
@@ -513,11 +515,11 @@ class ObjectiveFunction:
         ...     model,
         ...     simulation_options,
         ...     parameters=[param_x],
-        ...     indicators_config={"res": np.mean}
+        ...     indicators_config={"res": np.mean},
         ... )
-        >>> res = minimize_scalar(obj_fun.scipy_obj_function,
-        ...                       bounds=obj_fun.bounds[0],
-        ...                       method="bounded")
+        >>> res = minimize_scalar(
+        ...     obj_fun.scipy_obj_function, bounds=obj_fun.bounds[0], method="bounded"
+        ... )
         >>> res.fun
         13.445138634774501
         """
