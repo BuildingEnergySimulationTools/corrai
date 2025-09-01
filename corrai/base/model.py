@@ -78,7 +78,7 @@ class Model(ABC):
         self,
         property_dict: dict[str, str | int | float] = None,
         simulation_options: dict = None,
-        simulation_kwargs: dict = None,
+        **simulation_kwargs,
     ) -> pd.DataFrame:
         """
         Run a simulation for given properties and options.
@@ -132,12 +132,10 @@ class Model(ABC):
         return self.simulate(
             self.get_property_from_param(parameter_value_pairs),
             simulation_options,
-            simulation_kwargs,
+            **{} if simulation_kwargs is None else simulation_kwargs,
         )
 
-    def get_property_values(
-        self, property_list: list[str]
-    ) -> list[str | int | float]:
+    def get_property_values(self, property_list: list[str]) -> list[str | int | float]:
         """
         Retrieve current values of given properties from the model.
 

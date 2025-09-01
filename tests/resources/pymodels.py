@@ -17,7 +17,7 @@ class Pymodel(Model):
         self,
         property_dict: dict[str, str | int | float] = None,
         simulation_options: dict = None,
-        simulation_kwargs: dict = None,
+        **simulation_kwargs,
     ) -> pd.DataFrame:
         if property_dict is not None:
             for prop, val in property_dict.items():
