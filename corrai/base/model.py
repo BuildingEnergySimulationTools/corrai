@@ -81,7 +81,7 @@ class Model(ABC):
         simulation_kwargs: dict = None,
     ) -> pd.DataFrame:
         """
-        Run a simulation for given parameters and options.
+        Run a simulation for given properties and options.
 
         Must be implemented in subclasses.
 
@@ -126,7 +126,8 @@ class Model(ABC):
         Returns
         -------
         pd.DataFrame
-            Results of the simulation run.
+            Simulation results as a DataFrame with a DateTimeIndex and one
+            or more output columns.
         """
         return self.simulate(
             self.get_property_from_param(parameter_value_pairs),

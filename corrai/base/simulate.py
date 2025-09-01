@@ -22,13 +22,11 @@ def run_simulations(
     of (Parameter, value) pairs that specify which model properties to update
     before running the simulation.
 
-    A progress bar is displayed using `fastprogress` to track the simulations.
-
     Parameters
     ----------
     model : Model
         An instance of a subclass of :class:`corrai.base.model.Model`.
-        Must implement the method `simulate_parameter`.
+        Must implement the method `simulate`.
     list_parameter_value_pairs : list of list of (Parameter, value)
         A list where each element corresponds to one simulation run.
         Each simulation run is represented as a list of tuples:
@@ -57,24 +55,29 @@ def run_simulations(
     Notes
     -----
     - Simulations are executed in parallel using `joblib.Parallel`.
-    - A progress bar is displayed with `fastprogress`.
-    - The model must implement :meth:`Model.simulate_parameter`.
+    - The model must implement :meth:`Model.simulate`.
 
     Examples
     --------
     >>> from corrai.base.model import Model
     >>> from corrai.base.parameter import Parameter
+    >>> from corrai.base.simulate import run_simulations
     >>> import pandas as pd
 
     >>> class SimpleModel(Model):
+    ...     def __init__(self):
+    ...         self.prop = 1
+    ...
     ...     def simulate(self, property_dict=None, simulation_options=None, **kwargs):
-    ...         # Simple example: return a constant series
+    ...         if property_dict is not None:
+    ...             for prop, val in property_dict.items():
+    ...                 setattr(self, prop, val)
     ...         return pd.DataFrame(
-    ...             {"output": [property_dict.get("x", 0)] * 2},
+    ...             {"output": self.prop * 2},
     ...             index=pd.date_range("2020-01-01", periods=5, freq="h")
     ...         )
 
-    >>> param_x = Parameter(name="x", interval=(0, 1))
+    >>> param_x = Parameter(name="x", interval=(0, 1), model_property="prop")
     >>> model = SimpleModel()
     >>> param_sets = [[(param_x, 0.1)], [(param_x, 0.5)], [(param_x, 0.9)]]
 
