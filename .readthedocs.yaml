@@ -28,5 +28,5 @@ python:
       path: .
       extra_requirements:
         - dev
-    - requirements: requirements/dev.txt
+    - requirements: requirements/docs.txt
 
