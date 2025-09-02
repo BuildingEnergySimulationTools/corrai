@@ -140,6 +140,7 @@ class TestSample:
             show_legends=True,
             parameter_values=param_values,
             parameter_names=param_names,
+            type_graph="scatter",
         )
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 4
@@ -155,19 +156,21 @@ class TestSample:
         )
         results_multi = pd.Series([df_multi])
         with pytest.raises(ValueError, match="Provide `indicator`: multiple columns"):
-            plot_sample(results=results_multi)
+            plot_sample(results=results_multi, type_graph="scatter")
         fig_a = plot_sample(results=results_multi, indicator="a")
         y_values = np.array(fig_a.data[0].y)
         np.testing.assert_allclose(y_values, df_multi["a"].to_numpy())
 
         # empty Series
         with pytest.raises(ValueError):
-            plot_sample(results=pd.Series(dtype=object))
+            plot_sample(results=pd.Series(dtype=object), type_graph="scatter")
 
         # Partial simulation
         empty_df = pd.DataFrame({"res": []})
         results_partial = pd.Series([empty_df, df1, empty_df])
-        fig_partial = plot_sample(results=results_partial, indicator="res")
+        fig_partial = plot_sample(
+            results=results_partial, indicator="res", type_graph="scatter"
+        )
 
         # Only 1 non-empty sample
         assert len(fig_partial.data) == 1
@@ -176,14 +179,39 @@ class TestSample:
         # All results empty and no reference
         results_all_empty = pd.Series([empty_df, empty_df])
         with pytest.raises(ValueError, match="No simulated data available to plot."):
-            plot_sample(results_all_empty, indicator="res")
+            plot_sample(results_all_empty, indicator="res", type_graph="scatter")
 
         # All results empty but with reference
         fig_ref_only = plot_sample(
-            results_all_empty, indicator="res", reference_timeseries=ref
+            results_all_empty,
+            indicator="res",
+            reference_timeseries=ref,
+            type_graph="scatter",
         )
         assert len(fig_ref_only.data) == 1
         np.testing.assert_allclose(fig_ref_only.data[0]["y"], ref.to_numpy())
+
+    def test_plot_sample_area(self):
+        t = pd.date_range("2025-01-01 00:00:00", periods=3, freq="h")
+        df1 = pd.DataFrame({"res": [1.0, 2.0, 3.0]}, index=t)
+        df2 = pd.DataFrame({"res": [2.0, 3.0, 4.0]}, index=t)
+        df3 = pd.DataFrame({"res": [3.0, 4.0, 5.0]}, index=t)
+        results = pd.Series([df1, df2, df3])
+        ref = pd.Series([2.0, 2.5, 3.0], index=t)
+
+        fig = plot_sample(
+            results=results,
+            reference_timeseries=ref,
+            type_graph="area",
+        )
+        assert isinstance(fig, go.Figure)
+        assert len(fig.data) == 6
+        np.testing.assert_allclose(fig.data[-1]["y"], ref.to_numpy())
+        assert fig.data[-1].name == "Reference"
+
+        names = [tr.name for tr in fig.data]
+        assert "Median" in names
+        assert "Quantiles" in names
 
     def test_plot_sample_in_sampler(self):
         sampler = LHSSampler(
@@ -201,8 +229,8 @@ class TestSample:
             y_label="value",
             alpha=0.3,
             show_legends=True,
+            type_graph="scatter",
         )
-        fig.show()
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 3
         assert fig.layout.title.text == "test"
@@ -218,6 +246,7 @@ class TestSample:
             results=results,
             reference_timeseries=ref,
             show_legends=False,
+            type_graph="scatter",
         )
         assert len(fig.data) == 2
 
