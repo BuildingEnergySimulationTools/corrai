@@ -916,7 +916,7 @@ def plot_sample(
                     line=dict(width=0),
                     mode="lines",
                     fill="tonexty",
-                    name="Area min–max",
+                    name="Area min - max",
                     fillcolor="rgba(255,165,0,0.4)",
                     showlegend=True,
                 )
@@ -978,7 +978,7 @@ def plot_sample(
     # === titre auto si pas fourni ===
     if title is None:
         if indicator is not None:
-            title = f"Sample plot of {indicator}"
+            title = f"Sample plot of {indicator} indicator"
         else:
             title = "Sample plot"
 
