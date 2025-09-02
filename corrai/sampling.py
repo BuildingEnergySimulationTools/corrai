@@ -289,7 +289,7 @@ class Sample:
         round_ndigits: int = 2,
     ) -> go.Figure:
         if self.results is None:
-            raise ValueError("No results available to plot." " Run a simulation first.")
+            raise ValueError("No results available to plot. Run a simulation first.")
 
         return plot_sample(
             results=self.results,
@@ -426,6 +426,8 @@ class Sampler(ABC):
         parameter_values: np.ndarray | None = None,
         parameter_names: list[str] | None = None,
         round_ndigits: int = 2,
+        quantile_band: float = 0.75,
+        type_graph: str = "area",
     ) -> go.Figure:
         if parameter_values is None:
             parameter_values = self.values
@@ -444,6 +446,8 @@ class Sampler(ABC):
             parameter_values=parameter_values,
             parameter_names=parameter_names,
             round_ndigits=round_ndigits,
+            quantile_band=quantile_band,
+            type_graph=type_graph,
         )
 
     def plot_pcp(
@@ -757,40 +761,66 @@ def plot_sample(
     parameter_values: np.ndarray | None = None,
     parameter_names: list[str] | None = None,
     round_ndigits: int = 2,
+    quantile_band: float = 0.75,
+    type_graph: str = "area",
 ) -> go.Figure:
     """
-    Plot all available (non-empty) simulation results contained in a Series, optionally
-    annotating each trace legend with the corresponding parameter values.
+    Plot simulation results with different visualization modes.
+
+    This function allows visualization of multiple simulation samples,
+    either as a scatter plot of all samples or as an aggregated area
+    with min–max envelope, median, and quantile bands.
 
     Parameters
     ----------
-    results : pd.Series
-        A pandas Series where each element is either a pandas Series or a pandas DataFrame
-        (typically 1 column per indicator). Empty elements are ignored.
+    results : pandas.Series
+        A Series where each element is either a pandas Series or
+        a pandas DataFrame containing simulation results. Empty
+        elements are ignored.
     indicator : str, optional
-        Column name to use if inner elements are DataFrames with multiple columns.
-        If None and the DataFrame has exactly one column, that column is used.
-    reference_timeseries : pd.Series, optional
-        A reference time series to plot alongside simulations.
-    title, y_label, x_label : str, optional
-        Plot title and axis labels.
-    alpha : float, default 0.5
-        Opacity for the markers.
-    show_legends : bool, default False
-        Whether to show a legend per sample trace.
-    parameter_values : np.ndarray, optional
-        Array of shape (n_samples, n_params) with the parameter values used per sample.
-        Only used to build legend strings when `show_legends=True`.
-    parameter_names : list[str], optional
-        Names of the parameters (same order as in `parameter_values`).
-    round_ndigits : int, default 2
+        Column name to extract if inner elements are DataFrames
+        with multiple columns. If ``None`` and the DataFrame has
+        exactly one column, that column is used.
+    reference_timeseries : pandas.Series, optional
+        A reference time series to plot alongside simulations
+        (e.g., measured data).
+    title : str, optional
+        Plot title.
+    y_label : str, optional
+        Label for the y-axis.
+    x_label : str, optional
+        Label for the x-axis.
+    alpha : float, default=0.5
+        Opacity for scatter markers when ``type_graph="scatter"``.
+    show_legends : bool, default=False
+        Whether to display legends for each individual sample trace
+        when ``type_graph="scatter"``.
+    parameter_values : numpy.ndarray, optional
+        Array of shape (n_samples, n_params) with the parameter values
+        used per sample. Only used for legend strings when
+        ``show_legends=True``.
+    parameter_names : list of str, optional
+        Names of the parameters (same order as in ``parameter_values``).
+    round_ndigits : int, default=2
         Number of digits for rounding parameter values in legend strings.
+    quantile_band : float, default=0.75
+        Upper quantile to display when ``type_graph="area"``.
+        Both ``(1 - quantile_band)`` and ``quantile_band`` are drawn
+        as dotted lines, e.g. ``0.75`` → 25% and 75%.
+    type_graph : {"area", "scatter"}, default="area"
+        Visualization mode:
+        - ``"scatter"`` : plot all samples individually as scatter markers.
+        - ``"area"`` : plot aggregated area with min–max envelope,
+          median line, and quantile bands.
 
-    Returns
-    -------
-    go.Figure
+    Examples
+    --------
+    >>> fig = plot_sample(results, reference_timeseries=ref)
+    >>> fig.show()
+
+    >>> fig = plot_sample(results, reference_timeseries=ref, type_graph="scatter")
+    >>> fig.show()
     """
-
     if not isinstance(results, pd.Series):
         raise ValueError("`results` must be a pandas Series.")
     if results.empty:
@@ -819,51 +849,145 @@ def plot_sample(
         if not show_legends:
             return "Simulations"
         if parameter_values is None or parameter_names is None:
-            return f"sample {i}"
+            return f"Sample {i}"
         vals = parameter_values[i]
         return ", ".join(
             f"{n}: {round(v, round_ndigits)}" for n, v in zip(parameter_names, vals)
         )
 
     fig = go.Figure()
-    plotted = 0
+    series_list = []
+    df_all = None
 
-    for i, sample in enumerate(results):
+    for sample in results:
         s = _to_series(sample, indicator, ref_name)
         if s is None or s.empty:
             continue
-        fig.add_trace(
-            go.Scattergl(
-                name=_legend_for(i),
-                mode="markers",
-                x=s.index,
-                y=s.to_numpy(),
-                marker=dict(color=f"rgba(135,135,135,{alpha})"),
-                showlegend=show_legends,
-            )
-        )
-        plotted += 1
+        series_list.append(s)
 
-    if plotted == 0 and reference_timeseries is None:
+    if not series_list and reference_timeseries is None:
         raise ValueError("No simulated data available to plot.")
 
-    if reference_timeseries is not None:
-        fig.add_trace(
-            go.Scattergl(
-                name="Reference",
-                mode="lines",
-                x=reference_timeseries.index,
-                y=reference_timeseries.to_numpy(),
-                marker=dict(color="red"),
-                showlegend=True,
+    if type_graph == "scatter":
+        for i, s in enumerate(series_list):
+            fig.add_trace(
+                go.Scattergl(
+                    name=_legend_for(i),
+                    mode="markers",
+                    x=s.index,
+                    y=s.to_numpy(),
+                    marker=dict(color=f"rgba(135,135,135,{alpha})"),
+                    showlegend=show_legends,
+                )
             )
-        )
+        if reference_timeseries is not None:
+            fig.add_trace(
+                go.Scatter(
+                    name="Reference",
+                    mode="lines",
+                    x=reference_timeseries.index,
+                    y=reference_timeseries.to_numpy(),
+                    line=dict(color="red"),
+                    showlegend=True,
+                )
+            )
+
+    elif type_graph == "area":
+        df_all = pd.concat(series_list, axis=1) if series_list else None
+
+        if df_all is not None:
+            lower = df_all.min(axis=1)
+            upper = df_all.max(axis=1)
+
+            fig.add_trace(
+                go.Scatter(
+                    x=upper.index,
+                    y=upper.values,
+                    line=dict(width=0),
+                    mode="lines",
+                    name="max",
+                    showlegend=False,
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=lower.index,
+                    y=lower.values,
+                    line=dict(width=0),
+                    mode="lines",
+                    fill="tonexty",
+                    name="Area min–max",
+                    fillcolor="rgba(255,165,0,0.4)",
+                    showlegend=True,
+                )
+            )
+
+            median = df_all.median(axis=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=median.index,
+                    y=median.values,
+                    mode="lines",
+                    line=dict(color="black"),
+                    name="Median",
+                    showlegend=True,
+                )
+            )
+
+            q_low = 1 - quantile_band
+            q_high = quantile_band
+            q1 = df_all.quantile(q_low, axis=1)
+            q2 = df_all.quantile(q_high, axis=1)
+
+            fig.add_trace(
+                go.Scatter(
+                    x=q1.index,
+                    y=q1.values,
+                    mode="lines",
+                    line=dict(color="black", dash="dot"),
+                    name="Quantiles",
+                    showlegend=False,
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=q2.index,
+                    y=q2.values,
+                    mode="lines",
+                    line=dict(color="black", dash="dot"),
+                    name="Quantiles",
+                    showlegend=True,
+                )
+            )
+
+        if reference_timeseries is not None:
+            fig.add_trace(
+                go.Scatter(
+                    name="Reference",
+                    mode="lines",
+                    x=reference_timeseries.index,
+                    y=reference_timeseries.to_numpy(),
+                    line=dict(color="red"),
+                    showlegend=True,
+                )
+            )
+
+    else:
+        raise ValueError("`type_graph` must be either 'area' or 'scatter'.")
+
+    # === titre auto si pas fourni ===
+    if title is None:
+        if indicator is not None:
+            title = f"Sample plot of {indicator}"
+        else:
+            title = "Sample plot"
 
     fig.update_layout(
         title=title,
         xaxis_title=x_label,
         yaxis_title=y_label,
-        showlegend=show_legends or (reference_timeseries is not None),
+        showlegend=True,
+        legend_traceorder="normal",
     )
     return fig
 

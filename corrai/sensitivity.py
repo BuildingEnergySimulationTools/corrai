@@ -96,20 +96,23 @@ class Sanalysis(ABC):
         parameter_values: np.ndarray | None = None,
         parameter_names: list[str] | None = None,
         round_ndigits: int = 2,
+        quantile_band: float = 0.75,
+        type_graph: str = "area",
     ) -> go.Figure:
         """
-        Plot all available simulation runs against an optional reference time series.
+        Plot simulation runs against an optional reference time series.
 
         This method wraps :meth:`Sampler.plot_sample` and plots the simulations
-        associated with this sensitivity analysis instance. Each run is displayed
-        as a scatter trace, optionally annotated with parameter values.
+        associated with this sensitivity analysis instance. It supports both
+        scatter plots of all runs or aggregated area plots with envelopes,
+        quantiles, and median.
 
         Parameters
         ----------
         indicator : str, optional
             Column name to select if simulation outputs are DataFrames with multiple
             columns. If None and a DataFrame has a single column, that column is used.
-        reference_timeseries : pd.Series, optional
+        reference_timeseries : pandas.Series, optional
             A time series to plot as ground truth or reference, shown as a red line.
         title : str, optional
             Plot title.
@@ -118,21 +121,30 @@ class Sanalysis(ABC):
         x_label : str, optional
             Label for the x-axis.
         alpha : float, default=0.5
-            Opacity for the sample markers.
+            Opacity for scatter markers when ``type_graph='scatter'``.
         show_legends : bool, default=False
-            Whether to display a legend entry for each sample.
-        parameter_values : np.ndarray, optional
+            Whether to display a legend entry for each sample trace.
+        parameter_values : numpy.ndarray, optional
             Custom parameter values for legend annotation. If None, values from
-            this Sanalysis instance are used.
+            this analysis instance are used.
         parameter_names : list of str, optional
-            Custom parameter names. If None, names from this Sanalysis instance are used.
+            Custom parameter names. If None, names from this analysis instance are used.
         round_ndigits : int, default=2
             Number of decimal digits for rounding parameter values in legends.
+        quantile_band : float, default=0.75
+            Upper quantile to display when ``type_graph='area'``.
+            Both ``(1 - quantile_band)`` and ``quantile_band`` are drawn
+            as dotted lines (e.g. 0.75 → 25% and 75%).
+        type_graph : {"area", "scatter"}, default="area"
+            Visualization mode:
+            - ``"scatter"`` : plot all runs individually as scatter markers.
+            - ``"area"`` : plot aggregated area with min–max envelope,
+              median line, and quantile bands.
 
         Returns
         -------
-        go.Figure
-            A Plotly Figure containing the sample simulations and optional reference.
+        plotly.graph_objects.Figure
+            A Plotly Figure containing the simulation runs and optional reference.
         """
         return self.sampler.plot_sample(
             indicator=indicator,
@@ -145,6 +157,8 @@ class Sanalysis(ABC):
             parameter_values=parameter_values,
             parameter_names=parameter_names,
             round_ndigits=round_ndigits,
+            quantile_band=quantile_band,
+            type_graph=type_graph,
         )
 
     def plot_pcp(
@@ -517,8 +531,7 @@ class Sanalysis(ABC):
             Heatmap or matrix visualization of 2nd-order indices.
         """
         title = (
-            f"{sensitivity_method_name} {method} {indicator} "
-            f"- 2nd order interactions"
+            f"{sensitivity_method_name} {method} {indicator} - 2nd order interactions"
             if title is None
             else title
         )
