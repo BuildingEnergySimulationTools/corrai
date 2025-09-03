@@ -55,7 +55,7 @@ class TestSample:
             indicator="res",
             method="mean",
             unit="J",
-            bin_size=0.5,
+            bins=10,
             colors="orange",
             reference_value=70,
             show_rug=True,
