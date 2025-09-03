@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from functools import wraps
 
 import datetime as dt
 import numpy as np
@@ -7,6 +8,7 @@ import plotly.graph_objects as go
 from SALib.analyze import morris, sobol, fast, rbd_fast
 from corrai.base.parameter import Parameter
 from corrai.sampling import (
+    Sample,
     SobolSampler,
     MorrisSampler,
     FASTSampler,
@@ -83,6 +85,35 @@ class Sanalysis(ABC):
     @property
     def results(self):
         return self.sampler.results
+
+    @wraps(Sample.plot_hist)
+    def plot_sample_hist(
+        self,
+        indicator: str,
+        method: str = "mean",
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        bins: int = 30,
+        colors: str = "orange",
+        reference_value: int | float = None,
+        reference_label: str = "Reference",
+        show_rug: bool = False,
+        title: str = None,
+    ):
+        return self.sampler.sample.plot_hist(
+            indicator=indicator,
+            method=method,
+            unit=unit,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            bins=bins,
+            colors=colors,
+            reference_value=reference_value,
+            reference_label=reference_label,
+            show_rug=show_rug,
+            title=title,
+        )
 
     def plot_sample(
         self,

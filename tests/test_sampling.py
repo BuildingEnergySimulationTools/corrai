@@ -57,6 +57,7 @@ class TestSample:
             unit="J",
             bin_size=0.5,
             colors="orange",
+            reference_value=70,
             show_rug=True,
         )
 
