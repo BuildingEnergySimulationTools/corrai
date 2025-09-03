@@ -217,8 +217,10 @@ class Sample:
         unit: str = "",
         agg_method_kwarg: dict = None,
         reference_time_series: pd.Series = None,
-        bin_size: float = 1.0,
+        bins: int = 30,
         colors: str = "orange",
+        reference_value: int | float = None,
+        reference_label: str = "Reference",
         show_rug: bool = False,
         title: str = None,
     ):
@@ -237,10 +239,16 @@ class Sample:
             Additional kwargs for aggregation.
         reference_time_series : Series, optional
             Reference time series.
-        bin_size : float, default=1.0
-            Histogram bin size.
+        bins : int, default=30
+            Histogram number of bins.
         colors : str, default="orange"
             Color of the histogram.
+        reference_value: int, float, optional
+            Add a vertical dashed red line at reference value.
+            May be used for comparison with an expected value
+        reference_label: str, optional
+            Label name for reference value line to be displayed in the legend.
+            Default is "Reference"
         show_rug : bool, default=False
             If True, display rug plot below histogram.
         title : str, optional
@@ -263,11 +271,26 @@ class Sample:
         fig = ff.create_distplot(
             [res.squeeze().to_numpy()],
             [f"{method}_{indicator}"],
-            bin_size=bin_size,
+            bin_size=(res.max() - res.min()) / bins,
             colors=[colors],
             show_rug=show_rug,
         )
 
+        if reference_value is not None:
+            counts, _ = np.histogram(res, bins=bins, density=True)
+
+            fig.add_trace(
+                go.Scatter(
+                    x=[reference_value, reference_value],
+                    y=[0, max(counts)],
+                    mode="lines",
+                    line=dict(color="red", width=2, dash="dash"),
+                    name=reference_label,
+                )
+            )
+
+            # Make sure it spans the full y-axis range
+            fig.update_yaxes(range=[0, None])  # auto from 0 to max
         title = (
             f"Sample distribution of {method} {indicator}" if title is None else title
         )

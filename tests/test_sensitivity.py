@@ -50,6 +50,10 @@ class TestSensitivity:
             pd.Timestamp("2009-01-01 05:00:00"),
         ]
 
+        sobol_analysis.plot_sample_hist(
+            "res", bins=10, reference_value=10, reference_label="ref"
+        )
+
         np.testing.assert_almost_equal(
             res["2009-01-01 00:00:00"]["S1"],
             np.array([0.33080399, 0.44206835, 0.00946747]),
