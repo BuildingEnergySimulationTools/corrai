@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from functools import wraps
 
 import numpy as np
 import pandas as pd
@@ -17,6 +18,317 @@ from corrai.base.parameter import Parameter
 from corrai.base.model import Model
 from corrai.base.math import aggregate_time_series
 from corrai.base.simulate import run_simulations
+
+
+def plot_sample(
+    results: pd.Series,
+    indicator: str | None = None,
+    reference_timeseries: pd.Series | None = None,
+    title: str | None = None,
+    y_label: str | None = None,
+    x_label: str | None = None,
+    alpha: float = 0.5,
+    show_legends: bool = False,
+    parameter_values: np.ndarray | None = None,
+    parameter_names: list[str] | None = None,
+    round_ndigits: int = 2,
+    quantile_band: float = 0.75,
+    type_graph: str = "area",
+) -> go.Figure:
+    """
+    Plot simulation results with different visualization modes.
+
+    This function allows visualization of multiple simulation samples,
+    either as a scatter plot of all samples or as an aggregated area
+    with min–max envelope, median, and quantile bands.
+
+    Parameters
+    ----------
+    results : pandas.Series
+        A Series where each element is either a pandas Series or
+        a pandas DataFrame containing simulation results. Empty
+        elements are ignored.
+    indicator : str, optional
+        Column name to extract if inner elements are DataFrames
+        with multiple columns. If ``None`` and the DataFrame has
+        exactly one column, that column is used.
+    reference_timeseries : pandas.Series, optional
+        A reference time series to plot alongside simulations
+        (e.g., measured data).
+    title : str, optional
+        Plot title.
+    y_label : str, optional
+        Label for the y-axis.
+    x_label : str, optional
+        Label for the x-axis.
+    alpha : float, default=0.5
+        Opacity for scatter markers when ``type_graph="scatter"``.
+    show_legends : bool, default=False
+        Whether to display legends for each individual sample trace
+        when ``type_graph="scatter"``.
+    parameter_values : numpy.ndarray, optional
+        Array of shape (n_samples, n_params) with the parameter values
+        used per sample. Only used for legend strings when
+        ``show_legends=True``.
+    parameter_names : list of str, optional
+        Names of the parameters (same order as in ``parameter_values``).
+    round_ndigits : int, default=2
+        Number of digits for rounding parameter values in legend strings.
+    quantile_band : float, default=0.75
+        Upper quantile to display when ``type_graph="area"``.
+        Both ``(1 - quantile_band)`` and ``quantile_band`` are drawn
+        as dotted lines, e.g. ``0.75`` → 25% and 75%.
+    type_graph : {"area", "scatter"}, default="area"
+        Visualization mode:
+        - ``"scatter"`` : plot all samples individually as scatter markers.
+        - ``"area"`` : plot aggregated area with min–max envelope,
+          median line, and quantile bands.
+
+    Examples
+    --------
+    >>> fig = plot_sample(results, reference_timeseries=ref)
+    >>> fig.show()
+
+    >>> fig = plot_sample(results, reference_timeseries=ref, type_graph="scatter")
+    >>> fig.show()
+    """
+    if not isinstance(results, pd.Series):
+        raise ValueError("`results` must be a pandas Series.")
+    if results.empty:
+        raise ValueError("`results` is empty. Simulate samples first.")
+
+    ref_name = getattr(reference_timeseries, "name", None)
+
+    def _to_series(obj, indicator_, ref_name_):
+        if isinstance(obj, pd.Series):
+            return obj
+        if isinstance(obj, pd.DataFrame):
+            if obj.empty:
+                return None
+            if indicator_ is not None:
+                return obj[indicator_]
+            if ref_name_ is not None and ref_name_ in obj.columns:
+                return obj[ref_name_]
+            if obj.shape[1] == 1:
+                return obj.iloc[:, 0]
+            raise ValueError(
+                "Provide `indicator`: multiple columns in the sample DataFrame."
+            )
+        return None
+
+    def _legend_for(i: int) -> str:
+        if not show_legends:
+            return "Simulations"
+        if parameter_values is None or parameter_names is None:
+            return f"Sample {i}"
+        vals = parameter_values[i]
+        return ", ".join(
+            f"{n}: {round(v, round_ndigits)}" for n, v in zip(parameter_names, vals)
+        )
+
+    fig = go.Figure()
+    series_list = []
+    df_all = None
+
+    for sample in results:
+        s = _to_series(sample, indicator, ref_name)
+        if s is None or s.empty:
+            continue
+        series_list.append(s)
+
+    if not series_list and reference_timeseries is None:
+        raise ValueError("No simulated data available to plot.")
+
+    if type_graph == "scatter":
+        for i, s in enumerate(series_list):
+            fig.add_trace(
+                go.Scattergl(
+                    name=_legend_for(i),
+                    mode="markers",
+                    x=s.index,
+                    y=s.to_numpy(),
+                    marker=dict(color=f"rgba(135,135,135,{alpha})"),
+                    showlegend=show_legends,
+                )
+            )
+        if reference_timeseries is not None:
+            fig.add_trace(
+                go.Scatter(
+                    name="Reference",
+                    mode="lines",
+                    x=reference_timeseries.index,
+                    y=reference_timeseries.to_numpy(),
+                    line=dict(color="red"),
+                    showlegend=True,
+                )
+            )
+
+    elif type_graph == "area":
+        df_all = pd.concat(series_list, axis=1) if series_list else None
+
+        if df_all is not None:
+            lower = df_all.min(axis=1)
+            upper = df_all.max(axis=1)
+
+            fig.add_trace(
+                go.Scatter(
+                    x=upper.index,
+                    y=upper.values,
+                    line=dict(width=0),
+                    mode="lines",
+                    name="max",
+                    showlegend=False,
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=lower.index,
+                    y=lower.values,
+                    line=dict(width=0),
+                    mode="lines",
+                    fill="tonexty",
+                    name="Area min - max",
+                    fillcolor="rgba(255,165,0,0.4)",
+                    showlegend=True,
+                )
+            )
+
+            median = df_all.median(axis=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=median.index,
+                    y=median.values,
+                    mode="lines",
+                    line=dict(color="black"),
+                    name="Median",
+                    showlegend=True,
+                )
+            )
+
+            q_low = 1 - quantile_band
+            q_high = quantile_band
+            q1 = df_all.quantile(q_low, axis=1)
+            q2 = df_all.quantile(q_high, axis=1)
+
+            fig.add_trace(
+                go.Scatter(
+                    x=q1.index,
+                    y=q1.values,
+                    mode="lines",
+                    line=dict(color="black", dash="dot"),
+                    name="Quantiles",
+                    showlegend=False,
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=q2.index,
+                    y=q2.values,
+                    mode="lines",
+                    line=dict(color="black", dash="dot"),
+                    name="Quantiles",
+                    showlegend=True,
+                )
+            )
+
+        if reference_timeseries is not None:
+            fig.add_trace(
+                go.Scatter(
+                    name="Reference",
+                    mode="lines",
+                    x=reference_timeseries.index,
+                    y=reference_timeseries.to_numpy(),
+                    line=dict(color="red"),
+                    showlegend=True,
+                )
+            )
+
+    else:
+        raise ValueError("`type_graph` must be either 'area' or 'scatter'.")
+
+    # === titre auto si pas fourni ===
+    if title is None:
+        if indicator is not None:
+            title = f"Sample plot of {indicator} indicator"
+        else:
+            title = "Sample plot"
+
+    fig.update_layout(
+        title=title,
+        xaxis_title=x_label,
+        yaxis_title=y_label,
+        showlegend=True,
+        legend_traceorder="normal",
+    )
+    return fig
+
+
+def plot_pcp(
+    parameter_values: np.ndarray,
+    parameter_names: list[str],
+    aggregated_results: pd.DataFrame,
+    *,
+    bounds: list[tuple[float, float]] | None = None,
+    color_by: str | None = None,
+    title: str | None = "Parallel Coordinates — Samples",
+    html_file_path: str | None = None,
+) -> go.Figure:
+    """
+    Creates a Parallel Coordinates Plot (PCP) for parameter samples and aggregated indicators.
+    Each vertical axis corresponds to a parameter or an aggregated indicator,
+    and each polyline represents one simulation.
+    """
+
+    if parameter_values.shape[0] != len(aggregated_results):
+        raise ValueError("Mismatch between number of samples and aggregated results.")
+    if len(parameter_names) != parameter_values.shape[1]:
+        raise ValueError(
+            "`parameter_names` length must match parameter_values.shape[1]."
+        )
+
+    df = pd.DataFrame(
+        parameter_values, columns=parameter_names, index=aggregated_results.index
+    )
+    df = pd.concat([df, aggregated_results], axis=1)
+
+    if color_by is None:
+        if not aggregated_results.empty:
+            color_by = aggregated_results.columns[0]
+        else:
+            color_by = parameter_names[0]
+
+    dimensions = []
+    for j, pname in enumerate(parameter_names):
+        dim = {"label": pname, "values": df[pname].to_numpy()}
+        if bounds is not None:
+            lb, ub = bounds[j]
+            dim["range"] = [lb, ub]
+        dimensions.append(dim)
+
+    for col in aggregated_results.columns:
+        col_vals = df[col].to_numpy()
+        if np.all(np.isnan(col_vals)):
+            dim = {"label": col, "values": col_vals}
+        else:
+            vmin = float(np.nanmin(col_vals))
+            vmax = float(np.nanmax(col_vals))
+            if np.isfinite(vmin) and np.isfinite(vmax) and vmin != vmax:
+                dim = {"label": col, "values": col_vals, "range": [vmin, vmax]}
+            else:
+                dim = {"label": col, "values": col_vals}
+        dimensions.append(dim)
+
+    line_kwargs = {}
+    if color_by is not None and color_by in df.columns:
+        line_kwargs = dict(color=df[color_by], colorscale="Viridis", showscale=True)
+
+    fig = go.Figure(data=go.Parcoords(dimensions=dimensions, line=line_kwargs))
+    fig.update_layout(title=title)
+
+    if html_file_path:
+        fig.write_html(html_file_path)
+
+    return fig
 
 
 @dataclass
@@ -300,6 +612,7 @@ class Sample:
         )
         return fig
 
+    @wraps(plot_sample)
     def plot(
         self,
         indicator: str | None = None,
@@ -310,6 +623,8 @@ class Sample:
         alpha: float = 0.5,
         show_legends: bool = False,
         round_ndigits: int = 2,
+        quantile_band: float = 0.75,
+        type_graph: str = "area",
     ) -> go.Figure:
         if self.results is None:
             raise ValueError("No results available to plot. Run a simulation first.")
@@ -326,6 +641,8 @@ class Sample:
             parameter_values=self.values,
             parameter_names=[p.name for p in self.parameters],
             round_ndigits=round_ndigits,
+            quantile_band=quantile_band,
+            type_graph=type_graph,
         )
 
 
@@ -437,6 +754,7 @@ class Sampler(ABC):
         unsimulated_idx = self.sample.get_pending_index()
         self.simulate_at(unsimulated_idx, n_cpu, simulation_kwargs)
 
+    @wraps(Sample.plot)
     def plot_sample(
         self,
         indicator: str | None = None,
@@ -770,314 +1088,3 @@ class SobolSampler(RealSampler):
             **sobol_kwargs,
         )
         self._post_draw_sample(new_sample, simulate, n_cpu, sample_is_dimless=False)
-
-
-def plot_sample(
-    results: pd.Series,
-    indicator: str | None = None,
-    reference_timeseries: pd.Series | None = None,
-    title: str | None = None,
-    y_label: str | None = None,
-    x_label: str | None = None,
-    alpha: float = 0.5,
-    show_legends: bool = False,
-    parameter_values: np.ndarray | None = None,
-    parameter_names: list[str] | None = None,
-    round_ndigits: int = 2,
-    quantile_band: float = 0.75,
-    type_graph: str = "area",
-) -> go.Figure:
-    """
-    Plot simulation results with different visualization modes.
-
-    This function allows visualization of multiple simulation samples,
-    either as a scatter plot of all samples or as an aggregated area
-    with min–max envelope, median, and quantile bands.
-
-    Parameters
-    ----------
-    results : pandas.Series
-        A Series where each element is either a pandas Series or
-        a pandas DataFrame containing simulation results. Empty
-        elements are ignored.
-    indicator : str, optional
-        Column name to extract if inner elements are DataFrames
-        with multiple columns. If ``None`` and the DataFrame has
-        exactly one column, that column is used.
-    reference_timeseries : pandas.Series, optional
-        A reference time series to plot alongside simulations
-        (e.g., measured data).
-    title : str, optional
-        Plot title.
-    y_label : str, optional
-        Label for the y-axis.
-    x_label : str, optional
-        Label for the x-axis.
-    alpha : float, default=0.5
-        Opacity for scatter markers when ``type_graph="scatter"``.
-    show_legends : bool, default=False
-        Whether to display legends for each individual sample trace
-        when ``type_graph="scatter"``.
-    parameter_values : numpy.ndarray, optional
-        Array of shape (n_samples, n_params) with the parameter values
-        used per sample. Only used for legend strings when
-        ``show_legends=True``.
-    parameter_names : list of str, optional
-        Names of the parameters (same order as in ``parameter_values``).
-    round_ndigits : int, default=2
-        Number of digits for rounding parameter values in legend strings.
-    quantile_band : float, default=0.75
-        Upper quantile to display when ``type_graph="area"``.
-        Both ``(1 - quantile_band)`` and ``quantile_band`` are drawn
-        as dotted lines, e.g. ``0.75`` → 25% and 75%.
-    type_graph : {"area", "scatter"}, default="area"
-        Visualization mode:
-        - ``"scatter"`` : plot all samples individually as scatter markers.
-        - ``"area"`` : plot aggregated area with min–max envelope,
-          median line, and quantile bands.
-
-    Examples
-    --------
-    >>> fig = plot_sample(results, reference_timeseries=ref)
-    >>> fig.show()
-
-    >>> fig = plot_sample(results, reference_timeseries=ref, type_graph="scatter")
-    >>> fig.show()
-    """
-    if not isinstance(results, pd.Series):
-        raise ValueError("`results` must be a pandas Series.")
-    if results.empty:
-        raise ValueError("`results` is empty. Simulate samples first.")
-
-    ref_name = getattr(reference_timeseries, "name", None)
-
-    def _to_series(obj, indicator_, ref_name_):
-        if isinstance(obj, pd.Series):
-            return obj
-        if isinstance(obj, pd.DataFrame):
-            if obj.empty:
-                return None
-            if indicator_ is not None:
-                return obj[indicator_]
-            if ref_name_ is not None and ref_name_ in obj.columns:
-                return obj[ref_name_]
-            if obj.shape[1] == 1:
-                return obj.iloc[:, 0]
-            raise ValueError(
-                "Provide `indicator`: multiple columns in the sample DataFrame."
-            )
-        return None
-
-    def _legend_for(i: int) -> str:
-        if not show_legends:
-            return "Simulations"
-        if parameter_values is None or parameter_names is None:
-            return f"Sample {i}"
-        vals = parameter_values[i]
-        return ", ".join(
-            f"{n}: {round(v, round_ndigits)}" for n, v in zip(parameter_names, vals)
-        )
-
-    fig = go.Figure()
-    series_list = []
-    df_all = None
-
-    for sample in results:
-        s = _to_series(sample, indicator, ref_name)
-        if s is None or s.empty:
-            continue
-        series_list.append(s)
-
-    if not series_list and reference_timeseries is None:
-        raise ValueError("No simulated data available to plot.")
-
-    if type_graph == "scatter":
-        for i, s in enumerate(series_list):
-            fig.add_trace(
-                go.Scattergl(
-                    name=_legend_for(i),
-                    mode="markers",
-                    x=s.index,
-                    y=s.to_numpy(),
-                    marker=dict(color=f"rgba(135,135,135,{alpha})"),
-                    showlegend=show_legends,
-                )
-            )
-        if reference_timeseries is not None:
-            fig.add_trace(
-                go.Scatter(
-                    name="Reference",
-                    mode="lines",
-                    x=reference_timeseries.index,
-                    y=reference_timeseries.to_numpy(),
-                    line=dict(color="red"),
-                    showlegend=True,
-                )
-            )
-
-    elif type_graph == "area":
-        df_all = pd.concat(series_list, axis=1) if series_list else None
-
-        if df_all is not None:
-            lower = df_all.min(axis=1)
-            upper = df_all.max(axis=1)
-
-            fig.add_trace(
-                go.Scatter(
-                    x=upper.index,
-                    y=upper.values,
-                    line=dict(width=0),
-                    mode="lines",
-                    name="max",
-                    showlegend=False,
-                )
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=lower.index,
-                    y=lower.values,
-                    line=dict(width=0),
-                    mode="lines",
-                    fill="tonexty",
-                    name="Area min - max",
-                    fillcolor="rgba(255,165,0,0.4)",
-                    showlegend=True,
-                )
-            )
-
-            median = df_all.median(axis=1)
-            fig.add_trace(
-                go.Scatter(
-                    x=median.index,
-                    y=median.values,
-                    mode="lines",
-                    line=dict(color="black"),
-                    name="Median",
-                    showlegend=True,
-                )
-            )
-
-            q_low = 1 - quantile_band
-            q_high = quantile_band
-            q1 = df_all.quantile(q_low, axis=1)
-            q2 = df_all.quantile(q_high, axis=1)
-
-            fig.add_trace(
-                go.Scatter(
-                    x=q1.index,
-                    y=q1.values,
-                    mode="lines",
-                    line=dict(color="black", dash="dot"),
-                    name="Quantiles",
-                    showlegend=False,
-                )
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=q2.index,
-                    y=q2.values,
-                    mode="lines",
-                    line=dict(color="black", dash="dot"),
-                    name="Quantiles",
-                    showlegend=True,
-                )
-            )
-
-        if reference_timeseries is not None:
-            fig.add_trace(
-                go.Scatter(
-                    name="Reference",
-                    mode="lines",
-                    x=reference_timeseries.index,
-                    y=reference_timeseries.to_numpy(),
-                    line=dict(color="red"),
-                    showlegend=True,
-                )
-            )
-
-    else:
-        raise ValueError("`type_graph` must be either 'area' or 'scatter'.")
-
-    # === titre auto si pas fourni ===
-    if title is None:
-        if indicator is not None:
-            title = f"Sample plot of {indicator} indicator"
-        else:
-            title = "Sample plot"
-
-    fig.update_layout(
-        title=title,
-        xaxis_title=x_label,
-        yaxis_title=y_label,
-        showlegend=True,
-        legend_traceorder="normal",
-    )
-    return fig
-
-
-def plot_pcp(
-    parameter_values: np.ndarray,
-    parameter_names: list[str],
-    aggregated_results: pd.DataFrame,
-    *,
-    bounds: list[tuple[float, float]] | None = None,
-    color_by: str | None = None,
-    title: str | None = "Parallel Coordinates — Samples",
-    html_file_path: str | None = None,
-) -> go.Figure:
-    """
-    Creates a Parallel Coordinates Plot (PCP) for parameter samples and aggregated indicators.
-    Each vertical axis corresponds to a parameter or an aggregated indicator,
-    and each polyline represents one simulation.
-    """
-
-    if parameter_values.shape[0] != len(aggregated_results):
-        raise ValueError("Mismatch between number of samples and aggregated results.")
-    if len(parameter_names) != parameter_values.shape[1]:
-        raise ValueError(
-            "`parameter_names` length must match parameter_values.shape[1]."
-        )
-
-    df = pd.DataFrame(
-        parameter_values, columns=parameter_names, index=aggregated_results.index
-    )
-    df = pd.concat([df, aggregated_results], axis=1)
-
-    if color_by is None:
-        if not aggregated_results.empty:
-            color_by = aggregated_results.columns[0]
-        else:
-            color_by = parameter_names[0]
-
-    dimensions = []
-    for j, pname in enumerate(parameter_names):
-        dim = {"label": pname, "values": df[pname].to_numpy()}
-        if bounds is not None:
-            lb, ub = bounds[j]
-            dim["range"] = [lb, ub]
-        dimensions.append(dim)
-
-    for col in aggregated_results.columns:
-        col_vals = df[col].to_numpy()
-        if np.all(np.isnan(col_vals)):
-            dim = {"label": col, "values": col_vals}
-        else:
-            vmin = float(np.nanmin(col_vals))
-            vmax = float(np.nanmax(col_vals))
-            if np.isfinite(vmin) and np.isfinite(vmax) and vmin != vmax:
-                dim = {"label": col, "values": col_vals, "range": [vmin, vmax]}
-            else:
-                dim = {"label": col, "values": col_vals}
-        dimensions.append(dim)
-
-    line_kwargs = {}
-    if color_by is not None and color_by in df.columns:
-        line_kwargs = dict(color=df[color_by], colorscale="Viridis", showscale=True)
-
-    fig = go.Figure(data=go.Parcoords(dimensions=dimensions, line=line_kwargs))
-    fig.update_layout(title=title)
-
-    if html_file_path:
-        fig.write_html(html_file_path)
-
-    return fig

@@ -115,6 +115,7 @@ class Sanalysis(ABC):
             title=title,
         )
 
+    @wraps(Sample.plot)
     def plot_sample(
         self,
         indicator: str | None = None,
@@ -130,54 +131,7 @@ class Sanalysis(ABC):
         quantile_band: float = 0.75,
         type_graph: str = "area",
     ) -> go.Figure:
-        """
-        Plot simulation runs against an optional reference time series.
-
-        This method wraps :meth:`Sampler.plot_sample` and plots the simulations
-        associated with this sensitivity analysis instance. It supports both
-        scatter plots of all runs or aggregated area plots with envelopes,
-        quantiles, and median.
-
-        Parameters
-        ----------
-        indicator : str, optional
-            Column name to select if simulation outputs are DataFrames with multiple
-            columns. If None and a DataFrame has a single column, that column is used.
-        reference_timeseries : pandas.Series, optional
-            A time series to plot as ground truth or reference, shown as a red line.
-        title : str, optional
-            Plot title.
-        y_label : str, optional
-            Label for the y-axis.
-        x_label : str, optional
-            Label for the x-axis.
-        alpha : float, default=0.5
-            Opacity for scatter markers when ``type_graph='scatter'``.
-        show_legends : bool, default=False
-            Whether to display a legend entry for each sample trace.
-        parameter_values : numpy.ndarray, optional
-            Custom parameter values for legend annotation. If None, values from
-            this analysis instance are used.
-        parameter_names : list of str, optional
-            Custom parameter names. If None, names from this analysis instance are used.
-        round_ndigits : int, default=2
-            Number of decimal digits for rounding parameter values in legends.
-        quantile_band : float, default=0.75
-            Upper quantile to display when ``type_graph='area'``.
-            Both ``(1 - quantile_band)`` and ``quantile_band`` are drawn
-            as dotted lines (e.g. 0.75 → 25% and 75%).
-        type_graph : {"area", "scatter"}, default="area"
-            Visualization mode:
-            - ``"scatter"`` : plot all runs individually as scatter markers.
-            - ``"area"`` : plot aggregated area with min–max envelope,
-              median line, and quantile bands.
-
-        Returns
-        -------
-        plotly.graph_objects.Figure
-            A Plotly Figure containing the simulation runs and optional reference.
-        """
-        return self.sampler.plot_sample(
+        return self.sampler.sample.plot(
             indicator=indicator,
             reference_timeseries=reference_timeseries,
             title=title,
