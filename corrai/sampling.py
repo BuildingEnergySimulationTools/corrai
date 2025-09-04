@@ -153,12 +153,12 @@ def plot_sample(
             )
         if reference_timeseries is not None:
             fig.add_trace(
-                go.Scatter(
+                go.Scattergl(
                     name="Reference",
                     mode="lines",
                     x=reference_timeseries.index,
                     y=reference_timeseries.to_numpy(),
-                    line=dict(color="red"),
+                    line=dict(color="red", width=2),
                     showlegend=True,
                 )
             )
