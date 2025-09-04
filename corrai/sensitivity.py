@@ -86,138 +86,6 @@ class Sanalysis(ABC):
     def results(self):
         return self.sampler.results
 
-    @wraps(Sample.plot_hist)
-    def plot_sample_hist(
-        self,
-        indicator: str,
-        method: str = "mean",
-        unit: str = "",
-        agg_method_kwarg: dict = None,
-        reference_time_series: pd.Series = None,
-        bins: int = 30,
-        colors: str = "orange",
-        reference_value: int | float = None,
-        reference_label: str = "Reference",
-        show_rug: bool = False,
-        title: str = None,
-    ):
-        return self.sampler.sample.plot_hist(
-            indicator=indicator,
-            method=method,
-            unit=unit,
-            agg_method_kwarg=agg_method_kwarg,
-            reference_time_series=reference_time_series,
-            bins=bins,
-            colors=colors,
-            reference_value=reference_value,
-            reference_label=reference_label,
-            show_rug=show_rug,
-            title=title,
-        )
-
-    @wraps(Sample.plot)
-    def plot_sample(
-        self,
-        indicator: str | None = None,
-        reference_timeseries: pd.Series | None = None,
-        title: str | None = None,
-        y_label: str | None = None,
-        x_label: str | None = None,
-        alpha: float = 0.5,
-        show_legends: bool = False,
-        parameter_values: np.ndarray | None = None,
-        parameter_names: list[str] | None = None,
-        round_ndigits: int = 2,
-        quantile_band: float = 0.75,
-        type_graph: str = "area",
-    ) -> go.Figure:
-        return self.sampler.sample.plot(
-            indicator=indicator,
-            reference_timeseries=reference_timeseries,
-            title=title,
-            y_label=y_label,
-            x_label=x_label,
-            alpha=alpha,
-            show_legends=show_legends,
-            parameter_values=parameter_values,
-            parameter_names=parameter_names,
-            round_ndigits=round_ndigits,
-            quantile_band=quantile_band,
-            type_graph=type_graph,
-        )
-
-    def plot_pcp(
-        self,
-        indicator: str | None = None,
-        method: str = "mean",
-        agg_method_kwarg: dict = None,
-        reference_time_series: pd.Series = None,
-        freq: str | pd.Timedelta | dt.timedelta = None,
-        prefix: str | None = None,
-        bounds: list[tuple[float, float]] | None = None,
-        color_by: str | None = None,
-        title: str | None = "Parallel Coordinates - Samples",
-        html_file_path: str | None = None,
-    ) -> go.Figure:
-        """
-        Create a Parallel Coordinates Plot (PCP) of parameters and aggregated results.
-
-        Each vertical axis corresponds to a parameter or an aggregated indicator,
-        and each polyline represents one simulation. Useful for visualizing the
-        relationship between sampled parameters and performance metrics.
-
-        This method wraps :meth:`Sampler.plot_pcp`.
-
-        Parameters
-        ----------
-        indicator : str, optional
-            Indicator name to extract from simulation results before aggregation.
-            If None, only parameters are shown.
-        method : str, default="mean"
-            Aggregation method to apply. Supported values include:
-            - "mean"
-            - "sum"
-            - "nmbe"
-            - "cv_rmse"
-            - "mean_squared_error"
-            - "mean_absolute_error"
-        agg_method_kwarg : dict, optional
-            Extra keyword arguments passed to the aggregation function.
-        reference_time_series : pd.Series, optional
-            Required for error-based methods (e.g., "cv_rmse"). Must have the same
-            index and length as each simulation.
-        freq : str or pd.Timedelta or datetime.timedelta, optional
-            If provided, aggregation is performed per time bin.
-        prefix : str, optional
-            Custom prefix for naming aggregated columns. Defaults to the method name.
-        bounds : list of tuple(float, float), optional
-            Parameter bounds for each parameter axis.
-        color_by : str, optional
-            Column name (parameter or aggregate) used to color polylines.
-        title : str, optional
-            Figure title.
-        html_file_path : str, optional
-            If provided, saves the plot as an interactive HTML file.
-
-        Returns
-        -------
-        go.Figure
-            A Plotly Figure with the parallel coordinates visualization.
-        """
-
-        return self.sampler.plot_pcp(
-            indicator=indicator,
-            method=method,
-            agg_method_kwarg=agg_method_kwarg,
-            reference_time_series=reference_time_series,
-            freq=freq,
-            prefix=prefix,
-            bounds=bounds,
-            color_by=color_by,
-            title=title,
-            html_file_path=html_file_path,
-        )
-
     @abstractmethod
     def _set_sampler(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
@@ -294,7 +162,7 @@ class Sanalysis(ABC):
         - If `x_needed=True`, the analyser will receive both `X` and `Y`.
         - The analyser is typically an object from SALib.
         """
-        agg_result = self.sampler.sample.get_aggregate_time_series(
+        agg_result = self.sampler.sample.get_aggregated_time_series(
             indicator,
             method,
             agg_method_kwarg,
@@ -438,46 +306,111 @@ class Sanalysis(ABC):
 
         return plot_dynamic_metric(metrics, sensitivity_metric, unit, title, stacked)
 
-    # def plot_pcp(
-    #     self,
-    #     aggregations: dict | None = None,  # <= optionnel
-    #     *,
-    #     bounds: list[tuple[float, float]] | None = None,
-    #     color_by: str | None = None,
-    #     title: str | None = "Parallel Coordinates — Samples",
-    #     html_file_path: str | None = None,
-    # ):
-    #     """
-    #     Parallel Coordinates Plot basé sur les échantillons et résultats présents dans l'analyse.
-    #
-    #     Parameters
-    #     ----------
-    #     aggregations : dict
-    #         {indicator: callable | [callable] | {label: callable}}
-    #         Ex. {"res": [np.sum, np.mean]}  -> colonnes "res:sum", "res:mean".
-    #     bounds : list[(float, float)] | None
-    #         Bornes (min, max) par paramètre (même ordre que les paramètres). Si None, autoscale.
-    #     color_by : str | None
-    #         Nom d'une dimension (paramètre ou indicateur agrégé) pour colorer les lignes.
-    #     title : str | None
-    #         Titre.
-    #     html_file_path : str | None
-    #         Si fourni, export HTML.
-    #     """
-    #     results = self.sampler.sample.results
-    #     parameter_values = self.sampler.sample.values
-    #     parameter_names = [p.name for p in self.sampler.sample.parameters]
-    #
-    #     return _plot_pcp(
-    #         results=results,
-    #         parameter_values=parameter_values,
-    #         parameter_names=parameter_names,
-    #         aggregations=aggregations,
-    #         bounds=bounds,
-    #         color_by=color_by,
-    #         title=title,
-    #         html_file_path=html_file_path,
-    #     )
+    @wraps(Sample.get_aggregated_time_series)
+    def get_sample_aggregated_time_series(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        prefix: str = "aggregated",
+    ) -> pd.DataFrame:
+        return self.sampler.sample.get_aggregated_time_series(
+            self.results,
+            indicator,
+            method,
+            agg_method_kwarg,
+            reference_time_series,
+            freq,
+            prefix,
+        )
+
+    @wraps(Sample.plot_hist)
+    def plot_sample_hist(
+        self,
+        indicator: str,
+        method: str = "mean",
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        bins: int = 30,
+        colors: str = "orange",
+        reference_value: int | float = None,
+        reference_label: str = "Reference",
+        show_rug: bool = False,
+        title: str = None,
+    ):
+        return self.sampler.sample.plot_hist(
+            indicator=indicator,
+            method=method,
+            unit=unit,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            bins=bins,
+            colors=colors,
+            reference_value=reference_value,
+            reference_label=reference_label,
+            show_rug=show_rug,
+            title=title,
+        )
+
+    @wraps(Sample.plot)
+    def plot_sample(
+        self,
+        indicator: str | None = None,
+        reference_timeseries: pd.Series | None = None,
+        title: str | None = None,
+        y_label: str | None = None,
+        x_label: str | None = None,
+        alpha: float = 0.5,
+        show_legends: bool = False,
+        parameter_values: np.ndarray | None = None,
+        parameter_names: list[str] | None = None,
+        round_ndigits: int = 2,
+        quantile_band: float = 0.75,
+        type_graph: str = "area",
+    ) -> go.Figure:
+        return self.sampler.sample.plot(
+            indicator=indicator,
+            reference_timeseries=reference_timeseries,
+            title=title,
+            y_label=y_label,
+            x_label=x_label,
+            alpha=alpha,
+            show_legends=show_legends,
+            parameter_values=parameter_values,
+            parameter_names=parameter_names,
+            round_ndigits=round_ndigits,
+            quantile_band=quantile_band,
+            type_graph=type_graph,
+        )
+
+    def plot_pcp(
+        self,
+        indicator: str | None = None,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        prefix: str | None = None,
+        bounds: list[tuple[float, float]] | None = None,
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates - Samples",
+        html_file_path: str | None = None,
+    ) -> go.Figure:
+        return self.sampler.plot_pcp(
+            indicator=indicator,
+            method=method,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            freq=freq,
+            prefix=prefix,
+            bounds=bounds,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
+        )
 
     def salib_plot_matrix(
         self,

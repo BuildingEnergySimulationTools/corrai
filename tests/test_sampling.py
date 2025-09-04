@@ -306,7 +306,7 @@ class TestSample:
         )
 
         pd.testing.assert_frame_equal(
-            sample.get_aggregate_time_series("res"),
+            sample.get_aggregated_time_series("res"),
             pd.DataFrame([123.0, 42.0], [0, 1], columns=["aggregated_res"]),
         )
 

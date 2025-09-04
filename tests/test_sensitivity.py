@@ -67,7 +67,7 @@ class TestSensitivity:
             simulation_options=SIMULATION_OPTIONS,
         )
         morris_analysis.add_sample(N=1000, n_cpu=1, seed=42)
-        agg_res = morris_analysis.sampler.sample.get_aggregate_time_series("res")
+        agg_res = morris_analysis.sampler.sample.get_aggregated_time_series("res")
 
         pd.testing.assert_frame_equal(
             agg_res.loc[0:7],

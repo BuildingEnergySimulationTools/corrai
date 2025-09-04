@@ -503,7 +503,8 @@ class Sample:
 
         self.results = pd.concat([self.results, new_results], ignore_index=True)
 
-    def get_aggregate_time_series(
+    @wraps(aggregate_time_series)
+    def get_aggregated_time_series(
         self,
         indicator: str,
         method: str = "mean",
@@ -571,7 +572,7 @@ class Sample:
         go.Figure
             Plotly histogram figure.
         """
-        res = self.get_aggregate_time_series(
+        res = self.get_aggregated_time_series(
             indicator,
             method,
             agg_method_kwarg,
@@ -612,7 +613,6 @@ class Sample:
         )
         return fig
 
-    @wraps(plot_sample)
     def plot(
         self,
         indicator: str | None = None,
@@ -626,6 +626,20 @@ class Sample:
         quantile_band: float = 0.75,
         type_graph: str = "area",
     ) -> go.Figure:
+        """
+        TODO Docstring
+        :param indicator:
+        :param reference_timeseries:
+        :param title:
+        :param y_label:
+        :param x_label:
+        :param alpha:
+        :param show_legends:
+        :param round_ndigits:
+        :param quantile_band:
+        :param type_graph:
+        :return:
+        """
         if self.results is None:
             raise ValueError("No results available to plot. Run a simulation first.")
 
