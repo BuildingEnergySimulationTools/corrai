@@ -226,12 +226,11 @@ class TestPlots:
             fig_bar["layout"]["title"]["text"] == "Morris euclidian_distance mean res"
         )
 
-        res_euclidian = morris_analysis.analyze("res")["mean_res"]
         fig_data = fig_bar.data[0]
-        expected_x = [p.name for p in PARAMETER_LIST]
-        expected_y = res_euclidian["euclidian_distance"].tolist()
-        assert list(fig_data.x) == expected_x
-        np.testing.assert_allclose(fig_data.y, expected_y)
+        assert list(fig_data.x) == ["par_x1", "par_x3", "par_x2"]
+        np.testing.assert_allclose(
+            fig_data.y, [1.455258008259737, 10.823232337117245, 13.63990010960599]
+        )
 
         fig_dyn = morris_analysis.plot_dynamic_metric(
             indicator="res",

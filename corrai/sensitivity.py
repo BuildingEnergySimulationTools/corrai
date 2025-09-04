@@ -247,7 +247,7 @@ class Sanalysis(ABC):
                 data=res[sensitivity_metric],
                 index=[par.name for par in self.sampler.sample.parameters],
                 name=f"{sensitivity_metric} {unit}",
-            ),
+            ).sort_values(),
             title=title,
         )
 
