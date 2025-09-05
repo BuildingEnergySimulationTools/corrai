@@ -330,12 +330,40 @@ class TestSample:
         sampler.simulate_at(slice(4, 7))
         assert [df.empty for df in sampler.results[-3:].values] == [False, True, True]
 
-        sampler.add_sample(3, simulate=False)
+        sampler.add_sample(3, rng=42, simulate=False)
         sampler.simulate_at(slice(10, None))
         assert [df.empty for df in sampler.results[-3:].values] == [True, False, False]
 
-        sampler.add_sample(3, simulate=True)
+        sampler.add_sample(3, rng=42, simulate=True)
         assert all(not df.empty for df in sampler.results[-3:])
+
+        sampler.simulate_pending()
+        to_test = sampler.get_sample_aggregated_time_series("res")
+        pd.testing.assert_frame_equal(
+            to_test,
+            pd.DataFrame(
+                {
+                    "aggregated_res": {
+                        0: 85.75934698790918,
+                        1: 38.08478803524709,
+                        2: 61.67268698504139,
+                        3: 85.75934698790918,
+                        4: 38.08478803524709,
+                        5: 61.67268698504139,
+                        6: 85.75934698790918,
+                        7: 38.08478803524709,
+                        8: 61.67268698504139,
+                        9: 85.75934698790918,
+                        10: 38.08478803524709,
+                        11: 61.67268698504139,
+                        12: 85.75934698790918,
+                        13: 38.08478803524709,
+                        14: 61.67268698504139,
+                    }
+                }
+            ),
+            check_exact=False,
+        )
 
     def test_morris_sampler(self):
         sampler = MorrisSampler(

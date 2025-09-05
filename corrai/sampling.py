@@ -260,7 +260,6 @@ class Sample:
 
         self.results = pd.concat([self.results, new_results], ignore_index=True)
 
-    @wraps(aggregate_time_series)
     def get_aggregated_time_series(
         self,
         indicator: str,
@@ -270,6 +269,109 @@ class Sample:
         freq: str | pd.Timedelta | dt.timedelta = None,
         prefix: str = "aggregated",
     ) -> pd.DataFrame:
+        """
+        Aggregate sample results using a specified statistical or error metric.
+
+        This method extracts the specified `indicator` column, and aggregates
+        the time series across simulations using the given method. If a reference
+        time series is provided, metrics that require ground truth
+        (e.g., mean_absolute_error) are supported.
+
+        If `freq` is provided, the aggregation is done over time bins, producing a
+        table of simulation runs versus time periods.
+
+        Parameters
+        ----------
+        indicator : str
+            The column name in each DataFrame to extract and aggregate.
+
+        method : str, default="mean"
+            The aggregation method to use. Supported methods include:
+            - "mean"
+            - "sum"
+            - "nmbe"
+            - "cv_rmse"
+            - "mean_squared_error"
+            - "mean_absolute_error"
+
+        agg_method_kwarg : dict, optional
+            Additional keyword arguments to pass to the aggregation function.
+
+        reference_time_series : pandas.Series, optional
+            Reference series (`y_true`) to compare each simulation against.
+            Required for error-based methods such as "mean_absolute_error".
+            Must have the same datetime index and length as the individual simulation
+            results.
+
+        freq : str or pandas.Timedelta or datetime.timedelta, optional
+            If provided, aggregate the time series within bins of this frequency
+            (e.g., "d" for daily, "h" for hourly).
+            The result will be a DataFrame where each row corresponds to a simulation and
+            each column to a time bin.
+
+        prefix : str, default="aggregated"
+            Prefix to use for naming the output column when `freq` is not specified.
+
+        Returns
+        -------
+        pandas.DataFrame
+            If `freq` is not provided, returns a one-column DataFrame containing the
+            aggregated metric per simulation, indexed by the same index as `results`.
+
+            If `freq` is provided, returns a DataFrame indexed by simulation IDs
+            (same as `results.index`), with columns representing each aggregated time bin.
+
+        Raises
+        ------
+        ValueError
+            If the shapes of `results` and `reference_time_series` are incompatible.
+            If the datetime index is not valid or missing.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import numpy as np
+
+        >>> from corrai.base.parameter import Parameter
+        >>> from corrai.sampling import Sample
+
+        >>> sample = Sample(
+        ...     parameters=[
+        ...         Parameter("a", interval=(1, 10)),
+        ...         Parameter("b", interval=(1, 10)),
+        ...     ]
+        ... )
+
+        >>> t = pd.date_range("2009-01-01", freq="h", periods=2)
+        >>> res_1 = pd.DataFrame({"a": [1, 2]}, index=t)
+        >>> res_2 = pd.DataFrame({"a": [3, 4]}, index=t)
+
+        >>> sample.add_samples(np.array([[1, 2], [3, 4]]), [res_1, res_2])
+
+        >>> # No frequency aggregation: one aggregated value per simulation
+        >>> sample.get_aggregated_time_series("a")
+           aggregated_a
+        0           1.5
+        1           3.5
+
+        >>> # With frequency aggregation: one value per time bin per simulation
+        >>> ref = pd.Series(
+        ...     [1, 1], index=pd.date_range("2009-01-01", freq="h", periods=2)
+        ... )
+
+        >>> sample.get_aggregated_time_series(
+        ...     indicator="a",
+        ...     method="mean_absolute_error",
+        ...     reference_time_series=ref,
+        ...     freq="h",
+        ...)
+
+           2009-01-01 00:00:00  2009-01-01 01:00:00
+        0                  0.0                  1.0
+        1                  2.0                  3.0
+
+        """
+
         return aggregate_time_series(
             self.results,
             indicator,
@@ -707,6 +809,20 @@ class Sampler(ABC):
             round_ndigits=round_ndigits,
             quantile_band=quantile_band,
             type_graph=type_graph,
+        )
+
+    @wraps(Sample.get_aggregated_time_series)
+    def get_sample_aggregated_time_series(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        prefix: str = "aggregated",
+    ):
+        return self.sample.get_aggregated_time_series(
+            indicator, method, agg_method_kwarg, reference_time_series, freq, prefix
         )
 
     def plot_pcp(
