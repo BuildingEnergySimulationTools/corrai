@@ -4,6 +4,7 @@ from functools import wraps
 
 import numpy as np
 import pandas as pd
+import parso.pgen2.grammar_parser
 import plotly.graph_objects as go
 import datetime as dt
 
@@ -114,23 +115,23 @@ class Sample:
     """
 
     parameters: list[Parameter]
-    values: np.ndarray = field(init=False)
+    values: pd.DataFrame = field(init=False)
     results: pd.Series = field(default_factory=lambda: pd.Series(dtype=object))
 
     def __post_init__(self):
-        self.values = np.empty((0, len(self.parameters)))
+        self.values = pd.DataFrame(columns=[par.name for par in self.parameters])
 
     def __len__(self):
         return self.values.shape[0]
 
     def __getitem__(self, idx):
         if isinstance(idx, (int, slice, list, np.ndarray)):
-            return {"values": self.values[idx], "results": self.results[idx]}
+            return {"values": self.values.loc[idx, :], "results": self.results[idx]}
         raise TypeError(f"Unsupported index type: {type(idx)}")
 
     def __setitem__(self, idx, item: dict):
         if "values" in item:
-            self.values[idx] = item["values"]
+            self.values.loc[idx, :] = item["values"]
         if "results" in item:
             if isinstance(idx, int):
                 self.results.at[idx] = item["results"]
@@ -201,12 +202,12 @@ class Sample:
         """
         selected_values = self[idx]["values"]
 
-        if selected_values.ndim == 1:
-            selected_values = selected_values[np.newaxis, :]
+        if isinstance(selected_values, pd.Series):
+            selected_values = selected_values.to_frame()
 
         return [
             [(par, val) for par, val in zip(self.parameters, row)]
-            for row in selected_values
+            for row in selected_values.values
         ]
 
     def get_dimension_less_values(
@@ -250,7 +251,8 @@ class Sample:
         n_samples, n_params = values.shape
         assert n_params == len(self.parameters), "Mismatch in number of parameters"
 
-        self.values = np.vstack([self.values, values])
+        new_df = pd.DataFrame(values, columns=self.values.columns)
+        self.values = pd.concat([self.values, new_df], ignore_index=True)
 
         if results is None:
             new_results = pd.Series([pd.DataFrame()] * n_samples, dtype=object)
@@ -539,7 +541,7 @@ class Sample:
             if not show_legends:
                 return "Simulations"
             parameter_names = [par.name for par in self.parameters]
-            vals = self.values[i, :]
+            vals = self.values.loc[i, :].values
             return ", ".join(
                 f"{n}: {round(v, round_ndigits)}" for n, v in zip(parameter_names, vals)
             )
