@@ -355,23 +355,21 @@ class Sanalysis(ABC):
             title=title,
         )
 
-    @wraps(Sample.plot)
+    @wraps(Sample.plot_sample)
     def plot_sample(
         self,
-        indicator: str | None = None,
+        indicator: str | None,
         reference_timeseries: pd.Series | None = None,
         title: str | None = None,
         y_label: str | None = None,
         x_label: str | None = None,
         alpha: float = 0.5,
         show_legends: bool = False,
-        parameter_values: np.ndarray | None = None,
-        parameter_names: list[str] | None = None,
         round_ndigits: int = 2,
         quantile_band: float = 0.75,
         type_graph: str = "area",
     ) -> go.Figure:
-        return self.sampler.sample.plot(
+        return self.sampler.sample.plot_sample(
             indicator=indicator,
             reference_timeseries=reference_timeseries,
             title=title,
@@ -379,8 +377,6 @@ class Sanalysis(ABC):
             x_label=x_label,
             alpha=alpha,
             show_legends=show_legends,
-            parameter_values=parameter_values,
-            parameter_names=parameter_names,
             round_ndigits=round_ndigits,
             quantile_band=quantile_band,
             type_graph=type_graph,

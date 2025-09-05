@@ -4,7 +4,6 @@ import pandas as pd
 
 from corrai.base.parameter import Parameter
 from corrai.sampling import (
-    plot_sample,
     plot_pcp,
     LHSSampler,
     MorrisSampler,
@@ -43,6 +42,167 @@ ISHIGAMI_PARAMETERS = [
 
 
 class TestSample:
+    def test_sample_functions(self):
+        sample = Sample(REAL_PARAM)
+        assert sample.values.shape == (0, 3)
+        pd.testing.assert_series_equal(sample.results, pd.Series())
+
+        sample.add_samples(
+            np.array([[1, 0.9, 10], [3, 0.85, 20]]),
+            [
+                pd.DataFrame(),
+                pd.DataFrame(
+                    {"res": [1, 2]}, index=pd.date_range("2009", freq="h", periods=2)
+                ),
+            ],
+        )
+
+        assert sample.get_pending_index().tolist() == [True, False]
+        assert sample.values.tolist() == [[1.0, 0.9, 10.0], [3.0, 0.85, 20.0]]
+        assert sample.get_parameters_intervals().tolist() == [
+            [0.0, 10.0],
+            [0.8, 1.2],
+            [0.0, 100.0],
+        ]
+        assert sample.get_list_parameter_value_pairs(sample.get_pending_index()) == [
+            [(REAL_PARAM[0], 1.0), (REAL_PARAM[1], 0.9), (REAL_PARAM[2], 10.0)],
+        ]
+
+        assert len(sample) == 2
+
+        item = sample[1]
+        assert isinstance(item, dict)
+        assert np.allclose(item["values"], [3.0, 0.85, 20.0])
+        pd.testing.assert_frame_equal(item["results"], sample.results.iloc[1])
+
+        new_result = pd.DataFrame({"res": [42]}, index=pd.date_range("2009", periods=1))
+        sample[1] = {"results": new_result}
+        pd.testing.assert_frame_equal(sample.results.iloc[1], new_result)
+
+        sample[0] = {
+            "values": np.array([9.9, 1.1, 88]),
+            "results": pd.DataFrame({"res": [123]}, index=[pd.Timestamp("2009-01-01")]),
+        }
+        np.testing.assert_allclose(sample.values[0], [9.9, 1.1, 88])
+        assert not sample.results.iloc[0].empty
+
+        dimless_val = sample.get_dimension_less_values()
+        np.testing.assert_allclose(
+            dimless_val, np.array([[0.99, 0.75, 0.88], [0.3, 0.125, 0.2]])
+        )
+
+        pd.testing.assert_frame_equal(
+            sample.get_aggregated_time_series("res"),
+            pd.DataFrame([123.0, 42.0], [0, 1], columns=["aggregated_res"]),
+        )
+
+        fig = sample.plot_hist("res")
+        assert fig.layout.title["text"] == "Sample distribution of mean res"
+        assert fig.layout.xaxis.title["text"] == "mean res "
+
+        fig = sample.plot_sample("res")
+        assert fig
+
+        sample._validate()
+
+    def test_plot_sample(self):
+        t = pd.date_range("2025-01-01 00:00:00", periods=2, freq="h")
+        df1 = pd.DataFrame({"res": [1.0, 2.0]}, index=t)
+        df2 = pd.DataFrame({"res": [3.0, 4.0]}, index=t)
+        df3 = pd.DataFrame({"res": [5.0, 6.0]}, index=t)
+
+        ref = pd.Series([2.0, 2.0], index=t)
+
+        sample = Sample(
+            parameters=[
+                Parameter("p1", interval=(0, 10)),
+                Parameter("p2", interval=(0, 10)),
+            ]
+        )
+
+        sample.add_samples(
+            np.array([[1.1, 2.2], [3.3, 4.4], [5.5, 6.6]]), [df1, df2, df3]
+        )
+
+        fig = sample.plot_sample(
+            indicator="res",
+            reference_timeseries=ref,
+            title="test",
+            x_label="time",
+            y_label="value",
+            alpha=0.3,
+            show_legends=True,
+            type_graph="scatter",
+        )
+        assert isinstance(fig, go.Figure)
+        assert len(fig.data) == 4
+
+        np.testing.assert_allclose(fig.data[0]["y"], df1["res"].to_numpy())
+        np.testing.assert_allclose(fig.data[-1]["y"], ref.to_numpy())
+
+        assert fig.data[0].name == "p1: 1.1, p2: 2.2"
+        assert fig.data[1].name == "p1: 3.3, p2: 4.4"
+        assert fig.data[2].name == "p1: 5.5, p2: 6.6"
+
+        # Partial simulation
+        empty_df = pd.DataFrame({"res": []})
+        sample[:] = {"results": [empty_df, df1, empty_df]}
+
+        fig_partial = sample.plot_sample(indicator="res", type_graph="scatter")
+
+        # Only 1 non-empty sample
+        assert len(fig_partial.data) == 1
+        np.testing.assert_allclose(fig_partial.data[0]["y"], df1["res"].to_numpy())
+
+        # All results empty and no reference
+        sample[:] = {"results": [empty_df] * 3}
+
+        with pytest.raises(ValueError, match="No simulated data available to plot."):
+            sample.plot_sample(indicator="res", type_graph="scatter")
+
+        # All results empty but with reference
+        fig_ref_only = sample.plot_sample(
+            indicator="res",
+            reference_timeseries=ref,
+            type_graph="scatter",
+        )
+        assert len(fig_ref_only.data) == 1
+        np.testing.assert_allclose(fig_ref_only.data[0]["y"], ref.to_numpy())
+
+        t = pd.date_range("2025-01-01 00:00:00", periods=3, freq="h")
+        df1 = pd.DataFrame({"res": [1.0, 2.0, 3.0]}, index=t)
+        df2 = pd.DataFrame({"res": [2.0, 3.0, 4.0]}, index=t)
+        df3 = pd.DataFrame({"res": [3.0, 4.0, 5.0]}, index=t)
+        ref = pd.Series([2.0, 2.5, 3.0], index=t)
+
+        sample[:] = {"results": [df1, df2, df3]}
+
+        fig = sample.plot_sample(
+            indicator="res",
+            reference_timeseries=ref,
+            type_graph="area",
+        )
+
+        assert isinstance(fig, go.Figure)
+        assert len(fig.data) == 6
+        np.testing.assert_allclose(fig.data[-1]["y"], ref.to_numpy())
+        assert fig.data[-1].name == "Reference"
+
+        names = [tr.name for tr in fig.data]
+        assert "Median" in names
+        assert "Quantiles" in names
+
+        fig = sample.plot_sample(
+            indicator="res",
+            reference_timeseries=ref,
+            show_legends=False,
+            type_graph="scatter",
+        )
+        assert len(fig.data) == 4
+        assert fig.data[0].mode == "markers"
+        np.testing.assert_allclose(np.array(fig.data[-1].y), ref.to_numpy())
+        assert fig.data[-1].mode == "lines"
+
     def test_plot_hist(self):
         sampler = LHSSampler(
             parameters=REAL_PARAM,
@@ -119,205 +279,6 @@ class TestSample:
         )
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 1
-
-    def test_plot_sample(self):
-        t = pd.date_range("2025-01-01 00:00:00", periods=2, freq="h")
-        df1 = pd.DataFrame({"res": [1.0, 2.0]}, index=t)
-        df2 = pd.DataFrame({"res": [3.0, 4.0]}, index=t)
-        df3 = pd.DataFrame({"res": [5.0, 6.0]}, index=t)
-        results = pd.Series([df1, df2, df3])
-        ref = pd.Series([2.0, 2.0], index=t)
-
-        param_names = ["p1", "p2"]
-        param_values = np.array([[1.1, 2.2], [3.3, 4.4], [5.5, 6.6]])
-
-        fig = plot_sample(
-            results=results,
-            reference_timeseries=ref,
-            title="test",
-            x_label="time",
-            y_label="value",
-            alpha=0.3,
-            show_legends=True,
-            parameter_values=param_values,
-            parameter_names=param_names,
-            type_graph="scatter",
-        )
-        assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 4
-        np.testing.assert_allclose(fig.data[0]["y"], df1["res"].to_numpy())
-        np.testing.assert_allclose(fig.data[-1]["y"], ref.to_numpy())
-
-        assert fig.data[0].name == "p1: 1.1, p2: 2.2"
-        assert fig.data[1].name == "p1: 3.3, p2: 4.4"
-        assert fig.data[2].name == "p1: 5.5, p2: 6.6"
-
-        df_multi = pd.concat(
-            [df1.rename(columns={"res": "a"}), df2.rename(columns={"res": "b"})], axis=1
-        )
-        results_multi = pd.Series([df_multi])
-        with pytest.raises(ValueError, match="Provide `indicator`: multiple columns"):
-            plot_sample(results=results_multi, type_graph="scatter")
-        fig_a = plot_sample(results=results_multi, indicator="a")
-        y_values = np.array(fig_a.data[0].y)
-        np.testing.assert_allclose(y_values, df_multi["a"].to_numpy())
-
-        # empty Series
-        with pytest.raises(ValueError):
-            plot_sample(results=pd.Series(dtype=object), type_graph="scatter")
-
-        # Partial simulation
-        empty_df = pd.DataFrame({"res": []})
-        results_partial = pd.Series([empty_df, df1, empty_df])
-        fig_partial = plot_sample(
-            results=results_partial, indicator="res", type_graph="scatter"
-        )
-
-        # Only 1 non-empty sample
-        assert len(fig_partial.data) == 1
-        np.testing.assert_allclose(fig_partial.data[0]["y"], df1["res"].to_numpy())
-
-        # All results empty and no reference
-        results_all_empty = pd.Series([empty_df, empty_df])
-        with pytest.raises(ValueError, match="No simulated data available to plot."):
-            plot_sample(results_all_empty, indicator="res", type_graph="scatter")
-
-        # All results empty but with reference
-        fig_ref_only = plot_sample(
-            results_all_empty,
-            indicator="res",
-            reference_timeseries=ref,
-            type_graph="scatter",
-        )
-        assert len(fig_ref_only.data) == 1
-        np.testing.assert_allclose(fig_ref_only.data[0]["y"], ref.to_numpy())
-
-    def test_plot_sample_area(self):
-        t = pd.date_range("2025-01-01 00:00:00", periods=3, freq="h")
-        df1 = pd.DataFrame({"res": [1.0, 2.0, 3.0]}, index=t)
-        df2 = pd.DataFrame({"res": [2.0, 3.0, 4.0]}, index=t)
-        df3 = pd.DataFrame({"res": [3.0, 4.0, 5.0]}, index=t)
-        results = pd.Series([df1, df2, df3])
-        ref = pd.Series([2.0, 2.5, 3.0], index=t)
-
-        fig = plot_sample(
-            results=results,
-            reference_timeseries=ref,
-            type_graph="area",
-        )
-        assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 6
-        np.testing.assert_allclose(fig.data[-1]["y"], ref.to_numpy())
-        assert fig.data[-1].name == "Reference"
-
-        names = [tr.name for tr in fig.data]
-        assert "Median" in names
-        assert "Quantiles" in names
-
-    def test_plot_sample_in_sampler(self):
-        sampler = LHSSampler(
-            parameters=REAL_PARAM,
-            model=Pymodel(),
-            simulation_options=SIMULATION_OPTIONS,
-        )
-        sampler.add_sample(3, 42, simulate=True)
-
-        fig = sampler.plot_sample(
-            indicator="res",
-            reference_timeseries=None,
-            title="test",
-            x_label="time",
-            y_label="value",
-            alpha=0.3,
-            show_legends=True,
-            type_graph="scatter",
-        )
-        assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 3
-        assert fig.layout.title.text == "test"
-
-    def test_plot_sample_infer_indicator_from_reference_name(self):
-        t = pd.date_range("2025-01-01 00:00:00", periods=3, freq="h")
-        df = pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [10.0, 20.0, 30.0]}, index=t)
-        results = pd.Series([df])
-
-        ref = pd.Series([0.0, 0.0, 0.0], index=t, name="a")  # <- nom = "a"
-
-        fig = plot_sample(
-            results=results,
-            reference_timeseries=ref,
-            show_legends=False,
-            type_graph="scatter",
-        )
-        assert len(fig.data) == 2
-
-        np.testing.assert_allclose(np.array(fig.data[0].y), df["a"].to_numpy())
-        assert fig.data[0].mode == "markers"
-        np.testing.assert_allclose(np.array(fig.data[1].y), ref.to_numpy())
-        assert fig.data[1].mode == "lines"
-
-    def test_sample(self):
-        sample = Sample(REAL_PARAM)
-        assert sample.values.shape == (0, 3)
-        pd.testing.assert_series_equal(sample.results, pd.Series())
-
-        sample.add_samples(
-            np.array([[1, 0.9, 10], [3, 0.85, 20]]),
-            [
-                pd.DataFrame(),
-                pd.DataFrame(
-                    {"res": [1, 2]}, index=pd.date_range("2009", freq="h", periods=2)
-                ),
-            ],
-        )
-
-        assert sample.get_pending_index().tolist() == [True, False]
-        assert sample.values.tolist() == [[1.0, 0.9, 10.0], [3.0, 0.85, 20.0]]
-        assert sample.get_parameters_intervals().tolist() == [
-            [0.0, 10.0],
-            [0.8, 1.2],
-            [0.0, 100.0],
-        ]
-        assert sample.get_list_parameter_value_pairs(sample.get_pending_index()) == [
-            [(REAL_PARAM[0], 1.0), (REAL_PARAM[1], 0.9), (REAL_PARAM[2], 10.0)],
-        ]
-
-        assert len(sample) == 2
-
-        item = sample[1]
-        assert isinstance(item, dict)
-        assert np.allclose(item["values"], [3.0, 0.85, 20.0])
-        pd.testing.assert_frame_equal(item["results"], sample.results.iloc[1])
-
-        new_result = pd.DataFrame({"res": [42]}, index=pd.date_range("2009", periods=1))
-        sample[1] = {"results": new_result}
-        pd.testing.assert_frame_equal(sample.results.iloc[1], new_result)
-
-        sample[0] = {
-            "values": np.array([9.9, 1.1, 88]),
-            "results": pd.DataFrame({"res": [123]}, index=[pd.Timestamp("2009-01-01")]),
-        }
-        np.testing.assert_allclose(sample.values[0], [9.9, 1.1, 88])
-        assert not sample.results.iloc[0].empty
-
-        dimless_val = sample.get_dimension_less_values()
-        np.testing.assert_allclose(
-            dimless_val, np.array([[0.99, 0.75, 0.88], [0.3, 0.125, 0.2]])
-        )
-
-        pd.testing.assert_frame_equal(
-            sample.get_aggregated_time_series("res"),
-            pd.DataFrame([123.0, 42.0], [0, 1], columns=["aggregated_res"]),
-        )
-
-        fig = sample.plot_hist("res")
-        assert fig.layout.title["text"] == "Sample distribution of mean res"
-        assert fig.layout.xaxis.title["text"] == "mean res "
-
-        fig = sample.plot("res")
-        assert fig
-
-        sample._validate()
 
     def test_lhs_sampler(self):
         sampler = LHSSampler(
