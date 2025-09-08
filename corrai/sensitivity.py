@@ -172,7 +172,7 @@ class Sanalysis(ABC):
         )
 
         if self.x_needed:
-            analyse_kwargs["X"] = self.sampler.sample.get_dimension_less_values()
+            analyse_kwargs["X"] = self.sampler.sample.get_dimension_less_values().values
 
         analyse_kwargs["problem"] = self.sampler.get_salib_problem()
 
