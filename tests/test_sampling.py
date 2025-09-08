@@ -58,10 +58,16 @@ class TestSample:
         )
 
         assert sample.get_pending_index().tolist() == [True, False]
-        pd.testing.assert_frame_equal(sample.values, pd.DataFrame({'param_1': {0: 1.0, 1: 3.0},
- 'param_2': {0: 0.9, 1: 0.85},
- 'param_3': {0: 10.0, 1: 20.0}}))
-
+        pd.testing.assert_frame_equal(
+            sample.values,
+            pd.DataFrame(
+                {
+                    "param_1": {0: 1.0, 1: 3.0},
+                    "param_2": {0: 0.9, 1: 0.85},
+                    "param_3": {0: 10.0, 1: 20.0},
+                }
+            ),
+        )
 
         assert sample.get_parameters_intervals().tolist() == [
             [0.0, 10.0],
@@ -87,15 +93,23 @@ class TestSample:
             "values": np.array([9.9, 1.1, 88]),
             "results": pd.DataFrame({"res": [123]}, index=[pd.Timestamp("2009-01-01")]),
         }
-        pd.testing.assert_series_equal(sample.values.loc[0], pd.Series({'param_1': 9.9, 'param_2': 1.1, 'param_3': 88.0}, name=0))
+        pd.testing.assert_series_equal(
+            sample.values.loc[0],
+            pd.Series({"param_1": 9.9, "param_2": 1.1, "param_3": 88.0}, name=0),
+        )
         assert not sample.results.iloc[0].empty
 
         dimless_val = sample.get_dimension_less_values()
         pd.testing.assert_frame_equal(
-            dimless_val, pd.DataFrame({'param_1': {0: 0.99, 1: 0.3},
- 'param_2': {0: 0.7500000000000003, 1: 0.12499999999999986},
- 'param_3': {0: 0.88, 1: 0.2}}))
-
+            dimless_val,
+            pd.DataFrame(
+                {
+                    "param_1": {0: 0.99, 1: 0.3},
+                    "param_2": {0: 0.7500000000000003, 1: 0.12499999999999986},
+                    "param_3": {0: 0.88, 1: 0.2},
+                }
+            ),
+        )
 
         pd.testing.assert_frame_equal(
             sample.get_aggregated_time_series("res"),
@@ -308,9 +322,9 @@ class TestSample:
         sampler.simulate_pending()
 
         expected = {
-            0: [[85.75934698790918]],
-            1: [[38.08478803524709]],
-            2: [[61.67268698504139]],
+            0: np.array([[85.75934698790918]]),
+            1: np.array([[38.08478803524709]]),
+            2: np.array([[61.67268698504139]]),
         }
 
         for k, arr in sampler.results.items():
@@ -334,7 +348,7 @@ class TestSample:
         sampler.add_sample(3, rng=42, simulate=False)
 
         sampler.simulate_at(slice(4, 7))
-        assert [df.empty for df in sampler.results[-3:].values] == [False, True, True]
+        assert [df.empty for df in sampler.results[-3:].values] == [False, False, True]
 
         sampler.add_sample(3, rng=42, simulate=False)
         sampler.simulate_at(slice(10, None))

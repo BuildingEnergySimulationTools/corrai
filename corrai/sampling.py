@@ -4,7 +4,6 @@ from functools import wraps
 
 import numpy as np
 import pandas as pd
-import parso.pgen2.grammar_parser
 import plotly.graph_objects as go
 import datetime as dt
 
@@ -126,7 +125,7 @@ class Sample:
 
     def __getitem__(self, idx):
         if isinstance(idx, (int, slice, list, np.ndarray)):
-            return {"values": self.values.loc[idx, :], "results": self.results[idx]}
+            return {"values": self.values.loc[idx, :], "results": self.results.loc[idx]}
         raise TypeError(f"Unsupported index type: {type(idx)}")
 
     def __setitem__(self, idx, item: dict):
@@ -135,6 +134,10 @@ class Sample:
         if "results" in item:
             if isinstance(idx, int):
                 self.results.at[idx] = item["results"]
+            elif isinstance(idx, slice):
+                self.results.loc[idx] = pd.Series(
+                    item["results"], index=self.results.loc[idx].index
+                )
             else:
                 self.results.iloc[idx] = pd.Series(
                     item["results"], index=self.results.index[idx]
@@ -146,6 +149,9 @@ class Sample:
         assert len(self.results) == len(
             self.values
         ), f"Mismatch: {len(self.values)} values vs {len(self.results)} results"
+
+        if not self.values.index.equals(self.results.index):
+            raise ValueError("Mismatch between values and results indices")
 
     def get_pending_index(self) -> np.ndarray:
         """
@@ -203,7 +209,7 @@ class Sample:
         selected_values = self[idx]["values"]
 
         if isinstance(selected_values, pd.Series):
-            selected_values = selected_values.to_frame()
+            selected_values = selected_values.to_frame().T
 
         return [
             [(par, val) for par, val in zip(self.parameters, row)]
