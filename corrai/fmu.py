@@ -199,43 +199,64 @@ def df_to_combitimetable(df: pd.DataFrame, filename):
 
 class ModelicaFmuModel(Model):
     """
-    Wrap an FMU (Functional Mock-up Unit) in the corrai Model formalism.
+    Wrapper for a Modelica FMU (Functional Mock-up Unit) in the corrai ``Model``
+    formalism.
+
+    Provides functionality to:
+    - Load an FMU and its metadata.
+    - Query property initial values.
+    - Run simulations with configurable options.
+    - Handle boundary conditions using a CombiTimeTable if defined.
 
     Parameters
     ----------
-    fmu_path : Path
+    fmu_path : Path or str
         Path to the FMU file.
-    simulation_options : dict, optional
-        Dictionary of simulation options including:
-        ``startTime``, ``stopTime``, ``stepSize``, ``solver``,
-        ``outputInterval``, ``tolerance``, ``fmi_type``.
-        Can also include ``boundary`` (pd.DataFrame) if the FMU
-        uses a CombiTimeTable.
-    output_list : list of str, optional
-        List of variables to record during simulation.
-    boundary_table_name : str or None, optional
-        Name of the CombiTimeTable object in the FMU that is used to
-        provide boundary conditions.
-
-        - If a string is provided, boundary data can be passed through
-          ``simulation_options["boundary"]``.
-        - If None (default), no CombiTimeTable will be set and any
-          provided ``boundary`` will be ignored.
     simulation_dir : Path, optional
-        Directory for simulation files. A temporary directory is created
-        if not provided.
+        Directory for simulation files. A temporary directory is created if not
+        provided.
+    output_list : list of str, optional
+        Names of FMU variables to record during simulation.
+    boundary_table_name : str or None, optional
+        Name of the CombiTimeTable object in the FMU used for boundary conditions.
+        If provided, boundary data can be passed through
+        ``simulation_options["boundary"]`` or ``property_dict["boundary"]``. If
+        ``None`` (default), boundaries are ignored. Boundaries specified in
+        ``property_dict`` will always override ``simulation_options`` boundaries
+
 
     Examples
     --------
     >>> import pandas as pd
     >>> from corrai.fmu import ModelicaFmuModel
-    >>> model = ModelicaFmuModel(
-    ...     "boundary_test.fmu",
-    ...     output_list=["Boundaries.y[1]"],
+
+    >>> simu = ModelicaFmuModel(
+    ...     fmu_path=fmu_path,
+    ...     output_list=["Boundaries.y[1]", "Boundaries.y[2]"],
     ...     boundary_table_name="Boundaries",
     ... )
-    >>> x = pd.DataFrame({"Boundaries.y[1]": [1, 2, 3]}, index=[0, 1, 2])
-    >>> res = model.simulate(simulation_options={"boundary": x, "stepSize": 1})
+
+    >>> new_bounds = pd.DataFrame(
+    ...     {"Boundaries.y[1]": [1, 2, 3], "Boundaries.y[2]": [3, 4, 5]},
+    ...     index=range(3, 6),
+    ... )
+
+    >>> res = simu.simulate(
+    ...     simulation_options={
+    ...         "solver": "CVode",
+    ...         "startTime": 3,
+    ...         "stopTime": 5,
+    ...         "stepSize": 1,
+    ...         "boundary": new_bounds,
+    ...     },
+    ...     solver_duplicated_keep="last",
+    ... )
+
+          Boundaries.y[1]  Boundaries.y[2]
+    time
+    3.0               1.0              3.0
+    4.0               2.0              4.0
+    5.0               3.0              5.0
     """
 
     def __init__(
@@ -321,39 +342,93 @@ class ModelicaFmuModel(Model):
         logger=None,
     ) -> pd.DataFrame:
         """
-        Run FMU simulation for the given parameters and simulation options.
+        Run an FMU simulation with properties and boundary configuration.
 
         Parameters
         ----------
         property_dict : dict, optional
             Dictionary of FMU parameter values to set before simulation.
-            Can include "boundary" (pd.DataFrame) if boundary data must override
-            simulation_options.
+            May include a key ``"boundary"`` with a DataFrame of boundary conditions.
+            If both ``property_dict`` and ``simulation_options`` specify boundaries,
+            the one in ``property_dict`` takes precedence.
         simulation_options : dict, optional
-            Simulation options. May include:
-            - ``startTime``, ``stopTime``, ``stepSize``, ``solver``,
-              ``outputInterval``, ``tolerance``, ``fmi_type``.
-            - ``boundary`` : pd.DataFrame of boundary conditions.
+            Simulation settings. Supported keys include:
+
+            - ``startTime`` : float or pandas.Timestamp
+            - ``stopTime`` : float or pandas.Timestamp
+            - ``stepSize`` : float or pandas.TimeDelta
+            - ``outputInterval`` : float or pandas.TimeDelta. If not provided, it will
+                be set equal to ``stepSize``
+            - ``solver`` : str
+            - ``tolerance`` : float
+            - ``fmi_type`` : {"CoSimulation", "ModelExchange"}
+            - ``boundary`` : pandas.DataFrame of boundary conditions
+
         solver_duplicated_keep : {"first", "last"}, default "last"
-            Which value to keep if solver outputs duplicated indices.
+            Which entry to keep if solver outputs duplicated indices.
         post_process_pipeline : sklearn.Pipeline, optional
-            Pipeline applied to simulation results.
+            Transformation pipeline applied to simulation results before returning.
         debug_param : bool, default False
-            If True, prints `property_dict`.
+            If True, prints the property dictionary before simulation.
         debug_logging : bool, default False
             Enable verbose logging from fmpy.
         logger : callable, optional
-            Logger for fmpy.
+            Custom logger for fmpy.
 
         Returns
         -------
-        pd.DataFrame
-            Simulation results, indexed by time.
+        pandas.DataFrame
+            Simulation results indexed by time. If ``startTime`` is a
+            :class:`pandas.Timestamp`, the index is a DateTimeIndex; otherwise,
+            a numeric index is used.
+
+        Raises
+        ------
+        ValueError
+            If ``startTime`` or ``stopTime`` are outside the boundary DataFrame.
 
         Notes
         -----
-        - If boundary is provided both in `property_dict` and `simulation_options`,
-          the one from `property_dict` takes precedence, with a warning.
+        - Duplicate time indices are resolved using ``solver_duplicated_keep``.
+
+        Examples
+        --------
+        Run a basic simulation with default options:
+
+        >>> model = ModelicaFmuModel("simple.fmu", output_list=["y"])
+        >>> res = model.simulate(
+        ...     simulation_options={"startTime": 0, "stopTime": 10, "stepSize": 1}
+        ... )
+        >>> res.head()
+           y
+        0.0  0.0
+        1.0  1.1
+        2.0  2.3
+        ...
+
+        Run a simulation with boundary conditions:
+
+        >>> import pandas as pd
+        >>> x = pd.DataFrame({"Boundaries.y[1]": [1, 2, 3]}, index=[0, 1, 2])
+        >>> model = ModelicaFmuModel(
+        ...     "boundary_test.fmu",
+        ...     output_list=["Boundaries.y[1]"],
+        ...     boundary_table_name="Boundaries",
+        ... )
+        >>> res = model.simulate(
+        ...     simulation_options={
+        ...         "boundary": x,
+        ...         "startTime": 0,
+        ...         "stopTime": 2,
+        ...         "stepSize": 1,
+        ...     }
+        ... )
+        >>> res.head()
+              Boundaries.y[1]
+        time
+        0.0               1.0
+        1.0               2.0
+        2.0               3.0
 
         """
         property_dict = dict(property_dict or {})
