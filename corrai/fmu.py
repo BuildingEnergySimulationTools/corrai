@@ -1,14 +1,59 @@
 import datetime as dt
 import shutil
 import tempfile
-from pathlib import Path
 import warnings
+from pathlib import Path
+from contextlib import contextmanager
+
 import fmpy
 from fmpy import simulate_fmu
 import pandas as pd
 from sklearn.pipeline import Pipeline
 
 from corrai.base.model import Model
+
+DEFAULT_SIMULATION_OPTIONS = {
+    "startTime": 0,
+    "stopTime": 24 * 3600,
+    "stepSize": 60,
+    "solver": "CVode",
+    "tolerance": 1e-6,
+    "fmi_type": "ModelExchange",
+}
+
+
+@contextmanager
+def simulation_workspace(fmu_path: Path, boundary_path: Path | None):
+    """
+    Create an isolated temporary workspace with a copy of the FMU and optional
+    boundary file. Cleans up everything automatically at exit.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+
+        local_fmu = tmpdir / fmu_path.name
+        shutil.copy(fmu_path, local_fmu)
+
+        local_boundary = None
+        if boundary_path is not None:
+            local_boundary = tmpdir / boundary_path.name
+            shutil.copy(boundary_path, local_boundary)
+
+        yield local_fmu, local_boundary
+
+
+def parse_simulation_times(start, stop, step, output_int):
+    if all(isinstance(elmt, int) for elmt in (start, stop, step, output_int)):
+        return start, stop, step, output_int
+
+    elif (
+        isinstance(start, (pd.Timestamp, dt.datetime))
+        and isinstance(stop, (pd.Timestamp, dt.datetime))
+        and isinstance(step, (pd.Timedelta, dt.timedelta))
+        and isinstance(output_int, (pd.Timedelta, dt.timedelta))
+    ):
+        return map(datetime_to_second, (start, stop, step, output_int))
+    raise ValueError("Invalid 'startTime', 'stopTime', 'stepSize', or 'outputInterval")
 
 
 def seconds_index_to_datetime_index(
@@ -44,7 +89,7 @@ def seconds_index_to_datetime_index(
     return pd.DatetimeIndex(pd.to_datetime(diff_seconds, unit="s"))
 
 
-def datetime_to_second(datetime_in: dt.datetime | pd.Timestamp):
+def datetime_to_second(datetime_in: dt.datetime | pd.Timestamp | pd.Timedelta):
     """
     Convert a datetime or timestamp into the number of seconds since the beginning of its year.
 
@@ -64,9 +109,11 @@ def datetime_to_second(datetime_in: dt.datetime | pd.Timestamp):
     >>> datetime_to_second(dt.datetime(2020, 1, 1, 1, 0, 0))
     3600.0
     """
-    year = datetime_in.year
-    origin = dt.datetime(year, 1, 1)
-    return (datetime_in - origin).total_seconds()
+    if isinstance(datetime_in, (dt.datetime | pd.Timestamp)):
+        year = datetime_in.year
+        origin = dt.datetime(year, 1, 1)
+        return int((datetime_in - origin).total_seconds())
+    return int(datetime_in.total_seconds())
 
 
 def datetime_index_to_seconds_index(index_datetime: pd.DatetimeIndex) -> pd.Index:
@@ -150,49 +197,6 @@ def df_to_combitimetable(df: pd.DataFrame, filename):
         file.write(df.to_csv(header=False, sep="\t", lineterminator="\n"))
 
 
-def get_start_stop_year_tz_from_x(x: pd.DataFrame = None):
-    """
-    Extract simulation time bounds and time zone from boundary condition data.
-
-    Parameters
-    ----------
-    x : pd.DataFrame, optional
-        DataFrame with DatetimeIndex or numeric index.
-
-    Returns
-    -------
-    tuple
-        (start, stop, year, tz):
-        - start : float
-            Minimum time (in seconds).
-        - stop : float
-            Maximum time (in seconds).
-        - year : int or None
-            Reference year if datetime index was used.
-        - tz : datetime.tzinfo or None
-            Time zone information.
-
-    Examples
-    --------
-    >>> import pandas as pd
-    >>> idx = pd.date_range("2020-01-01", periods=3, freq="H", tz="UTC")
-    >>> x = pd.DataFrame({"val": [1, 2, 3]}, index=idx)
-    >>> get_start_stop_year_tz_from_x(x)
-    (0.0, 7200.0, 2020, datetime.timezone.utc)
-    """
-    if x is None:
-        return None, None, None
-    if isinstance(x.index, pd.DatetimeIndex):
-        idx = datetime_index_to_seconds_index(x.index)
-        year = x.index[0].year
-        tz = x.index.tz
-    else:
-        idx = x.index
-        year = None
-        tz = None
-    return idx.min(), idx.max(), year, tz
-
-
 class ModelicaFmuModel(Model):
     """
     Wrap an FMU (Functional Mock-up Unit) in the corrai Model formalism.
@@ -209,7 +213,7 @@ class ModelicaFmuModel(Model):
         uses a CombiTimeTable.
     output_list : list of str, optional
         List of variables to record during simulation.
-    boundary_table : str or None, optional
+    boundary_table_name : str or None, optional
         Name of the CombiTimeTable object in the FMU that is used to
         provide boundary conditions.
 
@@ -228,7 +232,7 @@ class ModelicaFmuModel(Model):
     >>> model = ModelicaFmuModel(
     ...     "boundary_test.fmu",
     ...     output_list=["Boundaries.y[1]"],
-    ...     boundary_table="Boundaries",
+    ...     boundary_table_name="Boundaries",
     ... )
     >>> x = pd.DataFrame({"Boundaries.y[1]": [1, 2, 3]}, index=[0, 1, 2])
     >>> res = model.simulate(simulation_options={"boundary": x, "stepSize": 1})
@@ -236,116 +240,36 @@ class ModelicaFmuModel(Model):
 
     def __init__(
         self,
-        fmu_path: Path,
-        simulation_options: dict[str, float | str | int] = None,
-        output_list: list[str] = None,
-        boundary_table: str | None = None,
+        fmu_path: Path | str,
         simulation_dir: Path = None,
+        output_list: list[str] = None,
+        boundary_table_name: str | None = None,
     ):
-        fmu_path = Path(fmu_path)
+        fmu_path = Path(fmu_path) if isinstance(fmu_path, str) else fmu_path
         if not fmu_path.exists() or not fmu_path.is_file():
             raise FileNotFoundError(f"FMU file not found at {fmu_path}")
 
-        self._x = pd.DataFrame()
-        self.simulation_options = {
-            "startTime": 0,
-            "stopTime": 24 * 3600,
-            "stepSize": 60,
-            "solver": "CVode",
-            "outputInterval": 1,
-            "tolerance": 1e-6,
-            "fmi_type": "ModelExchange",
-        }
-        self.model_path = fmu_path
+        self.fmu_path = fmu_path
         self.simulation_dir = (
             Path(tempfile.mkdtemp()) if simulation_dir is None else simulation_dir
         )
         self.output_list = output_list
-        self.parameters = {}
-        self._begin_year = None
-        self._tz = None
-        self.boundary_table = boundary_table
-
-        if simulation_options is not None:
-            self.set_simulation_options(simulation_options)
-
-    def set_simulation_options(
-        self,
-        simulation_options: dict[
-            str, float | str | int | dt.datetime | pd.Timestamp
-        ] = None,
-    ):
-        """
-        Set simulation options and boundary data if provided.
-
-        Parameters
-        ----------
-        simulation_options : dict, optional
-            May include:
-            - ``startTime``, ``stopTime`` : float or datetime
-            - ``stepSize``, ``solver``, ``outputInterval``, ``tolerance``, ``fmi_type``
-            - ``boundary`` : pd.DataFrame, boundary data for the CombiTimeTable
-        """
-
-        if simulation_options is None:
-            return
-
-        if "boundary" in simulation_options:
-            if self.boundary_table is None:
+        self.boundary_table_name = boundary_table_name
+        self.boundary_file_path = None
+        if self.boundary_table_name is not None:
+            model_description = fmpy.read_model_description(self.fmu_path.as_posix())
+            var_map = {var.name: var.start for var in model_description.modelVariables}
+            try:
+                self.boundary_file_path = Path(
+                    rf"{var_map[f"{self.boundary_table_name}.fileName"]}"
+                )
+            except KeyError:
                 warnings.warn(
-                    "Boundary provided but no combitimetable name set -> ignoring."
+                    f"Boundary combitimetable '{self.boundary_table_name}' "
+                    f"not found in FMU -> ignoring boundary.",
+                    UserWarning,
+                    stacklevel=2,
                 )
-            else:
-                model_description = fmpy.read_model_description(
-                    self.model_path.as_posix()
-                )
-                varnames = [v.name for v in model_description.modelVariables]
-                if f"{self.boundary_table}.fileName" not in varnames:
-                    warnings.warn(
-                        f"Boundary combitimetable '{self.boundary_table}' "
-                        f"not found in FMU -> ignoring boundary.",
-                        UserWarning,
-                        stacklevel=2,
-                    )
-                else:
-                    self.set_boundary(simulation_options["boundary"])
-
-        to_update = {
-            k: v
-            for k, v in simulation_options.items()
-            if k not in ["startTime", "stopTime"]
-        }
-        self.simulation_options.update(to_update)
-
-        simo = {}
-        for key in ["startTime", "stopTime"]:
-            if key in simulation_options:
-                if isinstance(simulation_options[key], (dt.datetime, pd.Timestamp)):
-                    simo[key] = datetime_to_second(simulation_options[key])
-                    if key == "startTime":
-                        self._begin_year = simulation_options["startTime"].year
-                else:
-                    simo[key] = simulation_options[key]
-            else:
-                simo[key] = self.simulation_options[key]
-        self.simulation_options["startTime"] = simo["startTime"]
-        self.simulation_options["stopTime"] = simo["stopTime"]
-
-    def set_boundary(self, df: pd.DataFrame):
-        """Set boundary data and update parameters accordingly."""
-        if not self._x.equals(df):
-            new_bounds_path = self.simulation_dir / "boundaries.txt"
-            df_to_combitimetable(df, new_bounds_path)
-            self.parameters[f"{self.boundary_table}.fileName"] = (
-                new_bounds_path.as_posix()
-            )
-            self._x = df
-
-            start, stop, year, tz = get_start_stop_year_tz_from_x(df)
-            self.simulation_options["startTime"] = start
-            self.simulation_options["stopTime"] = stop
-            self._begin_year = year
-            self._tz = tz
 
     def get_property_values(
         self, property_list: str | tuple[str, ...] | list[str]
@@ -375,7 +299,7 @@ class ModelicaFmuModel(Model):
         if isinstance(property_list, str):
             property_list = (property_list,)
 
-        model_description = fmpy.read_model_description(self.model_path.as_posix())
+        model_description = fmpy.read_model_description(self.fmu_path.as_posix())
         variable_map = {var.name: var for var in model_description.modelVariables}
         values = []
         for prop in property_list:
@@ -432,46 +356,91 @@ class ModelicaFmuModel(Model):
           the one from `property_dict` takes precedence, with a warning.
 
         """
+        property_dict = dict(property_dict or {})
 
-        if debug_param:
+        if property_dict and debug_param:
             print(property_dict)
 
-        if property_dict and "boundary" in property_dict:
-            if simulation_options and "boundary" in simulation_options:
+        simulation_options = {
+            **DEFAULT_SIMULATION_OPTIONS,
+            **(simulation_options or {}),
+        }
+
+        start, stop, step, output_int = (
+            simulation_options.get(it, None)
+            for it in ["startTime", "stopTime", "stepSize", "outputInterval"]
+        )
+
+        if output_int is None:
+            output_int = step
+
+        start_sec, stop_sec, step_sec, output_int_sec = parse_simulation_times(
+            start, stop, step, output_int
+        )
+
+        boundary_df = None
+        if property_dict:
+            boundary_df = property_dict.pop("boundary", boundary_df)
+
+        if simulation_options:
+            sim_boundary = simulation_options.pop("boundary", boundary_df)
+
+            if boundary_df is None and sim_boundary is not None:
+                boundary_df = sim_boundary
+            elif boundary_df is not None and sim_boundary is not None:
                 warnings.warn(
-                    "Boundary specified in both property_dict and simulation_options. "
-                    "The one in property_dict will be used.",
+                    "Boundary specified in both property_dict and "
+                    "simulation_options. The one in property_dict will be used.",
                     UserWarning,
                     stacklevel=2,
                 )
-            self.set_boundary(property_dict["boundary"])
-            property_dict = {k: v for k, v in property_dict.items() if k != "boundary"}
 
-        self.parameters.update(property_dict or {})
+        if boundary_df is not None:
+            boundary_df = boundary_df.copy()
+            if isinstance(boundary_df.index, pd.DatetimeIndex):
+                boundary_df.index = datetime_index_to_seconds_index(boundary_df.index)
 
-        self.set_simulation_options(simulation_options)
+            if not (
+                boundary_df.index[0] <= start_sec <= boundary_df.index[-1]
+                and boundary_df.index[0] <= stop_sec <= boundary_df.index[-1]
+            ):
+                raise ValueError(
+                    "'startTime' and 'stopTime' are outside boundary DataFrame"
+                )
 
-        result = simulate_fmu(
-            filename=self.model_path,
-            start_time=self.simulation_options["startTime"],
-            stop_time=self.simulation_options["stopTime"],
-            step_size=self.simulation_options["stepSize"],
-            relative_tolerance=self.simulation_options["tolerance"],
-            start_values=self.parameters,
-            output=self.output_list,
-            solver=self.simulation_options["solver"],
-            output_interval=self.simulation_options["outputInterval"],
-            fmi_type=self.simulation_options["fmi_type"],
-            debug_logging=debug_logging,
-            logger=logger,
-        )
+            self.boundary_file_path = self.simulation_dir / "boundaries.txt"
+            df_to_combitimetable(boundary_df, self.boundary_file_path)
+
+        with simulation_workspace(self.fmu_path, self.boundary_file_path) as (
+            local_fmu,
+            local_boundary,
+        ):
+            if local_boundary is not None and self.boundary_table_name:
+                property_dict[f"{self.boundary_table_name}.fileName"] = (
+                    local_boundary.as_posix()
+                )
+
+            result = simulate_fmu(
+                filename=local_fmu,
+                start_time=start_sec,
+                stop_time=stop_sec,
+                step_size=step_sec,
+                relative_tolerance=simulation_options["tolerance"],
+                start_values=property_dict,
+                output=self.output_list,
+                solver=simulation_options["solver"],
+                output_interval=output_int_sec,
+                fmi_type=simulation_options["fmi_type"],
+                debug_logging=debug_logging,
+                logger=logger,
+            )
 
         df = pd.DataFrame(result, columns=["time"] + self.output_list)
 
-        if self._begin_year is not None:
-            df.index = seconds_index_to_datetime_index(df["time"], self._begin_year)
+        if isinstance(start, (pd.Timestamp, dt.datetime)):
+            df.index = seconds_index_to_datetime_index(df["time"], start.year)
             df.index = df.index.round("s")
-            df = df.tz_localize(self._tz)
+            df = df.tz_localize(start.tz)
             df.index.freq = df.index.inferred_freq
         else:
             df.index = round(df["time"], 2)
@@ -495,7 +464,7 @@ class ModelicaFmuModel(Model):
             Destination path.
 
         """
-        shutil.copyfile(self.model_path, file_path)
+        shutil.copyfile(self.fmu_path, file_path)
 
     def __repr__(self):
         """
@@ -524,11 +493,11 @@ class ModelicaFmuModel(Model):
           Name: res.significantDigits, Default Value: 2,
           Description: Number of significant digits to be shown
         """
-        model_description = fmpy.read_model_description(self.model_path.as_posix())
+        model_description = fmpy.read_model_description(self.fmu_path.as_posix())
 
         model_info = f"Model Name: {model_description.modelName}\n"
         model_info += (
-            f"Description: {fmpy.read_model_description(self.model_path.as_posix())}\n"
+            f"Description: {fmpy.read_model_description(self.fmu_path.as_posix())}\n"
         )
         model_info += f"Version: {model_description.fmiVersion}\n"
         model_info += "Parameters:\n"
