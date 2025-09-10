@@ -281,9 +281,8 @@ class ModelicaFmuModel(Model):
             model_description = fmpy.read_model_description(self.fmu_path.as_posix())
             var_map = {var.name: var.start for var in model_description.modelVariables}
             try:
-                self.boundary_file_path = Path(
-                    rf"{var_map[f"{self.boundary_table_name}.fileName"]}"
-                )
+                combi_tab_property_name = f"{self.boundary_table_name}.fileName"
+                self.boundary_file_path = Path(rf"{var_map[combi_tab_property_name]}")
             except KeyError:
                 warnings.warn(
                     f"Boundary combitimetable '{self.boundary_table_name}' "

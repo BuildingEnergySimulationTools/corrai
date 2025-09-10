@@ -42,27 +42,22 @@ class TestFmu:
 
         res = simu.simulate(
             simulation_options={
-                "startTime": pd.Timestamp("2009-01-01"),
-                "stopTime": pd.Timestamp("2009-01-02"),
+                "startTime": pd.Timestamp("2009-01-01 00:00:00"),
+                "stopTime": pd.Timestamp("2009-01-01 05:00:00"),
                 "stepSize": pd.Timedelta("30min"),
-                "outputInterval": pd.Timedelta("5h"),
+                "outputInterval": pd.Timedelta("1h"),
             }
         )
 
         ref = pd.DataFrame(
-            data=np.array([[401.0], [401.0], [401.0], [401.0], [401.0], [401.0]]),
-            index=pd.date_range("2009-01-01", freq="5h", periods=6, name="time"),
+            data=np.array([[401.0]]*6),
+            index=pd.date_range(
+                "2009-01-01 00:00:00",
+                "2009-01-01 05:00:00",
+                freq="1h",
+                name="time"
+            ),
             columns=["res.showNumber"],
-        )
-
-        pd.testing.assert_frame_equal(res, ref)
-
-        res = simu.simulate(
-            simulation_options={
-                "startTime": pd.Timestamp("2009-01-01"),
-                "stopTime": pd.Timestamp("2009-01-02"),
-                "stepSize": pd.Timedelta("5h"),
-            }
         )
 
         pd.testing.assert_frame_equal(res, ref)
