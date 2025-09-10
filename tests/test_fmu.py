@@ -1,15 +1,14 @@
-import datetime as dt
 import os
 import platform
 import tempfile
 from pathlib import Path
-import pytest
 
 import numpy as np
 import pandas as pd
 
 from corrai.fmu import ModelicaFmuModel
 from corrai.base.parameter import Parameter
+from corrai.sampling import LHSSampler
 
 system = platform.system()
 
@@ -25,6 +24,10 @@ class TestFmu:
     def test_results(self):
         simu = ModelicaFmuModel(
             fmu_path=PACKAGE_DIR / "rosen.fmu",
+            output_list=["res.showNumber"],
+        )
+
+        res = simu.simulate(
             simulation_options={
                 "startTime": 0,
                 "stopTime": 2,
@@ -33,12 +36,31 @@ class TestFmu:
                 "outputInterval": 1,
                 "tolerance": 1e-6,
             },
-            output_list=["res.showNumber"],
         )
-
-        res = simu.simulate()
         ref = pd.DataFrame({"res.showNumber": [401.0, 401.0, 401.0]})
         assert np.allclose(res["res.showNumber"].values, ref["res.showNumber"].values)
+
+        res = simu.simulate(
+            simulation_options={
+                "startTime": pd.Timestamp("2009-01-01 00:00:00"),
+                "stopTime": pd.Timestamp("2009-01-01 05:00:00"),
+                "stepSize": pd.Timedelta("30min"),
+                "outputInterval": pd.Timedelta("1h"),
+            }
+        )
+
+        ref = pd.DataFrame(
+            data=np.array([[401.0]]*6),
+            index=pd.date_range(
+                "2009-01-01 00:00:00",
+                "2009-01-01 05:00:00",
+                freq="1h",
+                name="time"
+            ),
+            columns=["res.showNumber"],
+        )
+
+        pd.testing.assert_frame_equal(res, ref)
 
     if system == "Windows":
         # Because issues with relatives filepaths exporting FMUs from OM.
@@ -46,7 +68,7 @@ class TestFmu:
             simu = ModelicaFmuModel(
                 fmu_path=PACKAGE_DIR / "boundary_test.fmu",
                 output_list=["Boundaries.y[1]", "Boundaries.y[2]"],
-                boundary_table="Boundaries",
+                boundary_table_name="Boundaries",
             )
 
             new_bounds = pd.DataFrame(
@@ -60,7 +82,8 @@ class TestFmu:
             res = simu.simulate(
                 simulation_options={
                     "solver": "CVode",
-                    "outputInterval": 1,
+                    "startTime": 3,
+                    "stopTime": 5,
                     "stepSize": 1,
                     "boundary": new_bounds,
                 },
@@ -93,25 +116,15 @@ class TestFmu:
 
             res = simu.simulate(
                 simulation_options={
-                    "outputInterval": 3600,
-                    "stepSize": 3600,
+                    "startTime": pd.Timestamp("2009-07-13 00:00:00"),
+                    "stopTime": pd.Timestamp("2009-07-13 04:00:00"),
+                    "stepSize": pd.Timedelta("1h"),
                     "boundary": x_datetime,
                 },
                 solver_duplicated_keep="last",
             )
 
             pd.testing.assert_frame_equal(res, x_datetime)
-
-            res = simu.simulate(
-                simulation_options={
-                    "startTime": dt.datetime(2009, 7, 13, 0, 0, 0),
-                    "stopTime": dt.datetime(2009, 7, 13, 3, 0, 0),
-                    "outputInterval": 3600,
-                },
-                solver_duplicated_keep="last",
-            )
-
-            pd.testing.assert_frame_equal(res, x_datetime.loc[:"2009-7-13 03:00:00", :])
 
     def test_save(self):
         simu = ModelicaFmuModel(
@@ -144,10 +157,9 @@ class TestFmu:
         vals = simu.get_property_values(["x.k", "y.k"])
         assert vals == ["2.0", "2.0"]
 
-    def test_simulate_parameter(self):
+    def test_simulate_parallel(self):
         simu = ModelicaFmuModel(
             fmu_path=PACKAGE_DIR / "rosen.fmu",
-            simulation_options={"startTime": 0, "stopTime": 2, "stepSize": 1},
             output_list=["res.showNumber"],
         )
 
@@ -161,39 +173,34 @@ class TestFmu:
             ),
         ]
 
-        res1 = simu.simulate({"y.k": 4, "x.k": 3})
-        res2 = simu.simulate_parameter(
-            [
-                (param[0], 3),
-                (param[1], 4),
-            ]
-        )
-        assert res1["res.showNumber"].equals(res2["res.showNumber"])
-
-    def test_boundary_warning(self):
-        simu = ModelicaFmuModel(
-            fmu_path=PACKAGE_DIR / "rosen.fmu",
-            output_list=["res.showNumber"],
-            boundary_table="Boundaries",
+        sampler = LHSSampler(
+            param,
+            simu,
+            {
+                "startTime": pd.Timestamp("2009-01-01 00:00:00"),
+                "stopTime": pd.Timestamp("2009-01-01 03:00:00"),
+                "stepSize": pd.Timedelta("1h"),
+            },
         )
 
-        fake_boundary = pd.DataFrame({"u": [1, 2, 3]}, index=[0, 1, 2])
+        sampler.add_sample(10, rng=42, n_cpu=4)
 
-        with pytest.warns(
-            UserWarning,
-            match="Boundary combitimetable 'Boundaries' "
-            "not found in FMU -> ignoring boundary.",
-        ):
-            res = simu.simulate(
-                simulation_options={
-                    "startTime": 0,
-                    "stopTime": 2,
-                    "stepSize": 1,
-                    "boundary": fake_boundary,
+        pd.testing.assert_frame_equal(
+            sampler.get_sample_aggregated_time_series("res.showNumber"),
+            pd.DataFrame(
+                {
+                    "aggregated_res.showNumber": {
+                        0: 9028.841228250902,
+                        1: 3867.529535367751,
+                        2: 17616.93240203703,
+                        3: 15.654149284825673,
+                        4: 39797.376949843376,
+                        5: 20.053828778963116,
+                        6: 8760.467701320911,
+                        7: 286.2421069382586,
+                        8: 2492.382439642574,
+                        9: 12.543082479944328,
+                    }
                 }
-            )
-
-        ref = pd.DataFrame({"res.showNumber": [401.0, 401.0, 401.0]})
-        np.testing.assert_allclose(
-            res["res.showNumber"].values, ref["res.showNumber"].values
+            ),
         )
