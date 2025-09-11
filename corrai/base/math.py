@@ -5,6 +5,7 @@ import numpy as np
 
 from fastprogress.fastprogress import progress_bar
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+from typing_extensions import Callable
 
 from corrai.base.utils import check_datetime_index
 from corrai.base.metrics import nmbe, cv_rmse
@@ -22,7 +23,7 @@ METHODS = {
 def aggregate_time_series(
     results: pd.Series,
     indicator: str,
-    method: str = "mean",
+    method: str | Callable = "mean",
     agg_method_kwarg: dict = None,
     reference_time_series: pd.Series = None,
     freq: str | pd.Timedelta | dt.timedelta = None,
@@ -132,7 +133,9 @@ def aggregate_time_series(
     """
 
     agg_method_kwarg = {} if agg_method_kwarg is None else agg_method_kwarg
-    method = METHODS[method]
+
+    if isinstance(method, str):
+        method = METHODS[method]
 
     for df in results:
         check_datetime_index(df)
