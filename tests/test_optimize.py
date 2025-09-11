@@ -3,9 +3,15 @@ import numpy as np
 from pathlib import Path
 import pytest
 
-from corrai.optimize import Problem, check_duplicate_params, ObjectiveFunction
+from corrai.optimize import (
+    Problem,
+    check_duplicate_params,
+    ObjectiveFunction,
+    ModelEvaluator,
+    SciOptimizer,
+)
 from corrai.base.parameter import Parameter
-from corrai.base.model import Model
+from corrai.base.model import Model, Ishigami
 
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.soo.nonconvex.de import DE
@@ -235,6 +241,80 @@ class RosenModel(Model):
 
 
 class TestObjectiveFunction:
+    def test_model_evaluator(self):
+        param_list = [
+            Parameter(
+                "par_x1",
+                (-3.14159265359, 3.14159265359),
+                init_value=1.5,
+                model_property="x1",
+            ),
+            Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
+            Parameter(
+                "par_x3",
+                (-3.14159265359, 3.14159265359),
+                relabs="Relative",
+                model_property="x3",
+            ),
+        ]
+
+        modev = ModelEvaluator(model=Ishigami(), parameters=param_list)
+
+        assert modev.intervals == [
+            (-3.14159265359, 3.14159265359),
+            (-3.14159265359, 3.14159265359),
+            (-3.14159265359, 3.14159265359),
+        ]
+
+        assert modev.get_initial_values() == [1.5, 2, 1.0]
+
+        # 3rd relative parameter was just for test
+        param_list[-1] = Parameter(
+            "par_x3", (-3.14159265359, 3.14159265359), model_property="x3"
+        )
+        modev = ModelEvaluator(model=Ishigami(), parameters=param_list)
+        res = modev.evaluate(
+            [(param_list[0], -3.14 / 2), (param_list[1], 0), (param_list[2], 3.14)],
+            indicators_configs=[("res", "mean")],
+            simulation_options={
+                "start": "2009-01-01 00:00:00",
+                "end": "2009-01-01 00:00:00",
+                "timestep": "h",
+            },
+        )
+
+        assert res == {"res": -10.721167816657914}
+
+        assert (
+            modev.scipy_obj_function(
+                np.array([-3.14 / 2, 0, 3.14]),
+                [("res", "mean")],
+                {
+                    "start": "2009-01-01 00:00:00",
+                    "end": "2009-01-01 00:00:00",
+                    "timestep": "h",
+                },
+                None,
+            )
+            == -10.721167816657914
+        )
+
+        sci_opt = SciOptimizer(parameters=param_list, model=Ishigami())
+
+        sci_opt.diff_evo_minimize(
+            indicators_configs=[("res", "mean")],
+            simulation_options={
+                "start": "2009-01-01 00:00:00",
+                "end": "2009-01-01 00:00:00",
+                "timestep": "h",
+            },
+            rng=42,
+        )
+
+        assert round(sci_opt.result.fun, 4) == -10.7409
+
+        assert True
+
     def test_function_indicators(self):
         expected_model_res = pd.DataFrame(
             {"res1": [6.79, 6.79], "res2": [5.50, 5.50]},

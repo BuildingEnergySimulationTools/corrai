@@ -1,12 +1,19 @@
 from typing import Callable, Sequence, Iterable
+from functools import wraps
 
 import numpy as np
 import pandas as pd
 
+from scipy.optimize import differential_evolution
+
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Integer, Real, Choice, Binary
 
+import plotly.graph_objects as go
+
+from corrai.base.math import METHODS
 from corrai.base.model import Model
+from corrai.sampling import Sample
 from corrai.base.parameter import Parameter
 
 
@@ -535,3 +542,152 @@ class ObjectiveFunction:
 
         res = self.function(parameter_value_pairs, kwargs)
         return float(res[self.scipy_obj_indicator])
+
+
+class ModelEvaluator:
+    def __init__(
+        self, parameters: list[Parameter], model: Model, store_results: bool = True
+    ):
+        self.parameters = parameters
+        self.model = model
+        if store_results:
+            self.sample = Sample(self.parameters)
+
+    @property
+    def intervals(self) -> list[tuple[int | float, int | float]]:
+        return [par.interval for par in self.parameters]
+
+    def get_initial_values(self, relative_is_one: bool = True) -> list[int | float]:
+        init_dict = {}
+
+        for par in self.parameters:
+            val = par.init_value
+
+            if val is None:
+                if par.relabs == "Relative" and relative_is_one:
+                    val = 1.0
+                elif par.relabs == "Absolute":
+                    if isinstance(par.model_property, str):
+                        val = self.model.get_property_values([par.model_property])
+                    else:
+                        raise ValueError(
+                            f"Failed for parameter {par}: "
+                            "Cannot retrieve several property values from a single "
+                            "parameter"
+                        )
+
+            init_dict[par.name] = val
+
+        return [
+            x for v in init_dict.values() for x in (v if isinstance(v, list) else [v])
+        ]
+
+    def evaluate(
+        self,
+        parameter_value_pairs: list[tuple[Parameter, str | int | float]],
+        indicators_configs: list[
+            tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series | None]
+        ],
+        simulation_options: dict = None,
+        simulation_kwargs=None,
+    ) -> dict[str, int | float]:
+        res_ts = self.model.simulate_parameter(
+            parameter_value_pairs, simulation_options, simulation_kwargs
+        )
+
+        self.sample.add_samples(
+            np.array([[val[1] for val in parameter_value_pairs]]), [res_ts]
+        )
+
+        results = {}
+        for config in indicators_configs:
+            col, func, *extra = config
+            series = res_ts[col]
+
+            if isinstance(func, str):
+                func = METHODS[func]
+
+            results[col] = func(series, *extra)
+        return results
+
+    def scipy_obj_function(self, x: np.ndarray, *args) -> float:
+        indicators_configs, simulation_options, simulation_kwargs = args
+        res = self.evaluate(
+            [(par, val) for par, val in zip(self.parameters, x)],
+            indicators_configs,
+            simulation_options,
+            simulation_kwargs,
+        )
+
+        return res[indicators_configs[0][0]]
+
+
+class SciOptimizer:
+    def __init__(
+        self,
+        parameters: list[Parameter],
+        model: Model,
+    ):
+        self.model_evaluator = ModelEvaluator(parameters, model, True)
+        self.result = None
+
+    @property
+    def parameters(self):
+        return self.model_evaluator.parameters
+
+    @property
+    def values(self):
+        return self.model_evaluator.sample.values
+
+    @property
+    def results(self):
+        return self.model_evaluator.sample.results
+
+    def diff_evo_minimize(
+        self,
+        indicators_configs: list[
+            tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series | None]
+        ],
+        simulation_options: dict = None,
+        simulation_kwargs=None,
+        maxiter=1000,
+        tol=0.01,
+        rng=None,
+        workers=1,
+    ):
+        self.result = differential_evolution(
+            func=self.model_evaluator.scipy_obj_function,
+            bounds=self.model_evaluator.intervals,
+            args=(indicators_configs, simulation_options, simulation_kwargs),
+            maxiter=maxiter,
+            tol=tol,
+            rng=rng,
+            workers=workers,
+        )
+
+    @wraps(Sample.plot_sample)
+    def plot_sample(
+        self,
+        indicator: str | None,
+        reference_timeseries: pd.Series | None = None,
+        title: str | None = None,
+        y_label: str | None = None,
+        x_label: str | None = None,
+        alpha: float = 0.5,
+        show_legends: bool = False,
+        round_ndigits: int = 2,
+        quantile_band: float = 0.75,
+        type_graph: str = "area",
+    ) -> go.Figure:
+        return self.model_evaluator.sample.plot_sample(
+            indicator=indicator,
+            reference_timeseries=reference_timeseries,
+            title=title,
+            y_label=y_label,
+            x_label=x_label,
+            alpha=alpha,
+            show_legends=show_legends,
+            round_ndigits=round_ndigits,
+            quantile_band=quantile_band,
+            type_graph=type_graph,
+        )
