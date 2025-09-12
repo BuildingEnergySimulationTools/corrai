@@ -98,6 +98,8 @@ class Sample:
     simulation results. It supports indexing, aggregation, plotting, and
     integration with sampling strategies.
 
+    Handle both dynamic and static models.
+
     Parameters
     ----------
     parameters : list of Parameter
@@ -107,6 +109,9 @@ class Sample:
     ----------
     parameters : list of Parameter
         Parameters associated with this sample.
+    is_dynamic : Bool default True
+        Specify if stored results are timeeries in a DataFrame for dynamic models
+        or a Series of float for static models
     values : ndarray of shape (n_samples, n_parameters)
         Numerical values of the sampled parameters.
     results : Series of DataFrames
@@ -291,6 +296,8 @@ class Sample:
 
         If `freq` is provided, the aggregation is done over time bins, producing a
         table of simulation runs versus time periods.
+
+        Only works for dynamic models
 
         Parameters
         ----------
@@ -514,6 +521,8 @@ class Sample:
         This function allows visualization of multiple simulation samples,
         either as a scatter plot of all samples or as an aggregated area
         with min–max envelope, median, and quantile bands.
+
+        Only works for dynamic models
 
         Parameters
         ----------

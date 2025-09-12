@@ -20,6 +20,12 @@ class Model(ABC):
 
     Subclasses must implement the :meth:`simulate` method.
 
+    Parameters
+    ----------
+    is_dynamic : bool, default=True
+        Indicates if the model returns time dependant results as DataFrame with
+        DatetimeIndex, or is static and returns a Series of values
+
     Methods
     -------
     get_property_from_param(parameter_value_pairs)
