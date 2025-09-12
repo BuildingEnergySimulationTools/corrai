@@ -266,6 +266,7 @@ class ModelicaFmuModel(Model):
         output_list: list[str] = None,
         boundary_table_name: str | None = None,
     ):
+        super().__init__(is_dynamic=True)
         fmu_path = Path(fmu_path) if isinstance(fmu_path, str) else fmu_path
         if not fmu_path.exists() or not fmu_path.is_file():
             raise FileNotFoundError(f"FMU file not found at {fmu_path}")

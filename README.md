@@ -67,52 +67,53 @@ This will install python-tide and all its dependencies.
 
 
 ### Quick example
+
 ```python
     import pandas as pd
 
-    from corrai.base.parameter import Parameter
-    from corrai.sensitivity import SobolSanalysis, MorrisSanalysis
-    from corrai.base.model import Ishigami
+from corrai.base.parameter import Parameter
+from corrai.sensitivity import SobolSanalysis, MorrisSanalysis
+from corrai.base.model import IshigamiDynamic
 
-    SIMULATION_OPTIONS = {
-        "start": "2009-01-01 00:00:00",
-        "end": "2009-01-01 05:00:00",
-        "timestep": "h",
-    }
+SIMULATION_OPTIONS = {
+    "start": "2009-01-01 00:00:00",
+    "end": "2009-01-01 05:00:00",
+    "timestep": "h",
+}
 
-    PARAMETER_LIST = [
-        Parameter("par_x1", (-3.14159265359, 3.14159265359), model_property="x1"),
-        Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
-        Parameter("par_x3", (-3.14159265359, 3.14159265359), model_property="x3"),
-    ]
+PARAMETER_LIST = [
+    Parameter("par_x1", (-3.14159265359, 3.14159265359), model_property="x1"),
+    Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
+    Parameter("par_x3", (-3.14159265359, 3.14159265359), model_property="x3"),
+]
 
-    # Configure a Sobol sensitivity analysis
-    sobol = SobolSanalysis(
-        parameters=PARAMETER_LIST,
-        model=Ishigami(),
-        simulation_options=SIMULATION_OPTIONS,
-    )
+# Configure a Sobol sensitivity analysis
+sobol = SobolSanalysis(
+    parameters=PARAMETER_LIST,
+    model=IshigamiDynamic(),
+    simulation_options=SIMULATION_OPTIONS,
+)
 
-    # Draw sample, and run simulations
-    sobol.add_sample(15**2, simulate=True, n_cpu=1, calc_second_order=True)
+# Draw sample, and run simulations
+sobol.add_sample(15 ** 2, simulate=True, n_cpu=1, calc_second_order=True)
 
-    # Corrai works for models that returns time series
-    # Ishigami model here will return the same value for the given parameters
-    # from START to END at 1h timestep
-    sobol.analyze('res', method="mean")["mean_res"]
+# Corrai works for models that returns time series
+# Ishigami model here will return the same value for the given parameters
+# from START to END at 1h timestep
+sobol.analyze('res', method="mean")["mean_res"]
 
-    # Default aggregation method is mean value of the timeseries
-    sobol.plot_bar('res')
+# Default aggregation method is mean value of the timeseries
+sobol.plot_bar('res')
 
-    # Display 2nd order matrix for parameters interaction
-    sobol.plot_s2_matrix('res')
+# Display 2nd order matrix for parameters interaction
+sobol.plot_s2_matrix('res')
 
-    # Display mean output values of the sample as hist
-    sobol.sampler.sample.plot_hist('res')
+# Display mean output values of the sample as hist
+sobol.sampler.sample.plot_hist('res')
 
-    # Compute dynamic sensitivity analisys at plot
-    # Obviously, in this example indexes value do not vary
-    sobol.plot_dynamic_metric('res', sensitivity_metric="ST", freq="h")
+# Compute dynamic sensitivity analisys at plot
+# Obviously, in this example indexes value do not vary
+sobol.plot_dynamic_metric('res', sensitivity_metric="ST", freq="h")
 ```
 
 ### Sponsors

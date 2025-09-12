@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import wraps
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -114,6 +115,7 @@ class Sample:
     """
 
     parameters: list[Parameter]
+    is_dynamic: bool = True
     values: pd.DataFrame = field(init=False)
     results: pd.Series = field(default_factory=lambda: pd.Series(dtype=object))
 
@@ -237,7 +239,9 @@ class Sample:
         intervals = self.get_parameters_intervals()
         return (values - intervals[:, 0]) / (intervals[:, 1] - intervals[:, 0])
 
-    def add_samples(self, values: np.ndarray, results: list[pd.DataFrame] = None):
+    def add_samples(
+        self, values: np.ndarray, results: list[Union[pd.DataFrame, pd.Series]] = None
+    ):
         """
         Add new samples and optionally their results.
 
@@ -379,6 +383,8 @@ class Sample:
         1                  2.0                  3.0
 
         """
+        if not self.is_dynamic:
+            raise ValueError("Cannot perform time aggregation on static sample")
 
         return aggregate_time_series(
             self.results,
@@ -389,6 +395,11 @@ class Sample:
             freq,
             prefix,
         )
+
+    def get_static_results_as_df(self):
+        if self.is_dynamic:
+            raise ValueError("Cannot map results to a DataFrame with a dynamic Sample")
+        return pd.DataFrame(self.results.to_list(), index=self.results.index)
 
     def plot_hist(
         self,
@@ -439,18 +450,24 @@ class Sample:
         go.Figure
             Plotly histogram figure.
         """
-        res = self.get_aggregated_time_series(
-            indicator,
-            method,
-            agg_method_kwarg,
-            reference_time_series,
-            freq=None,
-            prefix=method,
-        )
+        if self.is_dynamic:
+            res = self.get_aggregated_time_series(
+                indicator,
+                method,
+                agg_method_kwarg,
+                reference_time_series,
+                freq=None,
+                prefix=method,
+            )
+            hist_label = f"{method} {indicator}"
+
+        else:
+            res = self.get_static_results_as_df()[[indicator]]
+            hist_label = indicator
 
         fig = ff.create_distplot(
             [res.squeeze().to_numpy()],
-            [f"{method}_{indicator}"],
+            [hist_label],
             bin_size=(res.max() - res.min()) / bins,
             colors=[colors],
             show_rug=show_rug,
@@ -471,12 +488,10 @@ class Sample:
 
             # Make sure it spans the full y-axis range
             fig.update_yaxes(range=[0, None])  # auto from 0 to max
-        title = (
-            f"Sample distribution of {method} {indicator}" if title is None else title
-        )
+        title = f"Sample distribution of {hist_label}" if title is None else title
         fig.update_layout(
             title=title,
-            xaxis_title=f"{method} {indicator} {unit}",
+            xaxis_title=f"{hist_label} {unit}",
         )
         return fig
 
@@ -539,6 +554,8 @@ class Sample:
         >>> fig = plot_sample(results, reference_timeseries=ref, type_graph="scatter")
         >>> fig.show()
         """
+        if not self.is_dynamic:
+            raise ValueError("Cannot plot_sample a static sample")
 
         if self.results.empty:
             raise ValueError("`results` is empty. Simulate samples first.")
@@ -716,7 +733,7 @@ class Sampler(ABC):
             {} if simulation_options is None else simulation_options
         )
         self.model = model
-        self.sample = Sample(parameters)
+        self.sample = Sample(parameters, is_dynamic=model.is_dynamic)
 
     @property
     def parameters(self):

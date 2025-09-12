@@ -1,3 +1,4 @@
+import warnings
 from abc import ABC, abstractmethod
 from functools import wraps
 
@@ -162,14 +163,24 @@ class Sanalysis(ABC):
         - If `x_needed=True`, the analyser will receive both `X` and `Y`.
         - The analyser is typically an object from SALib.
         """
-        agg_result = self.sampler.sample.get_aggregated_time_series(
-            indicator,
-            method,
-            agg_method_kwarg,
-            reference_time_series,
-            freq,
-            prefix=method,
-        )
+        if self.sampler.sample.is_dynamic:
+            agg_result = self.sampler.sample.get_aggregated_time_series(
+                indicator,
+                method,
+                agg_method_kwarg,
+                reference_time_series,
+                freq,
+                prefix=method,
+            )
+        else:
+            if method or agg_method_kwarg:
+                warnings.warn(
+                    "'method' or 'agg_method_kwarg' was provided but Model is static."
+                    " Arguments will be ignored"
+                )
+            if freq:
+                raise ValueError("freq was specified with a static model")
+            agg_result = self.sampler.sample.get_static_results_as_df()[[indicator]]
 
         if self.x_needed:
             analyse_kwargs["X"] = self.sampler.sample.get_dimension_less_values().values
@@ -275,6 +286,11 @@ class Sanalysis(ABC):
         go.Figure
             Stacked or line plot of sensitivity metrics over time.
         """
+        if not self.sampler.sample.is_dynamic:
+            raise ValueError(
+                "Cannot perform dynamic sensitivity analysis on static sample"
+            )
+
         title = (
             f"{sensitivity_method_name} dynamic {sensitivity_metric} {method} {indicator}"
             if title is None
@@ -413,7 +429,6 @@ class Sanalysis(ABC):
         indicator: str,
         sensitivity_method_name: str,
         method: str = "mean",
-        unit: str = "",
         reference_time_series: pd.Series = None,
         agg_method_kwarg: dict = None,
         title: str = None,
@@ -581,11 +596,8 @@ class SobolSanalysis(Sanalysis):
     def plot_s2_matrix(
         self,
         indicator: str = "res",
-        sensitivity_metric: str = "S2",
         method: str = "mean",
         reference_time_series: pd.Series = None,
-        calc_second_order: bool = True,
-        unit: str = "",
         agg_method_kwarg: dict = None,
         title: str = None,
         **analyse_kwargs,
@@ -594,11 +606,9 @@ class SobolSanalysis(Sanalysis):
             indicator=indicator,
             sensitivity_method_name="Sobol",
             method=method,
-            unit=unit,
             reference_time_series=reference_time_series,
             agg_method_kwarg=agg_method_kwarg,
             title=title,
-            calc_second_order=calc_second_order,
             **analyse_kwargs,
         )
 

@@ -12,8 +12,7 @@ from corrai.sampling import (
 )
 
 from corrai.base.math import aggregate_time_series
-from corrai.base.model import Ishigami
-from tests.resources.pymodels import Pymodel
+from corrai.base.model import IshigamiDynamic, Ishigami, PymodelDynamic, PymodelStatic
 
 import pytest
 
@@ -42,7 +41,8 @@ ISHIGAMI_PARAMETERS = [
 
 
 class TestSample:
-    def test_sample_functions(self):
+    def test_sample_methods(self):
+        # Dynamic sample
         sample = Sample(REAL_PARAM)
         assert sample.values.shape == (0, 3)
         pd.testing.assert_series_equal(sample.results, pd.Series())
@@ -124,6 +124,19 @@ class TestSample:
         assert fig
 
         sample._validate()
+
+        # Static Sample
+        sample_static = Sample(REAL_PARAM, is_dynamic=False)
+
+        sample_static.add_samples(
+            np.array([[1, 0.9, 10], [3, 0.85, 20]]),
+            [pd.Series(), pd.Series({"res": 2})],
+        )
+
+        pd.testing.assert_frame_equal(
+            sample_static.get_static_results_as_df(),
+            pd.DataFrame({"res": {0: np.nan, 1: 2.0}}),
+        )
 
     def test_plot_sample(self):
         t = pd.date_range("2025-01-01 00:00:00", periods=2, freq="h")
@@ -224,9 +237,10 @@ class TestSample:
         assert fig.data[-1].mode == "lines"
 
     def test_plot_hist(self):
+        # Dynamic
         sampler = LHSSampler(
             parameters=REAL_PARAM,
-            model=Pymodel(),
+            model=PymodelDynamic(),
             simulation_options=SIMULATION_OPTIONS,
         )
         sampler.add_sample(3, 42, simulate=True)
@@ -243,6 +257,32 @@ class TestSample:
 
         assert isinstance(fig, go.Figure)
         assert fig.layout.title.text == "Sample distribution of mean res"
+
+        hist_traces = [tr for tr in fig.data if tr.type == "histogram"]
+        assert len(hist_traces) == 1
+        hist = hist_traces[0]
+        assert len(hist.x) == len(sampler.results)
+
+        # Static
+        sampler = LHSSampler(
+            parameters=ISHIGAMI_PARAMETERS,
+            model=Ishigami(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+
+        sampler.add_sample(3, 42)
+
+        fig = sampler.sample.plot_hist(
+            indicator="res",
+            unit="J",
+            bins=10,
+            colors="orange",
+            reference_value=70,
+            show_rug=True,
+        )
+
+        assert isinstance(fig, go.Figure)
+        assert fig.layout.title.text == "Sample distribution of res"
 
         hist_traces = [tr for tr in fig.data if tr.type == "histogram"]
         assert len(hist_traces) == 1
@@ -289,7 +329,7 @@ class TestSample:
     def test_plot_pcp_in_sampler(self):
         sampler = LHSSampler(
             parameters=REAL_PARAM,
-            model=Pymodel(),
+            model=PymodelDynamic(),
             simulation_options=SIMULATION_OPTIONS,
         )
         sampler.add_sample(3, 42, simulate=True)
@@ -301,9 +341,10 @@ class TestSample:
         assert len(fig.data) == 1
 
     def test_lhs_sampler(self):
+        # Dynamic
         sampler = LHSSampler(
             parameters=REAL_PARAM,
-            model=Pymodel(),
+            model=PymodelDynamic(),
             simulation_options=SIMULATION_OPTIONS,
         )
         sampler.add_sample(3, 42, False)
@@ -385,10 +426,37 @@ class TestSample:
             check_exact=False,
         )
 
+        # Static
+        sampler = LHSSampler(
+            parameters=REAL_PARAM,
+            model=PymodelStatic(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        sampler.add_sample(3, 42)
+        np.testing.assert_allclose(
+            sampler.sample.values,
+            np.array(
+                [
+                    [6.9441, 1.0785, 70.7802],
+                    [5.6356, 0.9393, 27.4968],
+                    [0.0112, 0.8330, 61.6539],
+                ]
+            ),
+            rtol=0.01,
+        )
+
+        pd.testing.assert_frame_equal(
+            sampler.sample.get_static_results_as_df(),
+            pd.DataFrame({"res": {0: 85.759, 1: 38.084, 2: 61.672}}),
+            atol=0.01,
+        )
+
+        assert True
+
     def test_morris_sampler(self):
         sampler = MorrisSampler(
             parameters=ISHIGAMI_PARAMETERS,
-            model=Ishigami(),
+            model=IshigamiDynamic(),
             simulation_options=SIMULATION_OPTIONS,
         )
 
@@ -408,7 +476,7 @@ class TestSample:
     def test_sobol_sampler(self):
         sampler = SobolSampler(
             parameters=ISHIGAMI_PARAMETERS,
-            model=Ishigami(),
+            model=IshigamiDynamic(),
             simulation_options=SIMULATION_OPTIONS,
         )
 
