@@ -1,3 +1,5 @@
+from typing import Union
+
 import pandas as pd
 import numpy as np
 
@@ -18,6 +20,12 @@ class Model(ABC):
 
     Subclasses must implement the :meth:`simulate` method.
 
+    Parameters
+    ----------
+    is_dynamic : bool, default=True
+        Indicates if the model returns time dependant results as DataFrame with
+        DatetimeIndex, or is static and returns a Series of values
+
     Methods
     -------
     get_property_from_param(parameter_value_pairs)
@@ -31,8 +39,11 @@ class Model(ABC):
         Retrieve current values of given model properties. Must be
         implemented in subclasses if relative parameters are used.
     save(file_path)
-        Persist the model state or parameters to disk. Optional.
+         Persists the model state or parameters to disk. Optional.
     """
+
+    def __init__(self, is_dynamic: bool = True):
+        self.is_dynamic = is_dynamic
 
     def get_property_from_param(
         self,
@@ -79,7 +90,7 @@ class Model(ABC):
         property_dict: dict[str, str | int | float] = None,
         simulation_options: dict = None,
         **simulation_kwargs,
-    ) -> pd.DataFrame:
+    ) -> pd.DataFrame | pd.Series:
         """
         Run a simulation for given properties and options.
 
@@ -108,7 +119,7 @@ class Model(ABC):
         parameter_value_pairs: list[tuple[Parameter, str | int | float]],
         simulation_options: dict = None,
         simulation_kwargs: dict = None,
-    ) -> pd.DataFrame:
+    ) -> Union[pd.DataFrame, pd.Series]:
         """
         Simulate the model given a set of parameter-value pairs.
 
@@ -179,7 +190,7 @@ class Model(ABC):
         raise NotImplementedError("No save method was defined for this model")
 
 
-class Ishigami(Model):
+class IshigamiDynamic(Model):
     """
     Example implementation of the Ishigami function.
 
@@ -202,6 +213,7 @@ class Ishigami(Model):
     """
 
     def __init__(self):
+        super().__init__(is_dynamic=True)
         self.x1 = 1
         self.x2 = 2
         self.x3 = 3
@@ -236,3 +248,109 @@ class Ishigami(Model):
                 freq=simulation_options["timestep"],
             ),
         )
+
+
+class Ishigami(Model):
+    """
+    Example implementation of the Ishigami function.
+
+    The Ishigami function is a standard benchmark for sensitivity analysis:
+        f(x) = sin(x1) + 7 sin^2(x2) + 0.1 x3^4 sin(x1)
+
+    Attributes
+    ----------
+    x1, x2, x3 : float
+        Model parameters controlling the output.
+
+    Methods
+    -------
+    get_property_values(property_list)
+        Retrieve current values of x1, x2, x3.
+    set_property_values(property_dict)
+        Set properties from a dictionary.
+    simulate(property_dict, simulation_options, simulation_kwargs)
+        Evaluate the Ishigami function and return as a Series.
+    """
+
+    def __init__(self):
+        super().__init__(is_dynamic=False)
+        self.x1 = 1
+        self.x2 = 2
+        self.x3 = 3
+
+    def get_property_values(self, property_list: list):
+        return [getattr(self, name) for name in property_list]
+
+    def set_property_values(self, property_dict: dict):
+        for prop, val in property_dict.items():
+            setattr(self, prop, val)
+
+    def simulate(
+        self,
+        property_dict: dict[str, str | int | float] = None,
+        simulation_options: dict = None,
+        simulation_kwargs: dict = None,
+    ) -> pd.Series:
+        if property_dict is not None:
+            self.set_property_values(property_dict)
+
+        res = (
+            np.sin(self.x1)
+            + 7.0 * np.power(np.sin(self.x2), 2)
+            + 0.1 * np.power(self.x3, 4) * np.sin(self.x1)
+        )
+
+        return pd.Series({"res": res})
+
+
+class PymodelDynamic(Model):
+    def __init__(self):
+        super().__init__(is_dynamic=True)
+        self.prop_1 = 1
+        self.prop_2 = 2
+        self.prop_3 = 3
+
+    def get_property_values(self, property_list: list):
+        return [getattr(self, name) for name in property_list]
+
+    def simulate(
+        self,
+        property_dict: dict[str, str | int | float] = None,
+        simulation_options: dict = None,
+        **simulation_kwargs,
+    ) -> pd.DataFrame:
+        if property_dict is not None:
+            for prop, val in property_dict.items():
+                setattr(self, prop, val)
+
+        return pd.DataFrame(
+            {"res": [self.prop_1 * self.prop_2 + self.prop_3]},
+            index=pd.date_range(
+                simulation_options["start"],
+                simulation_options["end"],
+                freq=simulation_options["timestep"],
+            ),
+        )
+
+
+class PymodelStatic(Model):
+    def __init__(self):
+        super().__init__(is_dynamic=False)
+        self.prop_1 = 1
+        self.prop_2 = 2
+        self.prop_3 = 3
+
+    def get_property_values(self, property_list: list):
+        return [getattr(self, name) for name in property_list]
+
+    def simulate(
+        self,
+        property_dict: dict[str, str | int | float] = None,
+        simulation_options: dict = None,
+        **simulation_kwargs,
+    ) -> pd.Series:
+        if property_dict is not None:
+            for prop, val in property_dict.items():
+                setattr(self, prop, val)
+
+        return pd.Series({"res": self.prop_1 * self.prop_2 + self.prop_3})
