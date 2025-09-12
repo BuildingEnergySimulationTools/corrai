@@ -50,12 +50,9 @@ class TestFmu:
         )
 
         ref = pd.DataFrame(
-            data=np.array([[401.0]]*6),
+            data=np.array([[401.0]] * 6),
             index=pd.date_range(
-                "2009-01-01 00:00:00",
-                "2009-01-01 05:00:00",
-                freq="1h",
-                name="time"
+                "2009-01-01 00:00:00", "2009-01-01 05:00:00", freq="1h", name="time"
             ),
             columns=["res.showNumber"],
         )

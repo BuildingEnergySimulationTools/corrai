@@ -2,7 +2,7 @@ import pandas as pd
 
 from corrai.base.parameter import Parameter
 from corrai.base.simulate import run_simulations
-from corrai.base.model import Ishigami
+from corrai.base.model import IshigamiDynamic
 
 SIMULATION_OPTIONS = {
     "start": "2009-01-01 00:00:00",
@@ -24,7 +24,7 @@ PARAMETER_PAIRS = [
 
 class TestSimulate:
     def test_run_models_in_parallel(self):
-        model = Ishigami()
+        model = IshigamiDynamic()
 
         res = run_simulations(model, PARAMETER_PAIRS, SIMULATION_OPTIONS, n_cpu=1)
 

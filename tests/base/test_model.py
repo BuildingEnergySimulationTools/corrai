@@ -1,5 +1,5 @@
 from corrai.base.parameter import Parameter
-from ..resources.pymodels import Pymodel
+from corrai.base.model import PymodelDynamic
 
 PARAM_LIST = [
     Parameter("par1", (0, 2), relabs="Absolute", model_property=("prop_1", "prop_2")),
@@ -15,7 +15,7 @@ SIMULATION_OPTIONS = {
 
 class TestModel:
     def test_pymodel(self):
-        mod = Pymodel()
+        mod = PymodelDynamic()
 
         res = mod.simulate(simulation_options=SIMULATION_OPTIONS)
 
