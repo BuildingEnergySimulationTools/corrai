@@ -16,6 +16,251 @@ from corrai.base.model import Model
 from corrai.sampling import Sample
 from corrai.base.parameter import Parameter
 
+class ModelEvaluator:
+    """
+    Evaluate a model with respect to a set of parameters and compute indicators
+    Series from simulation results.
+
+    This class acts as an interface between parameters, the model, and an optimizer.
+    It provides and objective function suitable for SciPy optimizers.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        List of corrai Parameters.
+    model : Model
+        Corrai Model object. `get_property_values` method must be implemented to use
+        get_initial_values method.
+    store_results : bool, optional
+        If True, stores results in an internal `Sample` instance. Default is True.
+
+    Attributes
+    ----------
+    parameters : list of Parameter
+        Model parameters used in evaluation.
+    model : Model
+        The underlying model being evaluated.
+    sample : Sample
+        Stores samples and simulation results if `store_results=True`.
+
+    Examples
+    --------
+    >>> from corrai.base.model import Ishigami
+    >>> from corrai.optimize import ModelEvaluator
+
+    >>> param_list = [
+    ...     Parameter("par_x1", (-3.14159265359, 3.14159265359), model_property="x1"),
+    ...     Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
+    ...     Parameter("par_x3", (-3.14159265359, 3.14159265359), model_property="x3"),
+    ... ]
+
+    >>> my_evaluator = ModelEvaluator(
+    ...     parameters=param_list,
+    ...     model=Ishigami(),
+    ... )
+
+    >>> my_evaluator.intervals
+    [(-3.14159265359, 3.14159265359),
+    (-3.14159265359, 3.14159265359),
+    (-3.14159265359, 3.14159265359)]
+
+    >>> my_evaluator.get_initial_values()
+    [1, 2, 3]
+
+    >>> my_evaluator.evaluate(
+    ...     parameter_value_pairs=[
+    ...         (param_list[0], -3.14 / 2),
+    ...         (param_list[1], 0),
+    ...         (param_list[2], -3.14),
+    ...     ],
+    ...     indicators_configs=["res"],
+    ... )
+    res   -10.721168
+
+    >>> my_evaluator.scipy_obj_function([-3.14 / 2, 0, -3.14], "res", None, None)
+    -10.721167816657914
+    """
+
+    def __init__(
+        self, parameters: list[Parameter], model: Model, store_results: bool = True
+    ):
+        self.parameters = parameters
+        self.model = model
+        if store_results:
+            self.sample = Sample(self.parameters, is_dynamic=model.is_dynamic)
+
+    @property
+    def intervals(self) -> list[tuple[int | float, int | float]]:
+        return [par.interval for par in self.parameters]
+
+    def get_initial_values(self, relative_is_one: bool = True) -> list[int | float]:
+        init_dict = {}
+
+        for par in self.parameters:
+            val = par.init_value
+
+            if val is None:
+                if par.relabs == "Relative" and relative_is_one:
+                    val = 1.0
+                elif par.relabs == "Absolute":
+                    if isinstance(par.model_property, str):
+                        val = self.model.get_property_values([par.model_property])
+                    else:
+                        raise ValueError(
+                            f"Failed for parameter {par}: "
+                            "Cannot retrieve several property values from a single "
+                            "parameter"
+                        )
+
+            init_dict[par.name] = val
+
+        return [
+            x for v in init_dict.values() for x in (v if isinstance(v, list) else [v])
+        ]
+
+    def evaluate(
+        self,
+        parameter_value_pairs: list[tuple[Parameter, str | int | float]],
+        indicators_configs: list[str]
+        | list[
+            tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series | None]
+        ],
+        simulation_options: dict = None,
+        simulation_kwargs=None,
+    ) -> pd.Series:
+        """
+        Run a model simulation and compute indicators. Return a pandas Series with
+        indicators name as index.
+
+        Parameters
+        ----------
+        parameter_value_pairs : list of tuple(Parameter, str or int or float)
+            List of parameters and their values to simulate.
+        indicators_configs : list of str or list of tuple
+            - If the model is **static**: list of indicator names (strings).
+            - If the model is **dynamic**: list of tuples specifying how to
+              aggregate results. Each tuple has the form:
+              - (col, func)
+              - (col, func, reference)
+
+              where:
+                * col : str
+                  Column name in the simulation results.
+                * func : str or Callable
+                  Aggregation function (either a method name registered in
+                  `METHODS` or a callable).
+                * reference : optional
+                  time series that will be a reference for error aggreation method
+                  (eg. nmbe, cv_rmse, mean_squarred_error).
+        simulation_options : dict, optional
+            Simulation options passed to the model.
+        simulation_kwargs : dict, optional
+            Additional keyword arguments for the simulation.
+
+        Returns
+        -------
+        pandas.Series
+            - For static models: direct simulation results.
+            - For dynamic models: aggregated indicator results.
+
+        Raises
+        ------
+        ValueError
+            If `indicators_configs` is invalid for the model type.
+        """
+
+        res = self.model.simulate_parameter(
+            parameter_value_pairs, simulation_options, simulation_kwargs
+        )
+
+        self.sample.add_samples(
+            np.array([[val[1] for val in parameter_value_pairs]]), [res]
+        )
+
+        if self.model.is_dynamic:
+            if isinstance(indicators_configs[0], str):
+                raise ValueError(
+                    "Invalid 'indicators_configs'. Model is dynamic"
+                    "At least 'method' is required"
+                )
+            results = pd.Series()
+            for config in indicators_configs:
+                col, func, *extra = config
+                series = res[col]
+
+                if isinstance(func, str):
+                    func = METHODS[func]
+
+                results[col] = func(series, *extra)
+            return pd.Series(results)
+        else:
+            if isinstance(indicators_configs[0], tuple):
+                raise ValueError(
+                    "Invalid 'indicators_configs'. Model is static. "
+                    "'indicators_configs' must be a list of string"
+                )
+            return res
+
+    def scipy_obj_function(self, x: np.ndarray, *args) -> float:
+        indicator_config, simulation_options, simulation_kwargs = args
+        res = self.evaluate(
+            [(par, val) for par, val in zip(self.parameters, x)],
+            [indicator_config],
+            simulation_options,
+            simulation_kwargs,
+        )
+        """
+        Objective function compatible with SciPy optimizers.
+
+        Parameters
+        ----------
+        x : numpy.ndarray
+            Array of parameter values in the same order as `self.parameters`.
+        *args : tuple
+            A 3-element tuple containing:
+            - indicator_config : str or tuple
+              Indicator specification. If the model is static, must be a string
+              (the column name). If the model is dynamic, must be a tuple of the
+              form `(col, func)` or `(col, func, reference)` where `func` is either a
+              registered method name or a callable.
+            - simulation_options : dict
+              Options to configure the model simulation. Must pass None if no 
+              simulation_options are required.
+            - simulation_kwargs : dict
+              Additional keyword arguments for simulation. Must pass None if no 
+              simulation_kwargs are required.
+
+        Returns
+        -------
+        float
+            The evaluated indicator value corresponding to `indicator_config`.
+
+        Raises
+        ------
+        ValueError
+            If the configuration does not match the model type.
+        """
+        if isinstance(indicator_config, str):
+            if self.model.is_dynamic:
+                raise ValueError(
+                    "Model is dynamic. An aggregation method must be "
+                    "passed ['indicator', method, method_kwargs]"
+                )
+            loc_idx = indicator_config
+
+        else:
+            if not self.model.is_dynamic:
+                raise ValueError(
+                    "An aggregation method was passed although model is not dynamic "
+                    "'indicator_config' must be a string"
+                )
+            loc_idx = indicator_config[0]
+
+        return res.loc[loc_idx]
+
+    def scipy_scalar_obj_function(self, x:float, *args):
+        return self.scipy_obj_function(np.array([x]), *args)
+
 
 class Problem(ElementwiseProblem):
     """
@@ -63,8 +308,8 @@ class Problem(ElementwiseProblem):
     def __init__(
         self,
         *,
-        parameters: list,
-        evaluators: Sequence[Callable] | None = None,
+        parameters: list[Parameter],
+        evaluators: list[ModelEvaluator] | None = None,
         objective_ids: Sequence[str],
         constraint_ids: Sequence[str] | None = None,
     ):
@@ -542,249 +787,6 @@ class ObjectiveFunction:
 
         res = self.function(parameter_value_pairs, kwargs)
         return float(res[self.scipy_obj_indicator])
-
-
-class ModelEvaluator:
-    """
-    Evaluate a model with respect to a set of parameters and compute indicators
-    Series from simulation results.
-
-    This class acts as an interface between parameters, the model, and an optimizer.
-    It provides and objective function suitable for SciPy optimizers.
-
-    Parameters
-    ----------
-    parameters : list of Parameter
-        List of corrai Parameters.
-    model : Model
-        Corrai Model object. `get_property_values` method must be implemented to use
-        get_initial_values method.
-    store_results : bool, optional
-        If True, stores results in an internal `Sample` instance. Default is True.
-
-    Attributes
-    ----------
-    parameters : list of Parameter
-        Model parameters used in evaluation.
-    model : Model
-        The underlying model being evaluated.
-    sample : Sample
-        Stores samples and simulation results if `store_results=True`.
-
-    Examples
-    --------
-    >>> from corrai.base.model import Ishigami
-    >>> from corrai.optimize import ModelEvaluator
-
-    >>> param_list = [
-    ...     Parameter("par_x1", (-3.14159265359, 3.14159265359), model_property="x1"),
-    ...     Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
-    ...     Parameter("par_x3", (-3.14159265359, 3.14159265359), model_property="x3"),
-    ... ]
-
-    >>> my_evaluator = ModelEvaluator(
-    ...     parameters=param_list,
-    ...     model=Ishigami(),
-    ... )
-
-    >>> my_evaluator.intervals
-    [(-3.14159265359, 3.14159265359),
-    (-3.14159265359, 3.14159265359),
-    (-3.14159265359, 3.14159265359)]
-
-    >>> my_evaluator.get_initial_values()
-    [1, 2, 3]
-
-    >>> my_evaluator.evaluate(
-    ...     parameter_value_pairs=[
-    ...         (param_list[0], -3.14 / 2),
-    ...         (param_list[1], 0),
-    ...         (param_list[2], -3.14),
-    ...     ],
-    ...     indicators_configs=["res"],
-    ... )
-    res   -10.721168
-
-    >>> my_evaluator.scipy_obj_function([-3.14 / 2, 0, -3.14], "res", None, None)
-    -10.721167816657914
-    """
-
-    def __init__(
-        self, parameters: list[Parameter], model: Model, store_results: bool = True
-    ):
-        self.parameters = parameters
-        self.model = model
-        if store_results:
-            self.sample = Sample(self.parameters, is_dynamic=model.is_dynamic)
-
-    @property
-    def intervals(self) -> list[tuple[int | float, int | float]]:
-        return [par.interval for par in self.parameters]
-
-    def get_initial_values(self, relative_is_one: bool = True) -> list[int | float]:
-        init_dict = {}
-
-        for par in self.parameters:
-            val = par.init_value
-
-            if val is None:
-                if par.relabs == "Relative" and relative_is_one:
-                    val = 1.0
-                elif par.relabs == "Absolute":
-                    if isinstance(par.model_property, str):
-                        val = self.model.get_property_values([par.model_property])
-                    else:
-                        raise ValueError(
-                            f"Failed for parameter {par}: "
-                            "Cannot retrieve several property values from a single "
-                            "parameter"
-                        )
-
-            init_dict[par.name] = val
-
-        return [
-            x for v in init_dict.values() for x in (v if isinstance(v, list) else [v])
-        ]
-
-    def evaluate(
-        self,
-        parameter_value_pairs: list[tuple[Parameter, str | int | float]],
-        indicators_configs: list[str]
-        | list[
-            tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series | None]
-        ],
-        simulation_options: dict = None,
-        simulation_kwargs=None,
-    ) -> pd.Series:
-        """
-        Run a model simulation and compute indicators. Return a pandas Series with
-        indicators name as index.
-
-        Parameters
-        ----------
-        parameter_value_pairs : list of tuple(Parameter, str or int or float)
-            List of parameters and their values to simulate.
-        indicators_configs : list of str or list of tuple
-            - If the model is **static**: list of indicator names (strings).
-            - If the model is **dynamic**: list of tuples specifying how to
-              aggregate results. Each tuple has the form:
-              - (col, func)
-              - (col, func, reference)
-
-              where:
-                * col : str
-                  Column name in the simulation results.
-                * func : str or Callable
-                  Aggregation function (either a method name registered in
-                  `METHODS` or a callable).
-                * reference : optional
-                  time series that will be a reference for error aggreation method
-                  (eg. nmbe, cv_rmse, mean_squarred_error).
-        simulation_options : dict, optional
-            Simulation options passed to the model.
-        simulation_kwargs : dict, optional
-            Additional keyword arguments for the simulation.
-
-        Returns
-        -------
-        pandas.Series
-            - For static models: direct simulation results.
-            - For dynamic models: aggregated indicator results.
-
-        Raises
-        ------
-        ValueError
-            If `indicators_configs` is invalid for the model type.
-        """
-
-        res = self.model.simulate_parameter(
-            parameter_value_pairs, simulation_options, simulation_kwargs
-        )
-
-        self.sample.add_samples(
-            np.array([[val[1] for val in parameter_value_pairs]]), [res]
-        )
-
-        if self.model.is_dynamic:
-            if isinstance(indicators_configs[0], str):
-                raise ValueError(
-                    "Invalid 'indicators_configs'. Model is dynamic"
-                    "At least 'method' is required"
-                )
-            results = pd.Series()
-            for config in indicators_configs:
-                col, func, *extra = config
-                series = res[col]
-
-                if isinstance(func, str):
-                    func = METHODS[func]
-
-                results[col] = func(series, *extra)
-            return pd.Series(results)
-        else:
-            if isinstance(indicators_configs[0], tuple):
-                raise ValueError(
-                    "Invalid 'indicators_configs'. Model is static. "
-                    "'indicators_configs' must be a list of string"
-                )
-            return res
-
-    def scipy_obj_function(self, x: np.ndarray, *args) -> float:
-        indicator_config, simulation_options, simulation_kwargs = args
-        res = self.evaluate(
-            [(par, val) for par, val in zip(self.parameters, x)],
-            [indicator_config],
-            simulation_options,
-            simulation_kwargs,
-        )
-        """
-        Objective function compatible with SciPy optimizers.
-
-        Parameters
-        ----------
-        x : numpy.ndarray
-            Array of parameter values in the same order as `self.parameters`.
-        *args : tuple
-            A 3-element tuple containing:
-            - indicator_config : str or tuple
-              Indicator specification. If the model is static, must be a string
-              (the column name). If the model is dynamic, must be a tuple of the
-              form `(col, func)` or `(col, func, reference)` where `func` is either a
-              registered method name or a callable.
-            - simulation_options : dict
-              Options to configure the model simulation. Must pass None if no 
-              simulation_options are required.
-            - simulation_kwargs : dict
-              Additional keyword arguments for simulation. Must pass None if no 
-              simulation_kwargs are required.
-
-        Returns
-        -------
-        float
-            The evaluated indicator value corresponding to `indicator_config`.
-
-        Raises
-        ------
-        ValueError
-            If the configuration does not match the model type.
-        """
-        if isinstance(indicator_config, str):
-            if self.model.is_dynamic:
-                raise ValueError(
-                    "Model is dynamic. An aggregation method must be "
-                    "passed ['indicator', method, method_kwargs]"
-                )
-            loc_idx = indicator_config
-
-        else:
-            if not self.model.is_dynamic:
-                raise ValueError(
-                    "An aggregation method was passed although model is not dynamic "
-                    "'indicator_config' must be a string"
-                )
-            loc_idx = indicator_config[0]
-
-        return res.loc[loc_idx]
 
 
 class SciOptimizer:
