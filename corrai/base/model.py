@@ -42,7 +42,7 @@ class Model(ABC):
          Persists the model state or parameters to disk. Optional.
     """
 
-    def __init__(self, is_dynamic: bool = True):
+    def __init__(self, is_dynamic: bool):
         self.is_dynamic = is_dynamic
 
     def get_property_from_param(
