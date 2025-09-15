@@ -11,7 +11,7 @@ from corrai.optimize import (
     SciOptimizer,
 )
 from corrai.base.parameter import Parameter
-from corrai.base.model import Model, Ishigami
+from corrai.base.model import Model, Ishigami, IshigamiDynamic
 
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.soo.nonconvex.de import DE
@@ -258,7 +258,7 @@ class TestObjectiveFunction:
             ),
         ]
 
-        modev = ModelEvaluator(model=Ishigami(), parameters=param_list)
+        modev = ModelEvaluator(model=IshigamiDynamic(), parameters=param_list)
 
         assert modev.intervals == [
             (-3.14159265359, 3.14159265359),
@@ -272,7 +272,7 @@ class TestObjectiveFunction:
         param_list[-1] = Parameter(
             "par_x3", (-3.14159265359, 3.14159265359), model_property="x3"
         )
-        modev = ModelEvaluator(model=Ishigami(), parameters=param_list)
+        modev = ModelEvaluator(model=IshigamiDynamic(), parameters=param_list)
         res = modev.evaluate(
             [(param_list[0], -3.14 / 2), (param_list[1], 0), (param_list[2], 3.14)],
             indicators_configs=[("res", "mean")],
@@ -283,12 +283,12 @@ class TestObjectiveFunction:
             },
         )
 
-        assert res == {"res": -10.721167816657914}
+        pd.testing.assert_series_equal(res, pd.Series({"res": -10.721167816657914}))
 
         assert (
             modev.scipy_obj_function(
                 np.array([-3.14 / 2, 0, 3.14]),
-                [("res", "mean")],
+                ("res", "mean"),
                 {
                     "start": "2009-01-01 00:00:00",
                     "end": "2009-01-01 00:00:00",
@@ -299,10 +299,26 @@ class TestObjectiveFunction:
             == -10.721167816657914
         )
 
-        sci_opt = SciOptimizer(parameters=param_list, model=Ishigami())
+        # Static model test
+        modev = ModelEvaluator(model=Ishigami(), parameters=param_list)
 
-        sci_opt.diff_evo_minimize(
-            indicators_configs=[("res", "mean")],
+        res = modev.evaluate(
+            [(param_list[0], -3.14 / 2), (param_list[1], 0), (param_list[2], 3.14)],
+            indicators_configs=["res"],
+        )
+
+        pd.testing.assert_series_equal(res, pd.Series({"res": -10.721167816657914}))
+
+        assert (
+            modev.scipy_obj_function(np.array([-3.14 / 2, 0, 3.14]), "res", None, None)
+            == -10.721167816657914
+        )
+
+        # Dynamic optimization
+        sci_opt = SciOptimizer(parameters=param_list, model=IshigamiDynamic())
+
+        opt_res = sci_opt.diff_evo_minimize(
+            indicators_configs=("res", "mean"),
             simulation_options={
                 "start": "2009-01-01 00:00:00",
                 "end": "2009-01-01 00:00:00",
@@ -311,9 +327,17 @@ class TestObjectiveFunction:
             rng=42,
         )
 
-        assert round(sci_opt.result.fun, 4) == -10.7409
+        assert round(opt_res.fun, 4) == -10.7409
 
-        assert True
+        # Static optimization
+        sci_opt = SciOptimizer(parameters=param_list, model=Ishigami())
+
+        opt_res = sci_opt.diff_evo_minimize(
+            indicators_configs="res",
+            rng=42,
+        )
+
+        assert round(opt_res.fun, 4) == -10.7409
 
     def test_function_indicators(self):
         expected_model_res = pd.DataFrame(
@@ -321,7 +345,7 @@ class TestObjectiveFunction:
             index=pd.date_range("2023-01-01 00:00:00", freq="s", periods=2),
         )
 
-        python_model = IshigamiTwoOutputs()
+        python_model = IshigamiTwoOutputs(is_dynamic=True)
         obj_func = ObjectiveFunction(
             model=python_model,
             simulation_options=SIMU_OPTIONS,
@@ -344,7 +368,7 @@ class TestObjectiveFunction:
         )
 
     def test_bounds_and_init_values(self):
-        python_model = IshigamiTwoOutputs()
+        python_model = IshigamiTwoOutputs(is_dynamic=True)
         obj_func = ObjectiveFunction(
             model=python_model,
             simulation_options=SIMU_OPTIONS,
@@ -356,7 +380,7 @@ class TestObjectiveFunction:
         assert obj_func.init_values == [2.0, 2.0]
 
     def test_scipy_obj_function(self):
-        rosen = RosenModel()
+        rosen = RosenModel(is_dynamic=True)
         obj_func = ObjectiveFunction(
             model=rosen,
             simulation_options=SIMU_OPTIONS,

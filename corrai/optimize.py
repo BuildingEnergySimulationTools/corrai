@@ -545,13 +545,77 @@ class ObjectiveFunction:
 
 
 class ModelEvaluator:
+    """
+    Evaluate a model with respect to a set of parameters and compute indicators
+    Series from simulation results.
+
+    This class acts as an interface between parameters, the model, and an optimizer.
+    It provides and objective function suitable for SciPy optimizers.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        List of corrai Parameters.
+    model : Model
+        Corrai Model object. `get_property_values` method must be implemented to use
+        get_initial_values method.
+    store_results : bool, optional
+        If True, stores results in an internal `Sample` instance. Default is True.
+
+    Attributes
+    ----------
+    parameters : list of Parameter
+        Model parameters used in evaluation.
+    model : Model
+        The underlying model being evaluated.
+    sample : Sample
+        Stores samples and simulation results if `store_results=True`.
+
+    Examples
+    --------
+    >>> from corrai.base.model import Ishigami
+    >>> from corrai.optimize import ModelEvaluator
+
+    >>> param_list = [
+    ...     Parameter("par_x1", (-3.14159265359, 3.14159265359), model_property="x1"),
+    ...     Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
+    ...     Parameter("par_x3", (-3.14159265359, 3.14159265359), model_property="x3"),
+    ... ]
+
+    >>> my_evaluator = ModelEvaluator(
+    ...     parameters=param_list,
+    ...     model=Ishigami(),
+    ... )
+
+    >>> my_evaluator.intervals
+    [(-3.14159265359, 3.14159265359),
+    (-3.14159265359, 3.14159265359),
+    (-3.14159265359, 3.14159265359)]
+
+    >>> my_evaluator.get_initial_values()
+    [1, 2, 3]
+
+    >>> my_evaluator.evaluate(
+    ...     parameter_value_pairs=[
+    ...         (param_list[0], -3.14 / 2),
+    ...         (param_list[1], 0),
+    ...         (param_list[2], -3.14),
+    ...     ],
+    ...     indicators_configs=["res"],
+    ... )
+    res   -10.721168
+
+    >>> my_evaluator.scipy_obj_function([-3.14 / 2, 0, -3.14], "res", None, None)
+    -10.721167816657914
+    """
+
     def __init__(
         self, parameters: list[Parameter], model: Model, store_results: bool = True
     ):
         self.parameters = parameters
         self.model = model
         if store_results:
-            self.sample = Sample(self.parameters)
+            self.sample = Sample(self.parameters, is_dynamic=model.is_dynamic)
 
     @property
     def intervals(self) -> list[tuple[int | float, int | float]]:
@@ -585,51 +649,197 @@ class ModelEvaluator:
     def evaluate(
         self,
         parameter_value_pairs: list[tuple[Parameter, str | int | float]],
-        indicators_configs: list[
+        indicators_configs: list[str]
+        | list[
             tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series | None]
         ],
         simulation_options: dict = None,
         simulation_kwargs=None,
-    ) -> dict[str, int | float]:
-        res_ts = self.model.simulate_parameter(
+    ) -> pd.Series:
+        """
+        Run a model simulation and compute indicators. Return a pandas Series with
+        indicators name as index.
+
+        Parameters
+        ----------
+        parameter_value_pairs : list of tuple(Parameter, str or int or float)
+            List of parameters and their values to simulate.
+        indicators_configs : list of str or list of tuple
+            - If the model is **static**: list of indicator names (strings).
+            - If the model is **dynamic**: list of tuples specifying how to
+              aggregate results. Each tuple has the form:
+              - (col, func)
+              - (col, func, reference)
+
+              where:
+                * col : str
+                  Column name in the simulation results.
+                * func : str or Callable
+                  Aggregation function (either a method name registered in
+                  `METHODS` or a callable).
+                * reference : optional
+                  time series that will be a reference for error aggreation method
+                  (eg. nmbe, cv_rmse, mean_squarred_error).
+        simulation_options : dict, optional
+            Simulation options passed to the model.
+        simulation_kwargs : dict, optional
+            Additional keyword arguments for the simulation.
+
+        Returns
+        -------
+        pandas.Series
+            - For static models: direct simulation results.
+            - For dynamic models: aggregated indicator results.
+
+        Raises
+        ------
+        ValueError
+            If `indicators_configs` is invalid for the model type.
+        """
+
+        res = self.model.simulate_parameter(
             parameter_value_pairs, simulation_options, simulation_kwargs
         )
 
         self.sample.add_samples(
-            np.array([[val[1] for val in parameter_value_pairs]]), [res_ts]
+            np.array([[val[1] for val in parameter_value_pairs]]), [res]
         )
 
-        results = {}
-        for config in indicators_configs:
-            col, func, *extra = config
-            series = res_ts[col]
+        if self.model.is_dynamic:
+            if isinstance(indicators_configs[0], str):
+                raise ValueError(
+                    "Invalid 'indicators_configs'. Model is dynamic"
+                    "At least 'method' is required"
+                )
+            results = pd.Series()
+            for config in indicators_configs:
+                col, func, *extra = config
+                series = res[col]
 
-            if isinstance(func, str):
-                func = METHODS[func]
+                if isinstance(func, str):
+                    func = METHODS[func]
 
-            results[col] = func(series, *extra)
-        return results
+                results[col] = func(series, *extra)
+            return pd.Series(results)
+        else:
+            if isinstance(indicators_configs[0], tuple):
+                raise ValueError(
+                    "Invalid 'indicators_configs'. Model is static. "
+                    "'indicators_configs' must be a list of string"
+                )
+            return res
 
     def scipy_obj_function(self, x: np.ndarray, *args) -> float:
-        indicators_configs, simulation_options, simulation_kwargs = args
+        indicator_config, simulation_options, simulation_kwargs = args
         res = self.evaluate(
             [(par, val) for par, val in zip(self.parameters, x)],
-            indicators_configs,
+            [indicator_config],
             simulation_options,
             simulation_kwargs,
         )
+        """
+        Objective function compatible with SciPy optimizers.
 
-        return res[indicators_configs[0][0]]
+        Parameters
+        ----------
+        x : numpy.ndarray
+            Array of parameter values in the same order as `self.parameters`.
+        *args : tuple
+            A 3-element tuple containing:
+            - indicator_config : str or tuple
+              Indicator specification. If the model is static, must be a string
+              (the column name). If the model is dynamic, must be a tuple of the
+              form `(col, func)` or `(col, func, reference)` where `func` is either a
+              registered method name or a callable.
+            - simulation_options : dict
+              Options to configure the model simulation. Must pass None if no 
+              simulation_options are required.
+            - simulation_kwargs : dict
+              Additional keyword arguments for simulation. Must pass None if no 
+              simulation_kwargs are required.
+
+        Returns
+        -------
+        float
+            The evaluated indicator value corresponding to `indicator_config`.
+
+        Raises
+        ------
+        ValueError
+            If the configuration does not match the model type.
+        """
+        if isinstance(indicator_config, str):
+            if self.model.is_dynamic:
+                raise ValueError(
+                    "Model is dynamic. An aggregation method must be "
+                    "passed ['indicator', method, method_kwargs]"
+                )
+            loc_idx = indicator_config
+
+        else:
+            if not self.model.is_dynamic:
+                raise ValueError(
+                    "An aggregation method was passed although model is not dynamic "
+                    "'indicator_config' must be a string"
+                )
+            loc_idx = indicator_config[0]
+
+        return res.loc[loc_idx]
 
 
 class SciOptimizer:
+    """
+    Optimization wrapper for models using SciPy.
+
+    This class provides a convenient interface to optimize model parameters
+    with respect to specified indicators. It leverages the `ModelEvaluator`
+    for simulation and evaluation, and uses SciPy's global optimization
+    algorithm such as `differential_evolution` to find optimal parameter sets.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        List of corrai Parameters to be optimized.
+    model : Model
+        Corrai Model object that provides simulation capabilities.
+
+    Attributes
+    ----------
+    model_evaluator : ModelEvaluator
+        Underlying evaluator used for simulations and objective evaluation and results
+        storage.
+
+    Examples
+    --------
+    >>> from corrai.optimize import SciOptimizer
+    >>> from corrai.base.model import Ishigami
+
+    >>> param_list = [
+    ...     Parameter("par_x1", (-3.14159265359, 3.14159265359), model_property="x1"),
+    ...     Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
+    ...     Parameter("par_x3", (-3.14159265359, 3.14159265359), model_property="x3"),
+    ... ]
+
+    >>> sci_opt = SciOptimizer(
+    ...     parameters=param_list,
+    ...     model=Ishigami(),
+    ... )
+
+    >>> res_opt = sci_opt.diff_evo_minimize("res")
+
+    >>> res_opt.fun
+    -10.74090910277037
+
+    >>> res_opt.x
+    array([-1.57080718e+00, -2.46536703e-07,  3.14159265e+00])
+    """
+
     def __init__(
         self,
         parameters: list[Parameter],
         model: Model,
     ):
         self.model_evaluator = ModelEvaluator(parameters, model, True)
-        self.result = None
 
     @property
     def parameters(self):
@@ -637,7 +847,10 @@ class SciOptimizer:
 
     @property
     def values(self):
-        return self.model_evaluator.sample.values
+        if self.model_evaluator.model.is_dynamic:
+            return self.model_evaluator.sample.values
+        else:
+            return self.model_evaluator.sample.get_static_results_as_df()
 
     @property
     def results(self):
@@ -645,9 +858,9 @@ class SciOptimizer:
 
     def diff_evo_minimize(
         self,
-        indicators_configs: list[
-            tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series | None]
-        ],
+        indicators_configs: str
+        | tuple[str, str | Callable]
+        | tuple[str, str | Callable, pd.Series | None],
         simulation_options: dict = None,
         simulation_kwargs=None,
         maxiter=1000,
@@ -655,7 +868,49 @@ class SciOptimizer:
         rng=None,
         workers=1,
     ):
-        self.result = differential_evolution(
+        """
+        Minimize an indicator using SciPy's differential evolution algorithm.
+
+        Parameters
+        ----------
+        indicators_configs : str or tuple
+            Indicator configuration passed to `ModelEvaluator.scipy_obj_function`:
+            - If the model is **static**: a string representing the indicator name.
+            - If the model is **dynamic**: a tuple of the form
+              (indicator, func) or (indicator, func, reference) where:
+                * indicator : str
+                  indicator name in the simulation results.
+                * func : str or Callable
+                  Aggregation function (method name registered in `METHODS`
+                  or a Python callable).
+                * reference : optional
+                  reference time series if aggregation function is an error function
+                  such as nmbe, cv_rmse, mean_squared_error.
+        simulation_options : dict, optional
+            Options for the simulation (e.g., stop time, solver settings).
+        simulation_kwargs : dict, optional
+            Additional keyword arguments for simulation.
+        maxiter : int, optional
+            Maximum number of generations for the optimizer. Default is 1000.
+        tol : float, optional
+            Tolerance for convergence. Default is 0.01.
+        rng : int or RandomState or Generator, optional
+            Random number generator seed or instance. Default is None.
+        workers : int or map-like callable, optional
+            Number of parallel workers. Can be set to -1 to use all processors.
+            Default is 1 (no parallelism).
+
+        Returns
+        -------
+        scipy.optimize.OptimizeResult
+            Result of the optimization. Accessible also via the `result` attribute.
+
+        Notes
+        -----
+        This method uses `scipy.optimize.differential_evolution`, which is a
+        global optimization algorithm suitable for continuous parameter spaces.
+        """
+        return differential_evolution(
             func=self.model_evaluator.scipy_obj_function,
             bounds=self.model_evaluator.intervals,
             args=(indicators_configs, simulation_options, simulation_kwargs),
