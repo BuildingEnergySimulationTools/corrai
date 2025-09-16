@@ -4,7 +4,7 @@ from functools import wraps
 import numpy as np
 import pandas as pd
 
-from scipy.optimize import differential_evolution
+from scipy.optimize import differential_evolution, minimize_scalar
 
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Integer, Real, Choice, Binary
@@ -15,6 +15,7 @@ from corrai.base.math import METHODS
 from corrai.base.model import Model
 from corrai.sampling import Sample
 from corrai.base.parameter import Parameter
+
 
 class ModelEvaluator:
     """
@@ -258,7 +259,7 @@ class ModelEvaluator:
 
         return res.loc[loc_idx]
 
-    def scipy_scalar_obj_function(self, x:float, *args):
+    def scipy_scalar_obj_function(self, x: float, *args):
         return self.scipy_obj_function(np.array([x]), *args)
 
 
@@ -857,6 +858,78 @@ class SciOptimizer:
     @property
     def results(self):
         return self.model_evaluator.sample.results
+
+    def scalar_minimize(
+        self,
+        indicator_config: str
+        | tuple[str, str | Callable]
+        | tuple[str, str | Callable, pd.Series | None],
+        simulation_options: dict = None,
+        simulation_kwargs=None,
+        bracket=None,
+        method=None,
+        tol=None,
+        options=None,
+    ):
+        """
+        Minimize a scalar indicator using SciPy's scalar optimization routines.
+
+        This method is suitable for problems with a **single parameter** only.
+
+        Parameters
+        ----------
+        indicator_config : str or tuple
+            Indicator specification passed to the objective function:
+            - If the model is **static**: a string representing the indicator name.
+            - If the model is **dynamic**: a tuple of the form
+              (col, func) or (col, func, reference) where:
+                * col : str
+                  Column name in the simulation results.
+                * func : str or Callable
+                  Aggregation function (either a method name registered in
+                  `METHODS` or a Python callable).
+                * reference : optional
+                  reference time series for error function (eg. nmbe, cv_rmse).
+        simulation_options : dict, optional
+            Options for the simulation (e.g., stop time, solver settings).
+        simulation_kwargs : dict, optional
+            Additional keyword arguments for simulation.
+        bracket : tuple of float, optional
+            Bracketing interval for methods that require it (e.g., "brent").
+        method : str, optional
+            Optimization method to use. Can be one of {"brent", "bounded", "golden"}.
+            See :func:`scipy.optimize.minimize_scalar` for details.
+        tol : float, optional
+            Tolerance for termination. Interpretation depends on the method.
+        options : dict, optional
+            Additional solver-specific options.
+
+        Returns
+        -------
+        scipy.optimize.OptimizeResult
+            Result of the optimization, including optimal parameter value `x`
+            and corresponding function value `fun`.
+
+        Raises
+        ------
+        ValueError
+            If more than one parameter is defined, since scalar optimization
+            only supports a single variable.
+
+        Notes
+        -----
+        - Only use a list of one parameter.
+        - Uses :func:`scipy.optimize.minimize_scalar`.
+        """
+        return minimize_scalar(
+            fun=self.model_evaluator.scipy_scalar_obj_function,
+            bounds=self.model_evaluator.intervals[0],
+            args=(indicator_config, simulation_options, simulation_kwargs),
+            bracket=bracket,
+            method=method,
+            tol=tol,
+            options=options,
+        )
 
     def diff_evo_minimize(
         self,

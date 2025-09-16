@@ -314,6 +314,20 @@ class TestObjectiveFunction:
             == -10.721167816657914
         )
 
+    def test_sci_optimizer(self):
+        param_list = [
+            Parameter(
+                "par_x1",
+                (-3.14159265359, 3.14159265359),
+                model_property="x1",
+            ),
+            Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
+            Parameter(
+                "par_x3",
+                (-3.14159265359, 3.14159265359),
+                model_property="x3",
+            ),
+        ]
         # Dynamic optimization
         sci_opt = SciOptimizer(parameters=param_list, model=IshigamiDynamic())
 
@@ -338,6 +352,36 @@ class TestObjectiveFunction:
         )
 
         assert round(opt_res.fun, 4) == -10.7409
+
+        # Scalar optimization
+        class X2(Model):
+            def __init__(self, is_dynamic: bool = False):
+                super().__init__(is_dynamic)
+                self.x = 10
+
+            def get_property_values(self, property_list: list):
+                return [getattr(self, name) for name in property_list]
+
+            def set_property_values(self, property_dict: dict):
+                for prop, val in property_dict.items():
+                    setattr(self, prop, val)
+
+            def simulate(
+                self,
+                property_dict: dict[str, str | int | float] = None,
+                simulation_options: dict = None,
+                **simulation_kwargs,
+            ) -> pd.DataFrame | pd.Series:
+                self.set_property_values(property_dict)
+                return pd.Series({"f_out": self.x**2})
+
+        parameter = Parameter("x_param", interval=(-10, 10), model_property="x")
+
+        sci_opt = SciOptimizer(parameters=[parameter], model=X2())
+
+        res = sci_opt.scalar_minimize("f_out")
+
+        assert res.x == 0
 
     def test_function_indicators(self):
         expected_model_res = pd.DataFrame(
