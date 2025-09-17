@@ -921,9 +921,14 @@ class SciOptimizer:
         - Only use a list of one parameter.
         - Uses :func:`scipy.optimize.minimize_scalar`.
         """
+
+        bounds = (
+            None if method in ["Brent", "Golden"] else self.model_evaluator.intervals[0]
+        )
+
         return minimize_scalar(
             fun=self.model_evaluator.scipy_scalar_obj_function,
-            bounds=self.model_evaluator.intervals[0],
+            bounds=bounds,
             args=(indicator_config, simulation_options, simulation_kwargs),
             bracket=bracket,
             method=method,
