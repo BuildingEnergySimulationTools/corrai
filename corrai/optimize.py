@@ -302,6 +302,13 @@ class ModelEvaluator:
 
 
 class PymooModelEvaluator(ModelEvaluator):
+    """
+    Specialization of ModelEvaluator for use with pymoo optimizers.
+
+    This class wraps the evaluation logic so it can be used as a pymoo-compatible
+    problem definition. It handles vectorized evaluations of parameter sets.
+    """
+
     def __init__(
         self,
         parameters: list[Parameter],
@@ -332,48 +339,6 @@ class PymooModelEvaluator(ModelEvaluator):
 
 
 class CorraiProblem(ElementwiseProblem, ABC):
-    """
-    Pymoo ``ElementwiseProblem`` wrapper for real-valued and mixed-variable optimization.
-
-    This class bridges corrai ``Parameter`` objects with evaluation functions
-    (``evaluators``) that compute objectives and constraints. It supports both:
-
-    - **float mode**: when all parameters are real-valued (``ptype="Real"``),
-      inputs are passed as numeric vectors (``list``/``ndarray``).
-    - **mixed mode**: when at least one parameter is ``Choice``, ``Integer``,
-      or ``Binary``, inputs are passed as dictionaries keyed by parameter name.
-
-    Parameters
-    ----------
-    parameters : list of Parameter
-        List of ``Parameter`` objects defining the optimization variables
-        (name, type, bounds/values, and relative/absolute mode).
-    evaluators : Sequence[Callable]
-        Sequence of functions or callable objects. Each evaluator takes either:
-
-        - a list of (Parameter, value) pairs,
-        - or a dictionary mapping parameter names to values,
-
-        and returns one of:
-
-        - dict mapping indicator names to floats,
-        - a pandas.Series,
-        - or a scalar (only valid if one objective/constraint is defined).
-    objective_ids : Sequence[str]
-        Names of objectives to extract from evaluator results.
-        Order defines their order in ``F``.
-    constraint_ids : Sequence[str], optional
-        Names of constraints to extract from evaluator results.
-        Defaults to an empty list if no constraints are defined.
-
-    Notes
-    -----
-    - In **float mode** (all Real parameters), ``x`` is a numeric vector.
-    - In **mixed mode**, ``x`` is a dict with parameter names as keys.
-    - Values returned by evaluators are automatically converted to floats.
-    - Choice/Integer/Binary parameters are internally cast to the closest valid value.
-    """
-
     def __init__(
         self,
         *,
@@ -430,6 +395,62 @@ class CorraiProblem(ElementwiseProblem, ABC):
 
 
 class RealContinuousProblem(CorraiProblem):
+    """
+    Continuous optimization problem for real-valued parameters in pymoo.
+
+    This class extends ``CorraiProblem`` and ``pymoo.ElementwiseProblem`` to
+    represent optimization problems where all decision variables are real-valued.
+    It wraps corrai ``Parameter`` objects, model evaluators, and objective/constraint
+    definitions into a pymoo-compatible interface.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        List ``Parameter`` with a Real `ptype`
+    evaluators : list of PymooModelEvaluator
+        Evaluator objects that run models and compute performance indicators
+        (objectives and/or constraints) given simulation options simulation kwargs
+        and indicators configurations.
+    objective_ids : list of str
+        Names of the indicators to be minimized or maximized as objectives.
+        The order defines their position in the objective vector ``F``.
+    constraint_ids : list of str, optional
+        Names of the indicators to be treated as inequality constraints.
+        If None (default), no constraints are applied.
+
+    Attributes
+    ----------
+    parameters : list of Parameter
+        Problem decision variables.
+    evaluators : list of PymooModelEvaluator
+        Model evaluators associated with the problem.
+    objective_ids : list of str
+        Ordered list of objective indicator names.
+    constraint_ids : list of str
+        Ordered list of constraint indicator names.
+    sample : Sample
+        Stores past evaluations (parameter values and results).
+    parameters_names : list of str
+        Names of all parameters.
+    values : dict
+        Current sample values keyed by parameter name.
+    results : pandas.DataFrame
+        Static results collected from evaluations.
+
+    Methods
+    -------
+    _evaluate(x, out, *args, **kwargs)
+        Evaluate objectives and constraints at the given point ``x``.
+
+    Notes
+    -----
+    - All parameters must be real-valued (``ptype="Real"``).
+    - Lower and upper bounds are extracted from the ``interval`` attribute
+      of each parameter.
+    - The class automatically constructs the pymoo-compatible problem with
+      ``n_var``, ``n_obj``, ``n_ieq_constr``, ``xl``, and ``xu``.
+    """
+
     def __init__(
         self,
         *,
@@ -460,6 +481,69 @@ class RealContinuousProblem(CorraiProblem):
 
 
 class MixedProblem(CorraiProblem):
+    """
+    Mixed-variable optimization problem for real, integer, binary, and choice
+    parameters in pymoo.
+
+    ``MixedProblem`` extends ``CorraiProblem`` and ``pymoo.ElementwiseProblem`` to
+    represent optimization problems where decision variables may be heterogeneous.
+    It builds a pymoo-compatible variable dictionary with the appropriate type
+    (Real, Integer, Binary, or Choice) for each parameter.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        List of ``Parameter`` objects defining the optimization variables.
+        Supported types are ``Real``, ``Integer``, ``Binary``, and ``Choice``.
+    evaluators : list of PymooModelEvaluator
+       Evaluator objects that run models and compute performance indicators
+        (objectives and/or constraints) given simulation options simulation kwargs
+        and indicators configurations.
+    objective_ids : list of str
+        Names of the indicators to be minimized or maximized as objectives.
+        The order defines their position in the objective vector ``F``.
+    constraint_ids : list of str, optional
+        Names of the indicators to be treated as inequality constraints.
+        Defaults to an empty list if not provided.
+
+    Attributes
+    ----------
+    parameters : list of Parameter
+        Problem decision variables.
+    evaluators : list of PymooModelEvaluator
+        Model evaluators associated with the problem.
+    objective_ids : list of str
+        Ordered list of objective indicator names.
+    constraint_ids : list of str
+        Ordered list of constraint indicator names.
+    sample : Sample
+        Stores past evaluations (parameter values and results).
+    parameters_names : list of str
+        Names of all parameters.
+    values : dict
+        Current sample values keyed by parameter name.
+    results : pandas.DataFrame
+        Static results collected from evaluations.
+
+    Methods
+    -------
+    _evaluate(x, out, *args, **kwargs)
+        Evaluate objectives and constraints at the given point ``x``.
+
+    Notes
+    -----
+    - Each parameter type is mapped internally to the corresponding pymoo variable:
+
+      * ``Real`` → :class:`pymoo.core.variable.Real` with bounds.
+      * ``Integer`` → :class:`pymoo.core.variable.Integer` with bounds.
+      * ``Binary`` → :class:`pymoo.core.variable.Binary`.
+      * ``Choice`` → :class:`pymoo.core.variable.Choice` with enumerated options.
+
+    - If a ``Choice`` parameter does not define ``values``, a ``ValueError`` is raised.
+    - Objective and constraint values are automatically extracted from evaluator results.
+    - See ``CorraiProblem`` for common attributes and evaluation workflow.
+    """
+
     def __init__(
         self,
         *,
