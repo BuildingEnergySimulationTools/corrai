@@ -378,6 +378,8 @@ class CorraiProblem(ElementwiseProblem, ABC):
         self,
         parameter_value_pairs: list[tuple[Parameter, str | int | float]],
         out,
+        *args,
+        **kwargs,
     ):
         list_res = []
         for modev in self.evaluators:
