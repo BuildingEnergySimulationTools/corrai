@@ -1,3 +1,4 @@
+import datetime as dt
 from typing import Union
 
 import pandas as pd
@@ -346,3 +347,39 @@ class PymodelStatic(PyModel):
                 setattr(self, prop, val)
 
         return pd.Series({"res": self.prop_1 * self.prop_2 + self.prop_3})
+
+
+class Sine(PyModel):
+    def __init__(self):
+        super().__init__(is_dynamic=True)
+        self.omega = 2
+        self.amplitude = 5
+
+    def simulate(
+        self,
+        property_dict: dict[str, str | int | float] = None,
+        simulation_options: dict = None,
+        **simulation_kwargs,
+    ) -> pd.DataFrame | pd.Series:
+        self.set_property_values(property_dict)
+
+        start = simulation_options.get("start", "2009-01-01 00:00:00")
+        stop = simulation_options.get("stop", "2009-01-02 00:00:00")
+        output_freq = simulation_options.get("freq", "h")
+
+        index = pd.date_range(start, stop, freq=output_freq, tz="UTC")
+        cumsum_second = np.arange(
+            0, (index[-1] - index[0]).total_seconds() + 1, step=3600
+        )
+
+        return pd.DataFrame(
+            data=self.amplitude
+            * np.sin(
+                self.omega
+                * np.pi
+                / dt.timedelta(days=1).total_seconds()
+                * cumsum_second
+            ),
+            columns=["res"],
+            index=index,
+        )
