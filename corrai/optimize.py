@@ -14,6 +14,7 @@ import plotly.graph_objects as go
 
 from corrai.base.math import METHODS
 from corrai.base.model import Model
+from corrai.base.utils import check_indicators_configs
 from corrai.sampling import Sample
 from corrai.base.parameter import Parameter
 
@@ -209,35 +210,18 @@ class ModelEvaluator:
             np.array([[val[1] for val in parameter_value_pairs]]), [res]
         )
 
+        check_indicators_configs(self.model.is_dynamic, indicators_configs)
+
         if self.model.is_dynamic:
-            if indicators_configs is None:
-                raise ValueError(
-                    "Model is dynamic. At least one indicators and its aggregation "
-                    "method must be provided"
-                )
-            if isinstance(indicators_configs[0], str):
-                raise ValueError(
-                    "Invalid 'indicators_configs'. Model is dynamic"
-                    "At least 'method' is required"
-                )
             results = pd.Series()
             for config in indicators_configs:
                 col, func, *extra = config
                 series = res[col]
-
                 if isinstance(func, str):
                     func = METHODS[func]
-
                 results[col] = func(series, *extra)
             return pd.Series(results)
         else:
-            if indicators_configs is not None and isinstance(
-                indicators_configs[0], tuple
-            ):
-                raise ValueError(
-                    "Invalid 'indicators_configs'. Model is static. "
-                    "'indicators_configs' must be a list of string"
-                )
             return res[indicators_configs] if indicators_configs is not None else res
 
     def scipy_obj_function(self, x: np.ndarray, *args) -> float:
