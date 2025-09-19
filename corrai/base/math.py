@@ -5,7 +5,7 @@ import numpy as np
 
 from fastprogress.fastprogress import progress_bar
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-from typing_extensions import Callable
+from typing import Callable
 
 from corrai.base.utils import check_datetime_index
 from corrai.base.metrics import nmbe, cv_rmse
