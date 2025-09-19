@@ -42,7 +42,7 @@ class Model(ABC):
          Persists the model state or parameters to disk. Optional.
     """
 
-    def __init__(self, is_dynamic: bool = True):
+    def __init__(self, is_dynamic: bool):
         self.is_dynamic = is_dynamic
 
     def get_property_from_param(
@@ -190,7 +190,19 @@ class Model(ABC):
         raise NotImplementedError("No save method was defined for this model")
 
 
-class IshigamiDynamic(Model):
+class PyModel(Model, ABC):
+    def __init__(self, is_dynamic: bool):
+        super().__init__(is_dynamic)
+
+    def get_property_values(self, property_list: list):
+        return [getattr(self, name) for name in property_list]
+
+    def set_property_values(self, property_dict: dict):
+        for prop, val in property_dict.items():
+            setattr(self, prop, val)
+
+
+class IshigamiDynamic(PyModel):
     """
     Example implementation of the Ishigami function.
 
@@ -218,13 +230,6 @@ class IshigamiDynamic(Model):
         self.x2 = 2
         self.x3 = 3
 
-    def get_property_values(self, property_list: list):
-        return [getattr(self, name) for name in property_list]
-
-    def set_property_values(self, property_dict: dict):
-        for prop, val in property_dict.items():
-            setattr(self, prop, val)
-
     def simulate(
         self,
         property_dict: dict[str, str | int | float] = None,
@@ -250,7 +255,7 @@ class IshigamiDynamic(Model):
         )
 
 
-class Ishigami(Model):
+class Ishigami(PyModel):
     """
     Example implementation of the Ishigami function.
 
@@ -278,13 +283,6 @@ class Ishigami(Model):
         self.x2 = 2
         self.x3 = 3
 
-    def get_property_values(self, property_list: list):
-        return [getattr(self, name) for name in property_list]
-
-    def set_property_values(self, property_dict: dict):
-        for prop, val in property_dict.items():
-            setattr(self, prop, val)
-
     def simulate(
         self,
         property_dict: dict[str, str | int | float] = None,
@@ -303,15 +301,12 @@ class Ishigami(Model):
         return pd.Series({"res": res})
 
 
-class PymodelDynamic(Model):
+class PymodelDynamic(PyModel):
     def __init__(self):
         super().__init__(is_dynamic=True)
         self.prop_1 = 1
         self.prop_2 = 2
         self.prop_3 = 3
-
-    def get_property_values(self, property_list: list):
-        return [getattr(self, name) for name in property_list]
 
     def simulate(
         self,
@@ -333,15 +328,12 @@ class PymodelDynamic(Model):
         )
 
 
-class PymodelStatic(Model):
+class PymodelStatic(PyModel):
     def __init__(self):
         super().__init__(is_dynamic=False)
         self.prop_1 = 1
         self.prop_2 = 2
         self.prop_3 = 3
-
-    def get_property_values(self, property_list: list):
-        return [getattr(self, name) for name in property_list]
 
     def simulate(
         self,

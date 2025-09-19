@@ -267,7 +267,10 @@ class Sample:
         assert n_params == len(self.parameters), "Mismatch in number of parameters"
 
         new_df = pd.DataFrame(values, columns=self.values.columns)
-        self.values = pd.concat([self.values, new_df], ignore_index=True)
+        if self.values.empty:
+            self.values = new_df
+        else:
+            self.values = pd.concat([self.values, new_df], ignore_index=True)
 
         if results is None:
             new_results = pd.Series([pd.DataFrame()] * n_samples, dtype=object)

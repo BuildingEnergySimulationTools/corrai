@@ -1,4 +1,6 @@
 import pandas as pd
+import numpy as np
+
 from corrai.base.math import aggregate_time_series
 
 
@@ -46,6 +48,15 @@ class TestMath:
             "a",
             freq="h",
         )
+
+        res_fun = aggregate_time_series(
+            sim_res,
+            "a",
+            method=np.mean,
+            freq="h",
+        )
+
+        pd.testing.assert_frame_equal(res, res_fun)
 
         pd.testing.assert_frame_equal(
             res,
