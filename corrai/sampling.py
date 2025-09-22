@@ -714,6 +714,65 @@ class Sample:
         title: str | None = "Parallel Coordinates — Samples",
         html_file_path: str | None = None,
     ) -> go.Figure:
+        """
+        This method produces an interactive PCP visualization that allows comparison
+        of model parameters against aggregated indicators from simulation results.
+        It supports both dynamic and static models.
+
+        For dynamic models, the specified indicators are aggregated across time using
+        the provided functions (e.g., "mean", "sum", error metrics). For static models,
+        the indicators are taken directly from the stored results.
+
+        Parameters
+        ----------
+        indicators_configs : list of str or list of tuple
+            Configuration of indicators to include in the plot.
+
+            - For dynamic models, each element must be a tuple of the form:
+              ``(indicator_name, method)`` or
+              ``(indicator_name, method, reference_series)``.
+
+              Here:
+                * `indicator_name` : str
+                  Column name in the simulation results to aggregate.
+                * `method` : str or Callable
+                  Aggregation function or metric to apply.
+                * `reference_series` : pandas.Series, optional
+                  Reference time series required for error-based methods
+                  (e.g., mean absolute error).
+
+            - For static models, a simple list of indicator names (str) is sufficient.
+
+        color_by : str, optional
+            Name of a parameter or result column to use for coloring the PCP lines.
+            If None, all lines are plotted in the same color.
+
+        title : str, default="Parallel Coordinates — Samples"
+            Title of the plot.
+
+        html_file_path : str, optional
+            If provided, saves the interactive plot as an HTML file at the specified
+            path.
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            The generated parallel coordinates figure. The figure can be displayed
+            interactively in a Jupyter notebook, web browser, or exported to HTML.
+
+        Raises
+        ------
+        ValueError
+            If the `indicators_configs` are incompatible with the model type
+            (dynamic vs static).
+
+        See Also
+        --------
+        get_aggregated_time_series :
+            For details on supported aggregation methods and how indicator values
+            are computed for dynamic models.
+        """
+
         check_indicators_configs(self.is_dynamic, indicators_configs)
 
         if self.is_dynamic:
