@@ -1,6 +1,7 @@
 import warnings
 from abc import ABC, abstractmethod
 from functools import wraps
+from typing import Callable
 
 import datetime as dt
 import numpy as np
@@ -398,27 +399,17 @@ class Sanalysis(ABC):
             type_graph=type_graph,
         )
 
+    @wraps(Sample.plot_pcp)
     def plot_pcp(
         self,
-        indicator: str | None = None,
-        method: str = "mean",
-        agg_method_kwarg: dict = None,
-        reference_time_series: pd.Series = None,
-        freq: str | pd.Timedelta | dt.timedelta = None,
-        prefix: str | None = None,
-        bounds: list[tuple[float, float]] | None = None,
+        indicators_configs: list[str]
+        | list[tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series]],
         color_by: str | None = None,
-        title: str | None = "Parallel Coordinates - Samples",
+        title: str | None = "Parallel Coordinates — Samples",
         html_file_path: str | None = None,
     ) -> go.Figure:
-        return self.sampler.plot_pcp(
-            indicator=indicator,
-            method=method,
-            agg_method_kwarg=agg_method_kwarg,
-            reference_time_series=reference_time_series,
-            freq=freq,
-            prefix=prefix,
-            bounds=bounds,
+        return self.sampler.sample.plot_pcp(
+            indicators_configs=indicators_configs,
             color_by=color_by,
             title=title,
             html_file_path=html_file_path,

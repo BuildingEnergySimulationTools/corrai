@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 from collections.abc import Iterable
+from typing import Callable
 
 
 def _reshape_1d(sample):
@@ -258,3 +259,28 @@ def get_reversed_dict(dictionary, values=None):
         values = [values]
 
     return {val: key for key, val in dictionary.items() if val in values}
+
+
+def check_indicators_configs(
+    is_dynamic: bool,
+    indicators_configs: list[str]
+    | list[tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series]]
+    | None,
+):
+    if is_dynamic:
+        if indicators_configs is None:
+            raise ValueError(
+                "Model is dynamic. At least one indicators and its aggregation "
+                "method must be provided"
+            )
+        if isinstance(indicators_configs[0], str):
+            raise ValueError(
+                "Invalid 'indicators_configs'. Model is dynamic"
+                "At least 'method' is required"
+            )
+    else:
+        if indicators_configs is not None and isinstance(indicators_configs[0], tuple):
+            raise ValueError(
+                "Invalid 'indicators_configs'. Model is static. "
+                "'indicators_configs' must be a list of string"
+            )

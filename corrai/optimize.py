@@ -14,6 +14,7 @@ import plotly.graph_objects as go
 
 from corrai.base.math import METHODS
 from corrai.base.model import Model
+from corrai.base.utils import check_indicators_configs
 from corrai.sampling import Sample
 from corrai.base.parameter import Parameter
 
@@ -209,35 +210,18 @@ class ModelEvaluator:
             np.array([[val[1] for val in parameter_value_pairs]]), [res]
         )
 
+        check_indicators_configs(self.model.is_dynamic, indicators_configs)
+
         if self.model.is_dynamic:
-            if indicators_configs is None:
-                raise ValueError(
-                    "Model is dynamic. At least one indicators and its aggregation "
-                    "method must be provided"
-                )
-            if isinstance(indicators_configs[0], str):
-                raise ValueError(
-                    "Invalid 'indicators_configs'. Model is dynamic"
-                    "At least 'method' is required"
-                )
             results = pd.Series()
             for config in indicators_configs:
                 col, func, *extra = config
                 series = res[col]
-
                 if isinstance(func, str):
                     func = METHODS[func]
-
                 results[col] = func(series, *extra)
             return pd.Series(results)
         else:
-            if indicators_configs is not None and isinstance(
-                indicators_configs[0], tuple
-            ):
-                raise ValueError(
-                    "Invalid 'indicators_configs'. Model is static. "
-                    "'indicators_configs' must be a list of string"
-                )
             return res[indicators_configs] if indicators_configs is not None else res
 
     def scipy_obj_function(self, x: np.ndarray, *args) -> float:
@@ -829,4 +813,49 @@ class SciOptimizer:
             round_ndigits=round_ndigits,
             quantile_band=quantile_band,
             type_graph=type_graph,
+        )
+
+    @wraps(Sample.plot_pcp)
+    def plot_pcp(
+        self,
+        indicators_configs: list[str]
+        | list[tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series]],
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates — Samples",
+        html_file_path: str | None = None,
+    ) -> go.Figure:
+        return self.model_evaluator.sample.plot_pcp(
+            indicators_configs=indicators_configs,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
+        )
+
+    @wraps(Sample.plot_hist)
+    def plot_hist(
+        self,
+        indicator: str,
+        method: str = "mean",
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        bins: int = 30,
+        colors: str = "orange",
+        reference_value: int | float = None,
+        reference_label: str = "Reference",
+        show_rug: bool = False,
+        title: str = None,
+    ):
+        return self.model_evaluator.sample.plot_hist(
+            indicator=indicator,
+            method=method,
+            unit=unit,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            bins=bins,
+            colors=colors,
+            reference_value=reference_value,
+            reference_label=reference_label,
+            show_rug=show_rug,
+            title=title,
         )

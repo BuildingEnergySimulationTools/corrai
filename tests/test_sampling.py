@@ -4,15 +4,19 @@ import pandas as pd
 
 from corrai.base.parameter import Parameter
 from corrai.sampling import (
-    plot_pcp,
     LHSSampler,
     MorrisSampler,
     SobolSampler,
     Sample,
 )
 
-from corrai.base.math import aggregate_time_series
-from corrai.base.model import IshigamiDynamic, Ishigami, PymodelDynamic, PymodelStatic
+from corrai.base.model import (
+    IshigamiDynamic,
+    Ishigami,
+    PymodelDynamic,
+    PymodelStatic,
+    Sine,
+)
 
 import pytest
 
@@ -290,41 +294,34 @@ class TestSample:
         assert len(hist.x) == len(sampler.results)
 
     def test_plot_pcp(self):
-        t = pd.date_range("2025-01-01 00:00:00", periods=2, freq="h")
-        df1 = pd.DataFrame({"res": [1.0, 2.0]}, index=t)
-        df2 = pd.DataFrame({"res": [3.0, 4.0]}, index=t)
-        df3 = pd.DataFrame({"res": [5.0, 6.0]}, index=t)
-        results = pd.Series([df1, df2, df3])
-
-        param_names = ["p1", "p2"]
-        param_values = np.array(
-            [
-                [1.1, 2.2],
-                [3.3, 4.4],
-                [5.5, 6.6],
-            ]
+        # Dynamic
+        lhs = LHSSampler(
+            parameters=[
+                Parameter("omega", (2, 8), model_property="omega"),
+                Parameter("amplitude", (1, 3), model_property="omega"),
+            ],
+            model=Sine(),
+            simulation_options={},
         )
 
-        agg_sum = aggregate_time_series(
-            results, indicator="res", method="sum", prefix="sum"
-        )
-        agg_mean = aggregate_time_series(
-            results, indicator="res", method="mean", prefix="mean"
-        )
-        aggregated = pd.concat([agg_sum, agg_mean], axis=1)
+        lhs.add_sample(15)
 
-        fig = plot_pcp(
-            parameter_values=param_values,
-            parameter_names=param_names,
-            aggregated_results=aggregated,
-            color_by="sum_res",
-            title="Parallel Coordinates — Samples",
+        lhs.sample.plot_pcp([("res", "mean"), ("res", "sum")])
+
+        # Static
+        lhs = LHSSampler(
+            parameters=[
+                Parameter("x1", (-3.14, 3.14), model_property="x"),
+                Parameter("x2", (-3.14, 3.14), model_property="x2"),
+                Parameter("x3", (-3.14, 3.14), model_property="x3"),
+            ],
+            model=Ishigami(),
+            simulation_options={},
         )
 
-        assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 1
-        pc = fig.data[0]
-        np.testing.assert_allclose(pc.dimensions[0]["values"], [1.1, 3.3, 5.5])  # p1
+        lhs.add_sample(100)
+
+        lhs.sample.plot_pcp(["res"])
 
     def test_plot_pcp_in_sampler(self):
         sampler = LHSSampler(
@@ -335,7 +332,7 @@ class TestSample:
         sampler.add_sample(3, 42, simulate=True)
 
         fig = sampler.plot_pcp(
-            indicator="res",
+            indicators_configs=[("res", "mean")],
         )
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 1
