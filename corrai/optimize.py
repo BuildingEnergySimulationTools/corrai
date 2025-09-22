@@ -857,5 +857,5 @@ class SciOptimizer:
             reference_value=reference_value,
             reference_label=reference_label,
             show_rug=show_rug,
-            title=title
+            title=title,
         )
