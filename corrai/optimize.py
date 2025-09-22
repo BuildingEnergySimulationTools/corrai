@@ -814,3 +814,48 @@ class SciOptimizer:
             quantile_band=quantile_band,
             type_graph=type_graph,
         )
+
+    @wraps(Sample.plot_pcp)
+    def plot_pcp(
+        self,
+        indicators_configs: list[str]
+        | list[tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series]],
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates — Samples",
+        html_file_path: str | None = None,
+    ) -> go.Figure:
+        return self.model_evaluator.sample.plot_pcp(
+            indicators_configs=indicators_configs,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
+        )
+
+    @wraps(Sample.plot_hist)
+    def plot_hist(
+        self,
+        indicator: str,
+        method: str = "mean",
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        bins: int = 30,
+        colors: str = "orange",
+        reference_value: int | float = None,
+        reference_label: str = "Reference",
+        show_rug: bool = False,
+        title: str = None,
+    ):
+        return self.model_evaluator.sample.plot_hist(
+            indicator=indicator,
+            method=method,
+            unit=unit,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            bins=bins,
+            colors=colors,
+            reference_value=reference_value,
+            reference_label=reference_label,
+            show_rug=show_rug,
+            title=title
+        )
