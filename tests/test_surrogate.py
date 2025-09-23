@@ -1,9 +1,13 @@
 import itertools
+
 import pandas as pd
 import numpy as np
+
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import make_pipeline
-from corrai.surrogate import ModelTrainer, MultiModelSO
+from sklearn.linear_model import LinearRegression
+
+from corrai.surrogate import ModelTrainer, MultiModelSO, StaticScikitModel
 
 
 class TestLearning:
@@ -41,4 +45,27 @@ class TestLearning:
 
         model_pipe.predict(x_df)
 
-        assert True
+
+class TestScikitWrapper:
+    def test_scikit_wrapper(self):
+        ds = pd.DataFrame(
+            {
+                "x_1": np.arange(0.0, 10.0, 1),
+                "x_2": np.arange(10.0, 20.0, 1),
+                "y": 4.0 * np.arange(10.0, 20.0, 1) + 2.0 * np.arange(0.0, 10.0, 1),
+            }
+        )
+
+        in_df = {"x_1": 2.0, "x_2": 4.0}
+
+        ref_df = pd.DataFrame({"y": 28.0}, index=[0])
+
+        mumoso = MultiModelSO()
+        mumoso.fit(ds[["x_1", "x_2"]], ds["y"])
+        stat_mod = StaticScikitModel(mumoso)
+        pd.testing.assert_frame_equal(stat_mod.simulate(in_df), ref_df)
+
+        line_reg = LinearRegression()
+        line_reg.fit(ds[["x_1", "x_2"]], ds["y"])
+        scikit_mod = StaticScikitModel(line_reg, target_name="y")
+        pd.testing.assert_frame_equal(scikit_mod.simulate(in_df), ref_df)
