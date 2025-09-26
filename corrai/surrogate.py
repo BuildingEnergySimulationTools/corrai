@@ -433,12 +433,11 @@ class StaticScikitModel(Model):
         if isinstance(self.scikit_model, MultiModelSO):
             return pd.Series(
                 self.scikit_model.predict(param_df).squeeze(),
-                index=[self.scikit_model.target_name_]
+                index=[self.scikit_model.target_name_],
             )
         elif self.target_name is not None:
             return pd.Series(
-                self.scikit_model.predict(param_df)[0],
-                index=[self.target_name]
+                self.scikit_model.predict(param_df)[0], index=[self.target_name]
             )
         else:
             raise ValueError(
