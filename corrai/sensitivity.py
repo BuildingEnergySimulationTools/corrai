@@ -334,7 +334,6 @@ class Sanalysis(ABC):
         prefix: str = "aggregated",
     ) -> pd.DataFrame:
         return self.sampler.sample.get_aggregated_time_series(
-            self.results,
             indicator,
             method,
             agg_method_kwarg,
