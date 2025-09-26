@@ -431,10 +431,14 @@ class StaticScikitModel(Model):
             raise ValueError(f"Unknown features: {missing}")
 
         if isinstance(self.scikit_model, MultiModelSO):
-            return self.scikit_model.predict(param_df)
+            return pd.Series(
+                self.scikit_model.predict(param_df).squeeze(),
+                index=[self.scikit_model.target_name_]
+            )
         elif self.target_name is not None:
-            return pd.DataFrame(
-                data=self.scikit_model.predict(param_df), columns=[self.target_name]
+            return pd.Series(
+                self.scikit_model.predict(param_df)[0],
+                index=[self.target_name]
             )
         else:
             raise ValueError(
