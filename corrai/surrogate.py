@@ -420,20 +420,24 @@ class StaticScikitModel(Model):
             is missing when required.
         """
 
-        param_df = pd.Series(property_dict)
-        if simulation_options is not None:
-            param_df = pd.concat([param_df, pd.Series(simulation_options)])
-        param_df = param_df.to_frame().T
+        param_df = pd.DataFrame(property_dict, index=[0])
+        if simulation_options:
+            sim_series = pd.Series(simulation_options)
+            if not sim_series.empty:
+                param_df = pd.concat([param_df, sim_series], axis=0)
 
         missing = set(param_df.columns) - set(self.scikit_model.feature_names_in_)
         if missing:
             raise ValueError(f"Unknown features: {missing}")
 
         if isinstance(self.scikit_model, MultiModelSO):
-            return self.scikit_model.predict(param_df)
+            return pd.Series(
+                self.scikit_model.predict(param_df).squeeze(),
+                index=[self.scikit_model.target_name_],
+            )
         elif self.target_name is not None:
-            return pd.DataFrame(
-                data=self.scikit_model.predict(param_df), columns=[self.target_name]
+            return pd.Series(
+                self.scikit_model.predict(param_df)[0], index=[self.target_name]
             )
         else:
             raise ValueError(
