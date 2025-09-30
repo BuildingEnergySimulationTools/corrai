@@ -1046,6 +1046,99 @@ class Sampler(ABC):
                 slice(sample_starts, sample_ends), n_cpu, simulation_kwargs
             )
 
+    def append_sample_from_param_dict(
+        self, param_dict: dict[str, int | float | str], simulation_kwargs=None
+    ):
+        """
+        Add a new sample from a parameter dictionary and simulate it.
+
+        This method appends a single sample to the existing sample set by providing
+        parameter values as a dictionary. The keys must correspond to the ``name``
+        property of the ``Parameter`` objects in the ``parameters``. After adding
+        the sample, it automatically runs a simulation for the newly added parameters.
+
+        Parameters
+        ----------
+        param_dict : dict of {str: int, float, or str}
+            Dictionary mapping parameter names to their values. Keys must match the
+            ``name`` attribute of ``Parameter`` objects in ``self.parameters``.
+            All parameters must be present in the dictionary.
+
+        simulation_kwargs : dict, optional
+            Additional keyword arguments to pass to the simulation method.
+            These can include simulation-specific options such as solver settings,
+            output options, or other model-specific parameters.
+            Default is None.
+
+        Returns
+        -------
+        None
+            The method modifies the sample in place by adding a new row to
+            ``self.sample`` and stores the simulation results in ``self.results``.
+
+        Raises
+        ------
+        AssertionError
+            If any parameter name in ``param_dict`` is not found in
+            ``self.values.columns``, indicating missing or misspelled parameter names.
+
+        Notes
+        -----
+        - The newly added sample is assigned the index ``self.values.index[-1]``,
+          which corresponds to the last index after appending.
+        - This method is useful for manual parameter exploration, adding specific
+          test cases, or iteratively building samples based on optimization results.
+
+        Examples
+        --------
+        Add a single sample with specific parameter values:
+
+        >>> from corrai.base.parameter import Parameter
+        >>> from corrai.base.model import IshigamiDynamic
+        >>> from corrai.sampling import LHSSampler
+        >>>
+        >>> # Define parameters
+        >>> params = [
+        ...     Parameter("par_x1", (-3.14, 3.14), model_property="x1"),
+        ...     Parameter("par_x2", (-3.14, 3.14), model_property="x2"),
+        ...     Parameter("par_x3", (-3.14, 3.14), model_property="x3"),
+        ... ]
+        >>>
+        >>> # Create sample object
+        >>> simulation_opts = {
+        ...     "start": "2023-01-01 00:00:00",
+        ...     "end": "2023-01-01 23:00:00",
+        ...     "timestep": "h",
+        ... }
+        >>> sample = LHSSampler(
+        ...     parameter_list=params,
+        ...     model=IshigamiDynamic(),
+        ...     simulation_options=simulation_opts,
+        ... )
+        >>>
+        >>> # Add a specific sample
+        >>> new_params = {"par_x1": 1.5, "par_x2": -0.5, "par_x3": 2.0}
+        >>> sample.append_sample_from_param_dict(new_params)
+        >>> print(sample.values.tail(1))
+              par_x1  par_x2  par_x3
+        0        1.5    -0.5     2.0
+
+        See Also
+        --------
+        add_samples : Add multiple samples at once using a numpy array
+        simulate_at : Simulate a specific sample by its index
+        Parameter : Class defining model parameters with bounds and properties
+        """
+
+        assert all(
+            val in self.values.columns for val in param_dict.keys()
+        ), "Missing parameters in columns"
+
+        self.sample.add_samples(
+            np.array([[param_dict[val] for val in self.values.columns]])
+        )
+        self.simulate_at(idx=self.values.index[-1], simulation_kwargs=simulation_kwargs)
+
     def simulate_at(
         self,
         idx: int | list[int] | np.ndarray | slice = None,

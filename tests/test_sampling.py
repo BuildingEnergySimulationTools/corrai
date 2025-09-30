@@ -449,6 +449,23 @@ class TestSample:
             check_exact=False,
         )
 
+        sampler.append_sample_from_param_dict(
+            {
+                "param_1": 0,
+                "param_2": 0,
+                "param_3": 0,
+            }
+        )
+
+        assert sampler.values.iloc[-1, :].to_dict() == {
+            "param_1": 0.0,
+            "param_2": 0.0,
+            "param_3": 0.0,
+        }
+        assert sampler.results.iloc[-1].to_dict() == {
+            "res": {pd.Timestamp("2009-01-01 00:00:00"): 0.0}
+        }
+
         # Static
         sampler = LHSSampler(
             parameters=REAL_PARAM,
