@@ -7,6 +7,12 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import datetime as dt
+from sklearn.metrics import (
+    r2_score,
+    mean_absolute_error,
+    root_mean_squared_error,
+    max_error,
+)
 
 import plotly.figure_factory as ff
 
@@ -16,10 +22,20 @@ from SALib.sample import sobol as sobol_sampler
 from SALib.sample import fast_sampler, latin
 
 from corrai.base.utils import check_indicators_configs
+from corrai.base.metrics import nmbe, cv_rmse
 from corrai.base.parameter import Parameter
 from corrai.base.model import Model
 from corrai.base.math import aggregate_time_series
 from corrai.base.simulate import run_simulations
+
+SCORE_MAP = {
+    "r2": r2_score,
+    "nmbe": nmbe,
+    "cv_rmse": cv_rmse,
+    "mae": mean_absolute_error,
+    "rmse": root_mean_squared_error,
+    "max": max_error,
+}
 
 
 def plot_pcp(
@@ -404,6 +420,156 @@ class Sample:
         if self.is_dynamic:
             raise ValueError("Cannot map results to a DataFrame with a dynamic Sample")
         return pd.DataFrame(self.results.to_list(), index=self.results.index)
+
+    def get_score_df(
+        self,
+        indicator: str,
+        reference_time_series: pd.Series,
+        scoring_methods: list[str | Callable] = None,
+        resample_rule: str | pd.Timedelta | dt.timedelta = None,
+        agg_method: str = "mean",
+    ) -> pd.DataFrame:
+        """
+        Compute scoring metrics for a given indicator across all sample results.
+
+        This method evaluates the performance of dynamic model predictions by comparing
+        them against a reference time series. It supports multiple scoring metrics
+        (R², NMBE, CV(RMSE), MAE, RMSE, max error) and optional resampling of data.
+
+        Parameters
+        ----------
+        indicator : str
+            Name of the indicator/variable to evaluate from the simulation results.
+            Must be a valid columns in the sample results DataFrame.
+        reference_time_series : pd.Series
+            Ground truth or measured time series data to compare against.
+        scoring_methods : list of str or callable, optional
+            List of scoring methods to apply. Can be:
+
+            - String values from ``SCORE_MAP``: ``"r2"``, ``"nmbe"``, ``"cv_rmse"``,
+              ``"mae"``, ``"rmse"``, ``"max"``
+            - Custom callable functions with signature ``func(y_true, y_pred) -> float``
+
+            If None, all methods are used.
+            Default is None.
+        resample_rule : str, pd.Timedelta or dt.timedelta, optional
+            Resampling frequency for aggregating the time series data before scoring.
+            Examples: ``"D"`` (daily), ``"h"`` (hourly), ``"ME"`` (month end).
+            If None, no resampling is performed.
+            Default is None.
+        agg_method : str, optional
+            Aggregation method to use when resampling. Common values include:
+            ``"mean"``, ``"sum"``, ``"min"``, ``"max"``, ``"median"``.
+            Default is ``"mean"``.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame containing scoring metrics for each sample.
+
+            - Index: sample identifiers from ``self.results``
+            - Columns: metric names (e.g., ``"r2_score"``, ``"nmbe"``, ``"cv_rmse"``)
+            - Values: computed metric values (float)
+
+            The DataFrame's index name is set to the resampling rule or the inferred
+            frequency of the reference time series.
+
+        Raises
+        ------
+        NotImplementedError
+            If the model is not dynamic (``self.is_dynamic == False``).
+
+        Notes
+        -----
+        The scoring metrics available in ``SCORE_MAP`` are:
+
+        - ``r2``: R² score (coefficient of determination)
+        - ``nmbe``: Normalized Mean Bias Error
+        - ``cv_rmse``: Coefficient of Variation of Root Mean Squared Error
+        - ``mae``: Mean Absolute Error
+        - ``rmse``: Root Mean Squared Error
+        - ``max``: Maximum absolute error
+
+        When resampling is applied, both the predicted and reference time series are
+        resampled using the same rule and aggregation method to ensure alignment.
+
+        Examples
+        --------
+        Basic usage with default metrics:
+
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> # Assuming 'sample' is an instance of Sample class with results
+        >>> reference = pd.Series(
+        ...     np.random.randn(100),
+        ...     index=pd.date_range("2023-01-01", periods=100, freq="h"),
+        ... )
+        >>> scores = sample.get_score_df(
+        ...     indicator="temperature", reference_time_series=reference
+        ... )
+        >>> print(scores)
+                    r2_score      nmbe   cv_rmse       mae      rmse       max
+        0    0.85234  0.012345  0.234567  1.234567  1.567890  3.456789
+        1    0.82156  0.023456  0.345678  1.345678  1.678901  3.567890
+        ...
+
+        Using specific metrics and daily resampling:
+
+        >>> scores = sample.get_score_df(
+        ...     indicator="Energy",
+        ...     reference_time_series=reference,
+        ...     scoring_methods=["r2", "rmse", "mae"],
+        ...     resample_rule="D",
+        ...     agg_method="sum",
+        ... )
+        >>> print(scores)
+                  r2_score      rmse       mae
+        D
+        0  0.91234  12.34567  10.12345
+        1  0.89123  13.45678  11.23456
+        ...
+
+        See Also
+        --------
+        sklearn.metrics.r2_score : R² metric implementation
+        sklearn.metrics.mean_absolute_error : MAE metric implementation
+        sklearn.metrics.root_mean_squared_error : RMSE metric implementation
+        """
+
+        if not self.is_dynamic:
+            raise NotImplementedError(
+                "get_score_df is not implemented for non dynamic models"
+            )
+
+        scores = pd.DataFrame()
+        scoring_methods = (
+            list(SCORE_MAP.keys()) if scoring_methods is None else scoring_methods
+        )
+
+        method_func = [
+            SCORE_MAP[method] if isinstance(method, str) else method
+            for method in scoring_methods
+        ]
+
+        for idx, sample_res in self.results.items():
+            data = sample_res[indicator]
+            if resample_rule:
+                data = data.resample(resample_rule).agg(agg_method)
+                reference_time_series = reference_time_series.resample(
+                    resample_rule
+                ).agg(agg_method)
+
+            for method in method_func:
+                scores.loc[idx, method.__name__] = method(reference_time_series, data)
+
+        scores.index.name = (
+            resample_rule
+            if resample_rule
+            else reference_time_series.index.freq
+            if reference_time_series.index.freq
+            else reference_time_series.index.inferred_freq
+        )
+        return scores
 
     def plot_hist(
         self,

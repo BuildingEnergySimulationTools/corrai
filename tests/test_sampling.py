@@ -127,6 +127,32 @@ class TestSample:
         fig = sample.plot_sample("res")
         assert fig
 
+        ref = pd.Series(
+            [123, 456],
+            index=pd.date_range("2009-01-02", periods=2, freq="d"),
+            name="ref",
+        )
+
+        sample.results[0].loc[pd.Timestamp("2009-01-02"), "res"] = 456
+        sample.results[1].loc[pd.Timestamp("2009-01-02"), "res"] = 43
+
+        score_res = sample.get_score_df("res", ref)
+
+        pd.testing.assert_frame_equal(
+            score_res,
+            pd.DataFrame(
+                {
+                    "r2_score": {0: 1.0, 1: -2.19},
+                    "nmbe": {0: -57.51, 1: 94.11},
+                    "cv_rmse": {0: 115.02, 1: 188.23},
+                    "mean_absolute_error": {0: 0.0, 1: 247.0},
+                    "root_mean_squared_error": {0: 0.0, 1: 297.59},
+                    "max_error": {0: 0.0, 1: 413.0},
+                }
+            ).rename_axis(ref.index.freq),
+            atol=0.1,
+        )
+
         sample._validate()
 
         # Static Sample
