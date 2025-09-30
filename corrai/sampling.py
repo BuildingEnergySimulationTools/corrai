@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import wraps
 from typing import Union, Callable
@@ -961,7 +960,7 @@ class Sample:
         )
 
 
-class Sampler(ABC):
+class Sampler:
     """
     Abstract base class for parameter samplers.
 
@@ -1007,7 +1006,6 @@ class Sampler(ABC):
     def results(self):
         return self.sample.results
 
-    @abstractmethod
     def add_sample(self, *args, **kwargs) -> np.ndarray:
         """
         Generate new samples and optionally run simulations.
@@ -1019,7 +1017,7 @@ class Sampler(ABC):
         ndarray
             The newly generated sample values.
         """
-        pass
+        raise NotImplementedError("add_sample is not implemented for this class")
 
     def _post_draw_sample(
         self,
@@ -1220,7 +1218,7 @@ class Sampler(ABC):
         )
 
 
-class RealSampler(Sampler, ABC):
+class RealSampler(Sampler):
     """
     Abstract base class for samplers that only support real-valued parameters.
 
