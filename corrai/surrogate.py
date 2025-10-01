@@ -371,8 +371,13 @@ class StaticScikitModel(Model):
         Always ``False`` for this wrapper, since it represents static models.
     scikit_model : MultiModelSO or RegressorMixin
         The wrapped scikit-learn model used for predictions.
-    target_name : str or None
-        Output variable name when applicable.
+    target_name : str
+        Output variable name.
+
+    Raises
+    ------
+    ValueError
+        If ``target_name`` cannot be inferred and is not provided.
     """
 
     def __init__(
@@ -380,20 +385,47 @@ class StaticScikitModel(Model):
     ):
         super().__init__(is_dynamic=False)
         self.scikit_model = scikit_model
-        self.target_name = target_name
+        self.target_name = self._resolve_target_name(target_name)
+
+    def _resolve_target_name(self, target_name: str = None) -> str:
+        if target_name is not None:
+            return target_name
+
+        if hasattr(self.scikit_model, "target_name_"):
+            return self.scikit_model.target_name_
+
+        raise ValueError(
+            "target_name must be specified when scikit_model "
+            "is not an instance of MultiModelSO"
+        )
+
+    def _build_feature_dataframe(
+        self, property_dict: dict[str, str | int | float], simulation_options: dict
+    ) -> pd.DataFrame:
+        if not property_dict and not simulation_options:
+            return pd.DataFrame()
+
+        # Merge dictionaries (simulation_options override property_dict)
+        merged = {**(property_dict or {}), **(simulation_options or {})}
+        return pd.DataFrame([merged])
+
+    def _validate_features(self, features: pd.DataFrame) -> None:
+        unknown = set(features.columns) - set(self.scikit_model.feature_names_in_)
+        if unknown:
+            raise ValueError(f"Unknown features: {unknown}")
 
     def simulate(
         self,
         property_dict: dict[str, str | int | float] = None,
         simulation_options: dict = None,
         **simulation_kwargs,
-    ) -> pd.DataFrame | pd.Series:
+    ) -> pd.Series:
         """
         Run the scikit-learn model prediction.
 
         Combines provided parameter values and simulation options into a
         feature vector, validates compatibility with the underlying model,
-        and returns predictions.
+        and returns predictions as a pandas Series.
 
         Parameters
         ----------
@@ -401,46 +433,26 @@ class StaticScikitModel(Model):
             Mapping from feature names to values to use for prediction.
         simulation_options : dict, optional
             Additional feature overrides or configuration parameters to
-            include in the feature vector.
+            include in the feature vector. These values override those
+            in ``property_dict`` if keys overlap.
         **simulation_kwargs
             Extra keyword arguments for future extensions (currently unused).
 
         Returns
         -------
-        pd.Series or pd.DataFrame
-            - If ``scikit_model`` is an instance of :class:`MultiModelSO`:
-              returns a :class:`pandas.Series` of predictions.
-            - Otherwise, returns a :class:`pandas.DataFrame` with column
-              name ``target_name``.
+        pd.Series
+            Prediction results with index ``[self.target_name]``.
 
         Raises
         ------
         ValueError
-            If unknown feature names are provided or if ``target_name``
-            is missing when required.
+            If unknown feature names are provided.
         """
+        features = self._build_feature_dataframe(property_dict, simulation_options)
+        self._validate_features(features)
 
-        param_df = pd.DataFrame(property_dict, index=[0])
-        if simulation_options:
-            sim_series = pd.Series(simulation_options)
-            if not sim_series.empty:
-                param_df = pd.concat([param_df, sim_series], axis=0)
+        pred = self.scikit_model.predict(features)
+        if isinstance(pred, pd.DataFrame):
+            pred = pred.squeeze()
 
-        missing = set(param_df.columns) - set(self.scikit_model.feature_names_in_)
-        if missing:
-            raise ValueError(f"Unknown features: {missing}")
-
-        if isinstance(self.scikit_model, MultiModelSO):
-            return pd.Series(
-                self.scikit_model.predict(param_df).squeeze(),
-                index=[self.scikit_model.target_name_],
-            )
-        elif self.target_name is not None:
-            return pd.Series(
-                self.scikit_model.predict(param_df)[0], index=[self.target_name]
-            )
-        else:
-            raise ValueError(
-                "scikit_model is not an instance of MultiModelSO"
-                "target_name must be specified"
-            )
+        return pd.Series(pred, index=[self.target_name])
