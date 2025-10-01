@@ -4,10 +4,14 @@ import pandas as pd
 from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.model_selection import (
+    train_test_split,
+    cross_val_score,
+    RandomizedSearchCV,
+)
 from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import PolynomialFeatures
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.svm import SVR
 from sklearn.utils.validation import check_is_fitted
 
@@ -33,7 +37,9 @@ MODEL_MAP = {
         ]
     ),
     "SUPPORT_VECTOR": SVR(),
-    "MULTI_LAYER_PERCEPTRON": MLPRegressor(max_iter=5000),
+    "MULTI_LAYER_PERCEPTRON": Pipeline(
+        [("scaler", StandardScaler()), ("MLP", MLPRegressor(max_iter=5000))]
+    ),
 }
 
 GRID_DICT = {
@@ -68,14 +74,14 @@ GRID_DICT = {
     ],
     "MULTI_LAYER_PERCEPTRON": [
         {
-            "hidden_layer_sizes": [(50,), (100,), (150,), (50, 50), (100, 50)],
-            "activation": [
-                "relu",
-                "tanh",
-            ],  # identity/logistic rarely perform well in regression
-            "solver": ["adam", "lbfgs"],  # "sgd" often unstable unless tuned further
-            "alpha": [0.0001, 0.001, 0.01],
-            "learning_rate": ["constant", "adaptive"],
+            "MLP__hidden_layer_sizes": [(50,), (100,), (150,), (50, 50), (100, 50)],
+            "MLP__activation": ["relu"],
+            "MLP__solver": ["adam"],
+            "MLP__alpha": [0.0001, 0.001, 0.01, 0.1],
+            "MLP__learning_rate": ["constant", "adaptive"],
+            "MLP__max_iter": [1000, 5000],
+            # "MLP__early_stopping": [True],
+            # "MLP__validation_fraction": [0.1],
         }
     ],
 }
@@ -158,7 +164,7 @@ class MultiModelSO(BaseEstimator, RegressorMixin):
             "LINEAR_SECOND_ORDER", "LINEAR_THIRD_ORDER", "SUPPORT_VECTOR",
             "MULTI_LAYER_PERCEPTRON"
         If ``None`` (default), all models in ``MODEL_MAP`` are evaluated.
-    cv : int, default=10
+    cv : int, default=3
         Number of cross-validation folds to use for model comparison.
     fine_tuning : bool, default=True
         If True, perform a grid search on the best model to fine-tune its
@@ -228,14 +234,16 @@ class MultiModelSO(BaseEstimator, RegressorMixin):
     def __init__(
         self,
         models: list[str] = None,
-        cv: int = 10,
-        fine_tuning: bool = True,
+        cv: int = 3,
         scoring: str = "neg_mean_squared_error",
+        fine_tuning: bool = True,
+        tuning_n_iter: int = 20,
         n_jobs: int = -1,
         random_state: int = None,
     ):
         self.cv = cv
         self.fine_tuning = fine_tuning
+        self.tuning_n_iter = tuning_n_iter
         self.scoring = scoring
         self.n_jobs = n_jobs
         self.random_state = random_state
@@ -328,14 +336,16 @@ class MultiModelSO(BaseEstimator, RegressorMixin):
 
         model_to_tune = self.get_model(model)
 
-        grid_search = GridSearchCV(
+        grid_search = RandomizedSearchCV(
             model_to_tune,
-            GRID_DICT[model],
+            param_distributions=GRID_DICT[model],
             cv=self.cv,
+            n_iter=self.tuning_n_iter,
             scoring=self.scoring,
             return_train_score=True,
             verbose=verbose,
             n_jobs=self.n_jobs,
+            random_state=self.random_state,
         )
         grid_search.fit(X, y)
 
