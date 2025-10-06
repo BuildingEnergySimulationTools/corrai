@@ -1,19 +1,145 @@
+import time
+
 import numpy as np
 import pandas as pd
+
+from scipy.stats import loguniform, randint
 
 from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.model_selection import (
+    train_test_split,
+    cross_val_score,
+    RandomizedSearchCV,
+)
 from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import PolynomialFeatures
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.svm import SVR
 from sklearn.utils.validation import check_is_fitted
 
 from corrai.base.metrics import nmbe, cv_rmse
 from corrai.base.utils import as_1_column_dataframe
 from corrai.base.model import Model
+
+GRID_DICT = {
+    "TREE_REGRESSOR": [
+        {
+            "n_estimators": [100, 200, 300],
+            "max_depth": [10, 20, 30, None],
+            "min_samples_split": [2, 5, 10],
+            "min_samples_leaf": [1, 2, 4],
+            "max_features": ["sqrt", "log2"],
+            "bootstrap": [True],
+        }
+    ],
+    "RANDOM_FOREST": [
+        {
+            "n_estimators": [100, 200, 300],
+            "max_depth": [10, 20, 30, None],
+            "max_features": ["sqrt", "log2"],
+            "min_samples_leaf": [1, 2, 5],
+            "min_samples_split": [2, 5],
+        }
+    ],
+    "LINEAR_REGRESSION": [{"fit_intercept": [True, False]}],
+    "LINEAR_SECOND_ORDER": [{"poly__interaction_only": [True, False]}],
+    "LINEAR_THIRD_ORDER": [{"poly__interaction_only": [True, False]}],
+    "SUPPORT_VECTOR": [
+        {
+            "kernel": ["rbf", "linear"],
+            "C": [0.1, 1, 10, 100],
+            "gamma": ["scale", "auto", 0.001, 0.01],
+            "epsilon": [0.01, 0.1],
+        }
+    ],
+    "MULTI_LAYER_PERCEPTRON": [
+        {
+            "MLP__hidden_layer_sizes": [
+                (100,),
+                (150,),
+                (100, 50),
+                (150, 100),
+            ],
+            "MLP__activation": ["relu", "tanh"],
+            "MLP__solver": ["adam"],
+            "MLP__alpha": [0.0001, 0.001, 0.01],
+            "MLP__learning_rate": ["adaptive"],
+            "MLP__max_iter": [3000, 5000],
+            "MLP__early_stopping": [True],
+            "MLP__validation_fraction": [0.15],
+            "MLP__n_iter_no_change": [15],
+            "MLP__tol": [1e-4],
+        }
+    ],
+}
+
+# For use with RandomizedSearchCV - continuous distributions
+# This allows exploring MORE distinct values
+GRID_DICT_CONTINUOUS = {
+    "TREE_REGRESSOR": {
+        "n_estimators": randint(100, 400),
+        "max_depth": [10, 20, 30, 40, None],
+        "min_samples_split": randint(2, 15),
+        "min_samples_leaf": randint(1, 8),
+        "max_features": ["sqrt", "log2"],
+        "bootstrap": [True],
+    },
+    "RANDOM_FOREST": {
+        "n_estimators": randint(100, 400),
+        "max_depth": [10, 20, 30, 40, None],
+        "max_features": ["sqrt", "log2"],
+        "min_samples_leaf": randint(1, 10),
+        "min_samples_split": randint(2, 15),
+    },
+    "LINEAR_REGRESSION": {"fit_intercept": [True, False]},
+    "LINEAR_SECOND_ORDER": {"poly__interaction_only": [True, False]},
+    "LINEAR_THIRD_ORDER": {"poly__interaction_only": [True, False]},
+    "SUPPORT_VECTOR": {
+        "kernel": ["rbf", "linear"],
+        "C": loguniform(0.1, 100),  # Continuous log scale
+        "gamma": ["scale", "auto"]
+        + list(loguniform(1e-4, 1e-1).rvs(5, random_state=42)),
+        "epsilon": loguniform(0.001, 0.5),
+    },
+    "MULTI_LAYER_PERCEPTRON": {
+        "MLP__hidden_layer_sizes": [
+            (50,),
+            (100,),
+            (150,),
+            (200,),
+            (50, 50),
+            (100, 50),
+            (150, 100),
+            (200, 100),
+            (100, 50, 25),
+            # (200, 50, 25),
+        ],
+        "MLP__activation": ["relu", "tanh"],
+        "MLP__solver": ["adam", "lbfgs"],
+        "MLP__alpha": loguniform(1e-5, 1e-2),
+        "MLP__learning_rate": ["constant", "adaptive"],
+        "MLP__max_iter": [3000, 5000],
+        "MLP__early_stopping": [True],
+        "MLP__validation_fraction": [0.05, 0.1],
+        "MLP__n_iter_no_change": [15, 30, 50],
+        "MLP__tol": [1e-4, 1e-5],
+    },
+}
+
+
+# RECOMMENDED: Different n_iter for different model complexities
+TUNING_N_ITER_BY_MODEL = {
+    "TREE_REGRESSOR": 30,
+    "RANDOM_FOREST": 30,
+    "LINEAR_REGRESSION": 2,
+    "LINEAR_SECOND_ORDER": 2,
+    "LINEAR_THIRD_ORDER": 2,
+    "SUPPORT_VECTOR": 25,
+    "MULTI_LAYER_PERCEPTRON": 20,
+}
+
 
 MODEL_MAP = {
     "TREE_REGRESSOR": RandomForestRegressor(),
@@ -33,51 +159,9 @@ MODEL_MAP = {
         ]
     ),
     "SUPPORT_VECTOR": SVR(),
-    "MULTI_LAYER_PERCEPTRON": MLPRegressor(max_iter=5000),
-}
-
-GRID_DICT = {
-    "TREE_REGRESSOR": [
-        {
-            "n_estimators": [100, 300, 500],
-            "max_depth": [None, 10, 20, 40],
-            "min_samples_split": [2, 5, 10],
-            "min_samples_leaf": [1, 2, 4],
-            "max_features": ["sqrt", "log2", 0.5],  # allow fraction
-            "bootstrap": [True, False],
-        }
-    ],
-    "RANDOM_FOREST": [
-        {
-            "n_estimators": [100, 200, 400, 800],
-            "max_features": ["sqrt", "log2"],
-            "min_samples_leaf": [1, 2, 5],
-        }
-    ],
-    "LINEAR_REGRESSION": [{"fit_intercept": [True, False]}],
-    "LINEAR_SECOND_ORDER": [{"poly__interaction_only": [True, False]}],
-    "LINEAR_THIRD_ORDER": [{"poly__interaction_only": [True, False]}],
-    "SUPPORT_VECTOR": [
-        {
-            "kernel": ["linear", "poly", "rbf", "sigmoid"],
-            "C": [0.1, 1, 10, 100],
-            "gamma": ["scale", "auto"],
-            "epsilon": [0.001, 0.01, 0.1],
-            "degree": [2, 3, 4],  # only relevant if kernel="poly"
-        }
-    ],
-    "MULTI_LAYER_PERCEPTRON": [
-        {
-            "hidden_layer_sizes": [(50,), (100,), (150,), (50, 50), (100, 50)],
-            "activation": [
-                "relu",
-                "tanh",
-            ],  # identity/logistic rarely perform well in regression
-            "solver": ["adam", "lbfgs"],  # "sgd" often unstable unless tuned further
-            "alpha": [0.0001, 0.001, 0.01],
-            "learning_rate": ["constant", "adaptive"],
-        }
-    ],
+    "MULTI_LAYER_PERCEPTRON": Pipeline(
+        [("scaler", StandardScaler()), ("MLP", MLPRegressor(max_iter=5000))]
+    ),
 }
 
 
@@ -158,7 +242,7 @@ class MultiModelSO(BaseEstimator, RegressorMixin):
             "LINEAR_SECOND_ORDER", "LINEAR_THIRD_ORDER", "SUPPORT_VECTOR",
             "MULTI_LAYER_PERCEPTRON"
         If ``None`` (default), all models in ``MODEL_MAP`` are evaluated.
-    cv : int, default=10
+    cv : int, default=3
         Number of cross-validation folds to use for model comparison.
     fine_tuning : bool, default=True
         If True, perform a grid search on the best model to fine-tune its
@@ -223,19 +307,44 @@ class MultiModelSO(BaseEstimator, RegressorMixin):
     72   134.038756
     321  291.417029
     73   123.789659
+
+    >>> # Fast configuration and training (development)
+    >>> model = MultiModelSO(
+    ...     models=["LINEAR_REGRESSION", "RANDOM_FOREST", "MULTI_LAYER_PERCEPTRON"],
+    ...     cv=3,
+    ...     fine_tuning=True,
+    ...     tuning_n_iter=TUNING_N_ITER_BY_MODEL,
+    ...     use_continuous_distributions=False,
+    ...     n_jobs=-1,
+    ... )
+
+    >>> # Optimal configuration (production)
+    >>> model = MultiModelSO(
+    ...     models=None,
+    ...     cv=5,
+    ...     fine_tuning=True,
+    ...     tuning_n_iter=TUNING_N_ITER_BY_MODEL,
+    ...     use_continuous_distributions=True,
+    ...     n_jobs=-1,
+    ...     random_state=42,
+    ... )
     """
 
     def __init__(
         self,
         models: list[str] = None,
-        cv: int = 10,
-        fine_tuning: bool = True,
+        cv: int = 3,
         scoring: str = "neg_mean_squared_error",
+        fine_tuning: bool = True,
+        tuning_n_iter: int | dict = None,
+        use_continuous_distributions: bool = False,
         n_jobs: int = -1,
         random_state: int = None,
     ):
         self.cv = cv
         self.fine_tuning = fine_tuning
+        self.tuning_n_iter = tuning_n_iter
+        self.use_continuous_distributions = use_continuous_distributions
         self.scoring = scoring
         self.n_jobs = n_jobs
         self.random_state = random_state
@@ -243,31 +352,62 @@ class MultiModelSO(BaseEstimator, RegressorMixin):
         self.models = models if models is not None else list(MODEL_MAP.keys())
         self.model_map = {mod: clone(MODEL_MAP[mod]) for mod in self.models}
 
+        self.training_times_ = {}
+        self.cv_scores_ = {}
+
     @property
     def feature_names_in_(self):
         check_is_fitted(self, ["_is_fitted"])
         return self.get_model().feature_names_in_
 
     def __sklearn_is_fitted__(self):
-        """
-        Check fitted status and return a Boolean value.
-        """
         return hasattr(self, "_is_fitted") and self._is_fitted
 
     def fit(self, X: pd.DataFrame, y: pd.DataFrame | pd.Series, verbose=True):
         y = y.squeeze() if isinstance(y, pd.DataFrame) else y
 
-        for mod in self.model_map.values():
-            mod.fit(X, y)
-
-        score_frame = pd.DataFrame(
-            columns=[f"mean({self.scoring})", f"std({self.scoring})"], index=self.models
-        )
+        # Train all models with timing
         for mod_name, mod in self.model_map.items():
-            cv_scores = cross_val_score(mod, X, y, scoring=self.scoring, cv=self.cv)
+            start_time = time.time()
+            try:
+                mod.fit(X, y)
+                self.training_times_[mod_name] = time.time() - start_time
+            except Exception as e:
+                if verbose:
+                    print(f"Warning: {mod_name} failed to train: {e}")
+                self.training_times_[mod_name] = None
+
+        # Cross-validation scores
+        score_frame = pd.DataFrame(
+            columns=[
+                f"mean({self.scoring})",
+                f"std({self.scoring})",
+                "train_time_sec",
+            ],
+            index=self.models,
+        )
+
+        for mod_name, mod in self.model_map.items():
+            if self.training_times_[mod_name] is None:
+                continue
+
+            cv_scores = cross_val_score(
+                mod,
+                X,
+                y,
+                scoring=self.scoring,
+                cv=self.cv,
+                n_jobs=self.n_jobs,  # NEW: parallel CV
+            )
+
             score_frame.loc[mod_name, f"mean({self.scoring})"] = np.mean(cv_scores)
             score_frame.loc[mod_name, f"std({self.scoring})"] = np.std(cv_scores)
+            score_frame.loc[mod_name, "train_time_sec"] = self.training_times_[mod_name]
 
+            self.cv_scores_[mod_name] = cv_scores
+
+        # Remove failed models
+        score_frame = score_frame.dropna()
         score_frame.sort_values(f"mean({self.scoring})", ascending=False, inplace=True)
 
         if verbose:
@@ -277,16 +417,21 @@ class MultiModelSO(BaseEstimator, RegressorMixin):
                 f"{score_frame}"
             )
 
+        if len(score_frame) == 0:
+            raise ValueError("All models failed to train!")
+
         self.best_model_key = score_frame.index[0]
 
         if self.fine_tuning:
             if verbose:
                 print(f"\n === Fine tuning === \n" f"Fine tuning {self.best_model_key}")
 
-            self.fine_tune(X, y, self.best_model_key)
+            self.fine_tune(X, y, self.best_model_key, verbose=verbose)
 
         self.target_name_ = y.name
         self._is_fitted = True
+
+        return self
 
     def predict(
         self, X: pd.DataFrame | np.ndarray | pd.Series, model: str = None
@@ -321,29 +466,83 @@ class MultiModelSO(BaseEstimator, RegressorMixin):
         X: pd.DataFrame,
         y: pd.DataFrame | pd.Series,
         model: str = None,
-        verbose=3,
+        verbose=True,
     ):
-        if GRID_DICT[model] is None:
-            raise ValueError(f"Fine tuning for {model} not yet implemented")
+        if model is None:
+            model = self.best_model_key
+
+        if self.use_continuous_distributions:
+            param_dist = GRID_DICT_CONTINUOUS.get(model)
+        else:
+            param_dist = GRID_DICT.get(model)
+
+        if param_dist is None:
+            if verbose:
+                print(f"Fine tuning for {model} not available - skipping")
+            return
 
         model_to_tune = self.get_model(model)
 
-        grid_search = GridSearchCV(
+        if isinstance(self.tuning_n_iter, dict):
+            n_iter = self.tuning_n_iter.get(model, 20)
+        elif self.tuning_n_iter is not None:
+            n_iter = self.tuning_n_iter
+        else:
+            n_iter = TUNING_N_ITER_BY_MODEL.get(model, 20)
+
+        verbose_level = 2 if verbose else 0
+
+        grid_search = RandomizedSearchCV(
             model_to_tune,
-            GRID_DICT[model],
+            param_distributions=param_dist,
             cv=self.cv,
+            n_iter=n_iter,
             scoring=self.scoring,
             return_train_score=True,
-            verbose=verbose,
+            verbose=verbose_level,
             n_jobs=self.n_jobs,
+            random_state=self.random_state,
         )
+
+        start_time = time.time()
         grid_search.fit(X, y)
+        tuning_time = time.time() - start_time
 
         self.model_map[model] = grid_search.best_estimator_
-        if verbose > 0:
+
+        if verbose:
+            print(f"\nFine tuning completed in {tuning_time:.2f}s")
+            print(f"Best params: {grid_search.best_params_}")
+            print(f"Best CV score: {grid_search.best_score_:.4f}")
+
+            # Show top 5 configurations
             cvres = grid_search.cv_results_
-            for mean_score, params in zip(cvres["mean_test_score"], cvres["params"]):
-                print(np.sqrt(-mean_score), params)
+            results = sorted(
+                zip(cvres["mean_test_score"], cvres["params"]), reverse=True
+            )[:5]
+
+            print("\nTop 5 configurations:")
+            for i, (score, params) in enumerate(results, 1):
+                print(f"{i}. Score: {score:.4f} | Params: {params}")
+
+    def get_feature_importance(self, model: str = None, top_n: int = 10):
+        check_is_fitted(self)
+        mod = self.get_model(model)
+
+        # Handle Pipeline
+        if isinstance(mod, Pipeline):
+            mod = mod.steps[-1][1]
+
+        if not hasattr(mod, "feature_importances_"):
+            raise ValueError(
+                f"Model {model or self.best_model_key} doesn't support feature_importances_"
+            )
+
+        importance_df = pd.DataFrame(
+            {"feature": self.feature_names_in_, "importance": mod.feature_importances_}
+        ).sort_values("importance", ascending=False)
+
+        return importance_df.head(top_n) if top_n else importance_df
 
 
 class StaticScikitModel(Model):

@@ -39,7 +39,9 @@ class TestLearning:
         x_df = pd.DataFrame(list(set(itertools.product(*list(x_dict.values())))))
         y = pd.Series(np.random.randn(x_df.shape[0]))
 
-        model_pipe = make_pipeline(OneHotEncoder(), MultiModelSO(fine_tuning=False))
+        model_pipe = make_pipeline(
+            OneHotEncoder(sparse_output=False), MultiModelSO(fine_tuning=False)
+        )
         trainer = ModelTrainer(model_pipe)
         trainer.train(X=x_df, y=y)
 
