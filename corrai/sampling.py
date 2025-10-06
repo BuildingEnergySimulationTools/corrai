@@ -446,7 +446,7 @@ class Sample:
         reference_time_series: pd.Series,
         scoring_methods: list[str | Callable] = None,
         resample_rule: str | pd.Timedelta | dt.timedelta = None,
-        agg_method: str = "mean",
+        resample_agg_method: str = "mean",
     ) -> pd.DataFrame:
         """
         Compute scoring metrics for a given indicator across all sample results.
@@ -476,7 +476,7 @@ class Sample:
             Examples: ``"D"`` (daily), ``"h"`` (hourly), ``"ME"`` (month end).
             If None, no resampling is performed.
             Default is None.
-        agg_method : str, optional
+        resample_agg_method : str, optional
             Aggregation method to use when resampling. Common values include:
             ``"mean"``, ``"sum"``, ``"min"``, ``"max"``, ``"median"``.
             Default is ``"mean"``.
@@ -539,7 +539,7 @@ class Sample:
         ...     reference_time_series=reference,
         ...     scoring_methods=["r2", "rmse", "mae"],
         ...     resample_rule="D",
-        ...     agg_method="sum",
+        ...     resample_agg_method="sum",
         ... )
         >>> print(scores)
                   r2_score      rmse       mae
@@ -573,10 +573,10 @@ class Sample:
         for idx, sample_res in self.results.items():
             data = sample_res[indicator]
             if resample_rule:
-                data = data.resample(resample_rule).agg(agg_method)
+                data = data.resample(resample_rule).agg(resample_agg_method)
                 reference_time_series = reference_time_series.resample(
                     resample_rule
-                ).agg(agg_method)
+                ).agg(resample_agg_method)
 
             for method in method_func:
                 scores.loc[idx, method.__name__] = method(reference_time_series, data)
