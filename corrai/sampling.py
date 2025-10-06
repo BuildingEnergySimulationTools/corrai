@@ -133,6 +133,26 @@ class Sample:
     values: pd.DataFrame = field(init=False)
     results: pd.Series = field(default_factory=lambda: pd.Series(dtype=object))
 
+    def __repr__(self):
+        if not self.results.empty:
+            if not self.results[0].empty:
+                indicators_name = (
+                    self.results[0].columns
+                    if self.is_dynamic
+                    else self.results[0].index
+                )
+            else:
+                indicators_name = None
+        else:
+            indicators_name = None
+
+        return (
+            f"is dynamic: {self.is_dynamic} \n"
+            f"n computed sample: {len(self.results)} \n"
+            f"parameters: {[par.name for par in self.parameters]} \n"
+            f"indicators: {[None] if indicators_name is None else list(indicators_name)}"
+        )
+
     def __post_init__(self):
         self.values = pd.DataFrame(columns=[par.name for par in self.parameters])
 
