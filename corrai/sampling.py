@@ -980,7 +980,99 @@ class Sample:
         )
 
 
-class Sampler:
+class SampleMethodsMixin:
+    """Mixin to expose Sample plotting methods to classes that contain a Sample object."""
+
+    sample: Sample
+
+    @wraps(Sample.get_aggregated_time_series)
+    def get_sample_aggregated_time_series(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        prefix: str = "aggregated",
+    ):
+        return self.sample.get_aggregated_time_series(
+            indicator, method, agg_method_kwarg, reference_time_series, freq, prefix
+        )
+
+    @wraps(Sample.plot_sample)
+    def plot_sample(
+        self,
+        indicator: str | None,
+        reference_timeseries: pd.Series | None = None,
+        title: str | None = None,
+        y_label: str | None = None,
+        x_label: str | None = None,
+        alpha: float = 0.5,
+        show_legends: bool = False,
+        round_ndigits: int = 2,
+        quantile_band: float = 0.75,
+        type_graph: str = "area",
+    ) -> go.Figure:
+        return self.sample.plot_sample(
+            indicator=indicator,
+            reference_timeseries=reference_timeseries,
+            title=title,
+            y_label=y_label,
+            x_label=x_label,
+            alpha=alpha,
+            show_legends=show_legends,
+            round_ndigits=round_ndigits,
+            quantile_band=quantile_band,
+            type_graph=type_graph,
+        )
+
+    @wraps(Sample.plot_pcp)
+    def plot_pcp(
+        self,
+        indicators_configs: list[str]
+        | list[tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series]],
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates — Samples",
+        html_file_path: str | None = None,
+    ) -> go.Figure:
+        return self.sample.plot_pcp(
+            indicators_configs=indicators_configs,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
+        )
+
+    @wraps(Sample.plot_hist)
+    def plot_hist(
+        self,
+        indicator: str,
+        method: str = "mean",
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        bins: int = 30,
+        colors: str = "orange",
+        reference_value: int | float = None,
+        reference_label: str = "Reference",
+        show_rug: bool = False,
+        title: str = None,
+    ):
+        return self.sample.plot_hist(
+            indicator,
+            method,
+            unit,
+            agg_method_kwarg,
+            reference_time_series,
+            bins,
+            colors,
+            reference_value,
+            reference_label,
+            show_rug,
+            title,
+        )
+
+
+class Sampler(SampleMethodsMixin):
     """
     Abstract base class for parameter samplers.
 
@@ -1179,63 +1271,6 @@ class Sampler:
     def simulate_pending(self, n_cpu: int = 1, simulation_kwargs: dict = None):
         unsimulated_idx = self.sample.get_pending_index()
         self.simulate_at(unsimulated_idx, n_cpu, simulation_kwargs)
-
-    @wraps(Sample.plot_sample)
-    def plot_sample(
-        self,
-        indicator: str | None,
-        reference_timeseries: pd.Series | None = None,
-        title: str | None = None,
-        y_label: str | None = None,
-        x_label: str | None = None,
-        alpha: float = 0.5,
-        show_legends: bool = False,
-        round_ndigits: int = 2,
-        quantile_band: float = 0.75,
-        type_graph: str = "area",
-    ) -> go.Figure:
-        return self.sample.plot_sample(
-            indicator=indicator,
-            reference_timeseries=reference_timeseries,
-            title=title,
-            y_label=y_label,
-            x_label=x_label,
-            alpha=alpha,
-            show_legends=show_legends,
-            round_ndigits=round_ndigits,
-            quantile_band=quantile_band,
-            type_graph=type_graph,
-        )
-
-    @wraps(Sample.get_aggregated_time_series)
-    def get_sample_aggregated_time_series(
-        self,
-        indicator: str,
-        method: str = "mean",
-        agg_method_kwarg: dict = None,
-        reference_time_series: pd.Series = None,
-        freq: str | pd.Timedelta | dt.timedelta = None,
-        prefix: str = "aggregated",
-    ):
-        return self.sample.get_aggregated_time_series(
-            indicator, method, agg_method_kwarg, reference_time_series, freq, prefix
-        )
-
-    @wraps(Sample.plot_pcp)
-    def plot_pcp(
-        self,
-        indicators_configs: list[str]
-        | list[tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series]],
-        color_by: str | None = None,
-        title: str | None = "Parallel Coordinates — Samples",
-        html_file_path: str | None = None,
-    ) -> go.Figure:
-        return self.sample.plot_pcp(
-            indicators_configs=indicators_configs,
-            color_by=color_by,
-            title=title,
-            html_file_path=html_file_path,
-        )
 
 
 class RealSampler(Sampler):
