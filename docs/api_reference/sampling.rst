@@ -9,6 +9,10 @@ Sampling Module
    :members:
    :show-inheritance:
 
+.. autoclass:: corrai.sampling.RealSampler
+   :members:
+   :show-inheritance:
+
 .. autoclass:: corrai.sampling.MorrisSampler
    :members:
    :show-inheritance:

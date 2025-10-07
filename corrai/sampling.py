@@ -133,6 +133,26 @@ class Sample:
     values: pd.DataFrame = field(init=False)
     results: pd.Series = field(default_factory=lambda: pd.Series(dtype=object))
 
+    def __repr__(self):
+        if not self.results.empty:
+            if not self.results[0].empty:
+                indicators_name = (
+                    self.results[0].columns
+                    if self.is_dynamic
+                    else self.results[0].index
+                )
+            else:
+                indicators_name = None
+        else:
+            indicators_name = None
+
+        return (
+            f"is dynamic: {self.is_dynamic} \n"
+            f"n computed sample: {len(self.results)} \n"
+            f"parameters: {[par.name for par in self.parameters]} \n"
+            f"indicators: {[None] if indicators_name is None else list(indicators_name)}"
+        )
+
     def __post_init__(self):
         self.values = pd.DataFrame(columns=[par.name for par in self.parameters])
 
@@ -426,7 +446,7 @@ class Sample:
         reference_time_series: pd.Series,
         scoring_methods: list[str | Callable] = None,
         resample_rule: str | pd.Timedelta | dt.timedelta = None,
-        agg_method: str = "mean",
+        resample_agg_method: str = "mean",
     ) -> pd.DataFrame:
         """
         Compute scoring metrics for a given indicator across all sample results.
@@ -456,7 +476,7 @@ class Sample:
             Examples: ``"D"`` (daily), ``"h"`` (hourly), ``"ME"`` (month end).
             If None, no resampling is performed.
             Default is None.
-        agg_method : str, optional
+        resample_agg_method : str, optional
             Aggregation method to use when resampling. Common values include:
             ``"mean"``, ``"sum"``, ``"min"``, ``"max"``, ``"median"``.
             Default is ``"mean"``.
@@ -519,7 +539,7 @@ class Sample:
         ...     reference_time_series=reference,
         ...     scoring_methods=["r2", "rmse", "mae"],
         ...     resample_rule="D",
-        ...     agg_method="sum",
+        ...     resample_agg_method="sum",
         ... )
         >>> print(scores)
                   r2_score      rmse       mae
@@ -553,10 +573,10 @@ class Sample:
         for idx, sample_res in self.results.items():
             data = sample_res[indicator]
             if resample_rule:
-                data = data.resample(resample_rule).agg(agg_method)
+                data = data.resample(resample_rule).agg(resample_agg_method)
                 reference_time_series = reference_time_series.resample(
                     resample_rule
-                ).agg(agg_method)
+                ).agg(resample_agg_method)
 
             for method in method_func:
                 scores.loc[idx, method.__name__] = method(reference_time_series, data)
@@ -960,7 +980,99 @@ class Sample:
         )
 
 
-class Sampler:
+class SampleMethodsMixin:
+    """Mixin to expose Sample plotting methods to classes that contain a Sample object."""
+
+    sample: Sample
+
+    @wraps(Sample.get_aggregated_time_series)
+    def get_sample_aggregated_time_series(
+        self,
+        indicator: str,
+        method: str = "mean",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        freq: str | pd.Timedelta | dt.timedelta = None,
+        prefix: str = "aggregated",
+    ):
+        return self.sample.get_aggregated_time_series(
+            indicator, method, agg_method_kwarg, reference_time_series, freq, prefix
+        )
+
+    @wraps(Sample.plot_sample)
+    def plot_sample(
+        self,
+        indicator: str | None,
+        reference_timeseries: pd.Series | None = None,
+        title: str | None = None,
+        y_label: str | None = None,
+        x_label: str | None = None,
+        alpha: float = 0.5,
+        show_legends: bool = False,
+        round_ndigits: int = 2,
+        quantile_band: float = 0.75,
+        type_graph: str = "area",
+    ) -> go.Figure:
+        return self.sample.plot_sample(
+            indicator=indicator,
+            reference_timeseries=reference_timeseries,
+            title=title,
+            y_label=y_label,
+            x_label=x_label,
+            alpha=alpha,
+            show_legends=show_legends,
+            round_ndigits=round_ndigits,
+            quantile_band=quantile_band,
+            type_graph=type_graph,
+        )
+
+    @wraps(Sample.plot_pcp)
+    def plot_pcp(
+        self,
+        indicators_configs: list[str]
+        | list[tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series]],
+        color_by: str | None = None,
+        title: str | None = "Parallel Coordinates — Samples",
+        html_file_path: str | None = None,
+    ) -> go.Figure:
+        return self.sample.plot_pcp(
+            indicators_configs=indicators_configs,
+            color_by=color_by,
+            title=title,
+            html_file_path=html_file_path,
+        )
+
+    @wraps(Sample.plot_hist)
+    def plot_hist(
+        self,
+        indicator: str,
+        method: str = "mean",
+        unit: str = "",
+        agg_method_kwarg: dict = None,
+        reference_time_series: pd.Series = None,
+        bins: int = 30,
+        colors: str = "orange",
+        reference_value: int | float = None,
+        reference_label: str = "Reference",
+        show_rug: bool = False,
+        title: str = None,
+    ):
+        return self.sample.plot_hist(
+            indicator,
+            method,
+            unit,
+            agg_method_kwarg,
+            reference_time_series,
+            bins,
+            colors,
+            reference_value,
+            reference_label,
+            show_rug,
+            title,
+        )
+
+
+class Sampler(SampleMethodsMixin):
     """
     Abstract base class for parameter samplers.
 
@@ -1159,63 +1271,6 @@ class Sampler:
     def simulate_pending(self, n_cpu: int = 1, simulation_kwargs: dict = None):
         unsimulated_idx = self.sample.get_pending_index()
         self.simulate_at(unsimulated_idx, n_cpu, simulation_kwargs)
-
-    @wraps(Sample.plot_sample)
-    def plot_sample(
-        self,
-        indicator: str | None,
-        reference_timeseries: pd.Series | None = None,
-        title: str | None = None,
-        y_label: str | None = None,
-        x_label: str | None = None,
-        alpha: float = 0.5,
-        show_legends: bool = False,
-        round_ndigits: int = 2,
-        quantile_band: float = 0.75,
-        type_graph: str = "area",
-    ) -> go.Figure:
-        return self.sample.plot_sample(
-            indicator=indicator,
-            reference_timeseries=reference_timeseries,
-            title=title,
-            y_label=y_label,
-            x_label=x_label,
-            alpha=alpha,
-            show_legends=show_legends,
-            round_ndigits=round_ndigits,
-            quantile_band=quantile_band,
-            type_graph=type_graph,
-        )
-
-    @wraps(Sample.get_aggregated_time_series)
-    def get_sample_aggregated_time_series(
-        self,
-        indicator: str,
-        method: str = "mean",
-        agg_method_kwarg: dict = None,
-        reference_time_series: pd.Series = None,
-        freq: str | pd.Timedelta | dt.timedelta = None,
-        prefix: str = "aggregated",
-    ):
-        return self.sample.get_aggregated_time_series(
-            indicator, method, agg_method_kwarg, reference_time_series, freq, prefix
-        )
-
-    @wraps(Sample.plot_pcp)
-    def plot_pcp(
-        self,
-        indicators_configs: list[str]
-        | list[tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series]],
-        color_by: str | None = None,
-        title: str | None = "Parallel Coordinates — Samples",
-        html_file_path: str | None = None,
-    ) -> go.Figure:
-        return self.sample.plot_pcp(
-            indicators_configs=indicators_configs,
-            color_by=color_by,
-            title=title,
-            html_file_path=html_file_path,
-        )
 
 
 class RealSampler(Sampler):

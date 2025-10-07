@@ -5,14 +5,11 @@ API Reference
    :maxdepth: 3
    :caption: API Reference
 
-   base/parameter
-   base/model
-   base/simulate
+   parameter
+   model
    sampling
    sensitivity
-   fmu
    optimize
    surrogate
-   base/math
-   base/metrics
-   base/utils
+   fmu
+   metrics

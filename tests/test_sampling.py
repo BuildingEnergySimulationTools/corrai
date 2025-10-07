@@ -48,6 +48,14 @@ class TestSample:
     def test_sample_methods(self):
         # Dynamic sample
         sample = Sample(REAL_PARAM)
+
+        assert sample.__repr__() == (
+            "is dynamic: True \n"
+            "n computed sample: 0 \n"
+            "parameters: ['param_1', 'param_2', 'param_3'] \n"
+            "indicators: [None]"
+        )
+
         assert sample.values.shape == (0, 3)
         pd.testing.assert_series_equal(sample.results, pd.Series())
 
@@ -166,6 +174,13 @@ class TestSample:
         pd.testing.assert_frame_equal(
             sample_static.get_static_results_as_df(),
             pd.DataFrame({"res": {0: np.nan, 1: 2.0}}),
+        )
+
+        assert sample.__repr__() == (
+            "is dynamic: True \n"
+            "n computed sample: 2 \n"
+            "parameters: ['param_1', 'param_2', 'param_3'] \n"
+            "indicators: ['res']"
         )
 
     def test_plot_sample(self):

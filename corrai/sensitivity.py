@@ -1,7 +1,5 @@
 import warnings
 from abc import ABC, abstractmethod
-from functools import wraps
-from typing import Callable
 
 import datetime as dt
 import numpy as np
@@ -10,7 +8,7 @@ import plotly.graph_objects as go
 from SALib.analyze import morris, sobol, fast, rbd_fast
 from corrai.base.parameter import Parameter
 from corrai.sampling import (
-    Sample,
+    SampleMethodsMixin,
     SobolSampler,
     MorrisSampler,
     FASTSampler,
@@ -19,7 +17,7 @@ from corrai.sampling import (
 from corrai.base.model import Model
 
 
-class Sanalysis(ABC):
+class Sanalysis(ABC, SampleMethodsMixin):
     """
     Abstract base class for Sensitivity Analysis workflows.
 
@@ -75,6 +73,10 @@ class Sanalysis(ABC):
         self.sampler = self._set_sampler(parameters, model, simulation_options)
         self.analyser = self._set_analyser()
         self.x_needed = x_needed
+
+    @property
+    def sample(self):
+        return self.sampler.sample
 
     @property
     def parameters(self):
@@ -322,97 +324,6 @@ class Sanalysis(ABC):
         )
 
         return plot_dynamic_metric(metrics, sensitivity_metric, unit, title, stacked)
-
-    @wraps(Sample.get_aggregated_time_series)
-    def get_sample_aggregated_time_series(
-        self,
-        indicator: str,
-        method: str = "mean",
-        agg_method_kwarg: dict = None,
-        reference_time_series: pd.Series = None,
-        freq: str | pd.Timedelta | dt.timedelta = None,
-        prefix: str = "aggregated",
-    ) -> pd.DataFrame:
-        return self.sampler.sample.get_aggregated_time_series(
-            indicator,
-            method,
-            agg_method_kwarg,
-            reference_time_series,
-            freq,
-            prefix,
-        )
-
-    @wraps(Sample.plot_hist)
-    def plot_sample_hist(
-        self,
-        indicator: str,
-        method: str = "mean",
-        unit: str = "",
-        agg_method_kwarg: dict = None,
-        reference_time_series: pd.Series = None,
-        bins: int = 30,
-        colors: str = "orange",
-        reference_value: int | float = None,
-        reference_label: str = "Reference",
-        show_rug: bool = False,
-        title: str = None,
-    ):
-        return self.sampler.sample.plot_hist(
-            indicator=indicator,
-            method=method,
-            unit=unit,
-            agg_method_kwarg=agg_method_kwarg,
-            reference_time_series=reference_time_series,
-            bins=bins,
-            colors=colors,
-            reference_value=reference_value,
-            reference_label=reference_label,
-            show_rug=show_rug,
-            title=title,
-        )
-
-    @wraps(Sample.plot_sample)
-    def plot_sample(
-        self,
-        indicator: str | None,
-        reference_timeseries: pd.Series | None = None,
-        title: str | None = None,
-        y_label: str | None = None,
-        x_label: str | None = None,
-        alpha: float = 0.5,
-        show_legends: bool = False,
-        round_ndigits: int = 2,
-        quantile_band: float = 0.75,
-        type_graph: str = "area",
-    ) -> go.Figure:
-        return self.sampler.sample.plot_sample(
-            indicator=indicator,
-            reference_timeseries=reference_timeseries,
-            title=title,
-            y_label=y_label,
-            x_label=x_label,
-            alpha=alpha,
-            show_legends=show_legends,
-            round_ndigits=round_ndigits,
-            quantile_band=quantile_band,
-            type_graph=type_graph,
-        )
-
-    @wraps(Sample.plot_pcp)
-    def plot_pcp(
-        self,
-        indicators_configs: list[str]
-        | list[tuple[str, str | Callable] | tuple[str, str | Callable, pd.Series]],
-        color_by: str | None = None,
-        title: str | None = "Parallel Coordinates — Samples",
-        html_file_path: str | None = None,
-    ) -> go.Figure:
-        return self.sampler.sample.plot_pcp(
-            indicators_configs=indicators_configs,
-            color_by=color_by,
-            title=title,
-            html_file_path=html_file_path,
-        )
 
     def salib_plot_matrix(
         self,
