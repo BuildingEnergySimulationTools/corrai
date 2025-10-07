@@ -60,17 +60,9 @@ Quick Example
 
 .. code-block:: python
 
-    import pandas as pd
-
     from corrai.base.parameter import Parameter
-    from corrai.sensitivity import SobolSanalysis, MorrisSanalysis
+    from corrai.sensitivity import SobolSanalysis
     from corrai.base.model import Ishigami
-
-    SIMULATION_OPTIONS = {
-        "start": "2009-01-01 00:00:00",
-        "end": "2009-01-01 05:00:00",
-        "timestep": "h",
-    }
 
     PARAMETER_LIST = [
         Parameter("par_x1", (-3.14159265359, 3.14159265359), model_property="x1"),
@@ -82,30 +74,27 @@ Quick Example
     sobol = SobolSanalysis(
         parameters=PARAMETER_LIST,
         model=Ishigami(),
-        simulation_options=SIMULATION_OPTIONS,
     )
 
     # Draw sample, and run simulations
-    sobol.add_sample(15**2, simulate=True, n_cpu=1, calc_second_order=True)
+    sobol.add_sample(2**10, simulate=True, n_cpu=1, calc_second_order=True)
 
-    # Corrai works for models that returns time series
-    # Ishigami model here will return the same value for the given parameters
-    # from START to END at 1h timestep
-    sobol.analyze('res', method="mean")["mean_res"]
+    # Corrai works for models that returns either time series or series
+    # depending on their static or dynamic nature
+    # Ishigami is a static model (see is_dynamic attribute)
+    sobol.analyze("res")
 
     # Default aggregation method is mean value of the timeseries
-    sobol.plot_bar('res')
+    sobol.plot_bar("res", sensitivity_metric="ST")
 
     # Display 2nd order matrix for parameters interaction
-    sobol.plot_s2_matrix('res')
+    sobol.plot_s2_matrix("res")
 
     # Display mean output values of the sample as hist
-    sobol.sampler.sample.plot_hist('res')
+    sobol.sampler.sample.plot_hist("res")
 
-    # Compute dynamic sensitivity analisys at plot
-    # Obviously, in this example indexes value do not vary
-    sobol.plot_dynamic_metric('res', sensitivity_metric="ST", freq="h")
-
+    # Display parallel coordinate plot
+    sobol.plot_pcp(["res"])
 
 
 .. toctree::
