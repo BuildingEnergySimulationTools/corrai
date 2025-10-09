@@ -516,7 +516,8 @@ class ModelicaFmuModel(Model):
                 logger=logger,
             )
 
-        df = pd.DataFrame(result, columns=["time"] + self.output_list)
+        columns = ["time"] + self.output_list if self.output_list else None
+        df = pd.DataFrame(result, columns=columns)
 
         if isinstance(start, (pd.Timestamp, dt.datetime)):
             df.index = seconds_index_to_datetime_index(df["time"], start.year)
