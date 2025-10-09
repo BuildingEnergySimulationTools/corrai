@@ -1472,12 +1472,22 @@ class LHSSampler(RealSampler):
         super().__init__(parameters, model, simulation_options)
 
     def add_sample(
-        self, n: int, rng: int = None, simulate=True, n_cpu: int = 1, simulation_kwargs:dict=None, **lhs_kwargs
+        self,
+        n: int,
+        rng: int = None,
+        simulate=True,
+        n_cpu: int = 1,
+        simulation_kwargs: dict = None,
+        **lhs_kwargs,
     ):
         lhs = LatinHypercube(d=len(self.parameters), rng=rng, **lhs_kwargs)
         new_dimless_sample = lhs.random(n=n)
         self._post_draw_sample(
-            new_dimless_sample, simulate, n_cpu, sample_is_dimless=True, simulation_kwargs=simulation_kwargs
+            new_dimless_sample,
+            simulate,
+            n_cpu,
+            sample_is_dimless=True,
+            simulation_kwargs=simulation_kwargs,
         )
 
 
