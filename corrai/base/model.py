@@ -141,10 +141,11 @@ class Model(ABC):
             Simulation results as a DataFrame with a DateTimeIndex and one
             or more output columns.
         """
+        sim_kwargs = {} if simulation_kwargs is None else simulation_kwargs
         return self.simulate(
             self.get_property_from_param(parameter_value_pairs),
             simulation_options,
-            **{} if simulation_kwargs is None else simulation_kwargs,
+            **sim_kwargs,
         )
 
     def get_property_values(self, property_list: list[str]) -> list[str | int | float]:

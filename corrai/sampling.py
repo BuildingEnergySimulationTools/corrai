@@ -1356,12 +1356,16 @@ class MorrisSampler(RealSampler):
         num_levels: int = 4,
         simulate: bool = True,
         n_cpu: int = 1,
+        simulation_kwargs=None,
         **morris_kwargs,
     ):
         morris_sample = morris_sampler.sample(
             self.get_salib_problem(), N, num_levels, **morris_kwargs
         )
-        self._post_draw_sample(morris_sample, simulate, n_cpu)
+        simulation_kwargs = {} if simulation_kwargs is None else simulation_kwargs
+        self._post_draw_sample(
+            morris_sample, simulate, n_cpu, simulation_kwargs=simulation_kwargs
+        )
 
 
 class FASTSampler(RealSampler):
@@ -1468,12 +1472,12 @@ class LHSSampler(RealSampler):
         super().__init__(parameters, model, simulation_options)
 
     def add_sample(
-        self, n: int, rng: int = None, simulate=True, n_cpu: int = 1, **lhs_kwargs
+        self, n: int, rng: int = None, simulate=True, n_cpu: int = 1, simulation_kwargs:dict=None, **lhs_kwargs
     ):
         lhs = LatinHypercube(d=len(self.parameters), rng=rng, **lhs_kwargs)
         new_dimless_sample = lhs.random(n=n)
         self._post_draw_sample(
-            new_dimless_sample, simulate, n_cpu, sample_is_dimless=True
+            new_dimless_sample, simulate, n_cpu, sample_is_dimless=True, simulation_kwargs=simulation_kwargs
         )
 
 

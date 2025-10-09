@@ -146,13 +146,13 @@ class TestFmu:
         assert len(values) == 1
 
         vals = simu.get_property_values("x.k")
-        assert vals == ["2.0"]
+        assert vals == [2.0]
 
         vals = simu.get_property_values(("x.k",))
-        assert vals == ["2.0"]
+        assert vals == [2.0]
 
         vals = simu.get_property_values(["x.k", "y.k"])
-        assert vals == ["2.0", "2.0"]
+        assert vals == [2.0, 2.0]
 
     def test_simulate_parallel(self):
         simu = ModelicaFmuModel(

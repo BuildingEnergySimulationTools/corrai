@@ -108,7 +108,7 @@ def run_simulations(
     results = Parallel(n_jobs=n_cpu)(
         delayed(
             lambda param: model.simulate_parameter(
-                param, simulation_options, **simulation_kwargs
+                param, simulation_options, simulation_kwargs
             )
         )(param)
         for param in bar
