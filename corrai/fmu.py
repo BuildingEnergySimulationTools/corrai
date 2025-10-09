@@ -117,7 +117,7 @@ def datetime_to_second(datetime_in: dt.datetime | pd.Timestamp | pd.Timedelta):
     """
     if isinstance(datetime_in, (dt.datetime | pd.Timestamp)):
         year = datetime_in.year
-        origin = dt.datetime(year, 1, 1)
+        origin = dt.datetime(year, 1, 1, tzinfo=datetime_in.tz)
         return int((datetime_in - origin).total_seconds())
     return int(datetime_in.total_seconds())
 
