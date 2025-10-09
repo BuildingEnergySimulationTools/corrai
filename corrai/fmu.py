@@ -331,8 +331,11 @@ class ModelicaFmuModel(Model):
         values = []
         for prop in property_list:
             if prop in variable_map:
-                val = variable_map[prop].start
-                values.append(val if val is not None else None)
+                try:
+                    val = float(variable_map[prop].start)
+                except (ValueError, TypeError):
+                    val = variable_map[prop].start
+                values.append(val)
             else:
                 values.append(None)
         return values
