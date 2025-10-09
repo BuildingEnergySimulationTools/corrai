@@ -52,7 +52,13 @@ def parse_simulation_times(start, stop, step, output_int):
         and isinstance(step, (pd.Timedelta, dt.timedelta))
         and isinstance(output_int, (pd.Timedelta, dt.timedelta))
     ):
-        return map(datetime_to_second, (start, stop, step, output_int))
+        # Handle 2 years with datetime_index_to_seconds_index function
+        start_s, stop_s = datetime_index_to_seconds_index(
+            pd.date_range(start, stop, periods=2)
+        ).astype(int)
+        step_s, output_int_s = map(datetime_to_second, (step, output_int))
+        return start_s, stop_s, step_s, output_int_s
+
     raise ValueError("Invalid 'startTime', 'stopTime', 'stepSize', or 'outputInterval")
 
 
