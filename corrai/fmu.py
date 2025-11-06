@@ -265,6 +265,7 @@ class ModelicaFmuModel(Model):
         simulation_dir: Path = None,
         output_list: list[str] = None,
         boundary_table_name: str | None = None,
+        default_properties: dict[str, float | int | str] = None,
     ):
         super().__init__(is_dynamic=True)
         fmu_path = Path(fmu_path) if isinstance(fmu_path, str) else fmu_path
@@ -291,6 +292,7 @@ class ModelicaFmuModel(Model):
                     UserWarning,
                     stacklevel=2,
                 )
+        self.default_properties = default_properties or {}
 
     def get_property_values(
         self, property_list: str | tuple[str, ...] | list[str]
@@ -432,7 +434,10 @@ class ModelicaFmuModel(Model):
 
         """
         property_dict = dict(property_dict or {})
-
+        merged_properties = self.default_properties.copy()
+        if property_dict:
+            merged_properties.update(property_dict)
+        property_dict = merged_properties
         if property_dict and debug_param:
             print(property_dict)
 
