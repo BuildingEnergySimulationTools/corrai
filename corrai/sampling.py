@@ -1530,6 +1530,7 @@ class SobolSampler(RealSampler):
         scramble: bool = True,
         *,
         calc_second_order: bool = True,
+        simulation_kwargs: dict = None,
         **sobol_kwargs,
     ):
         new_sample = sobol_sampler.sample(
@@ -1539,4 +1540,10 @@ class SobolSampler(RealSampler):
             calc_second_order=calc_second_order,
             **sobol_kwargs,
         )
-        self._post_draw_sample(new_sample, simulate, n_cpu, sample_is_dimless=False)
+        self._post_draw_sample(
+            new_sample,
+            simulate,
+            n_cpu,
+            sample_is_dimless=False,
+            simulation_kwargs=simulation_kwargs,
+        )
