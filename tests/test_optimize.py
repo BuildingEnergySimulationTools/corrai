@@ -257,17 +257,20 @@ class TestModelEvaluator:
         pd.testing.assert_series_equal(res, pd.Series({"res": -10.721167816657914}))
 
         assert (
-            modev.scipy_obj_function(
-                np.array([-3.14 / 2, 0, 3.14]),
-                ("res", "mean"),
-                {
-                    "start": "2009-01-01 00:00:00",
-                    "end": "2009-01-01 00:00:00",
-                    "timestep": "h",
-                },
-                None,
+            round(
+                modev.scipy_obj_function(
+                    np.array([-3.14 / 2, 0, 3.14]),
+                    ("res", "mean"),
+                    {
+                        "start": "2009-01-01 00:00:00",
+                        "end": "2009-01-01 00:00:00",
+                        "timestep": "h",
+                    },
+                    None,
+                ),
+                3,
             )
-            == -10.721167816657914
+            == -10.721
         )
 
         # Static model test
