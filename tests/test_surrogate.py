@@ -39,7 +39,9 @@ class TestLearning:
         x_df = pd.DataFrame(list(set(itertools.product(*list(x_dict.values())))))
         y = pd.Series(np.random.randn(x_df.shape[0]))
 
-        model_pipe = make_pipeline(OneHotEncoder(), MultiModelSO(fine_tuning=False))
+        model_pipe = make_pipeline(
+            OneHotEncoder(sparse_output=False), MultiModelSO(fine_tuning=False)
+        )
         trainer = ModelTrainer(model_pipe)
         trainer.train(X=x_df, y=y)
 
@@ -58,14 +60,14 @@ class TestScikitWrapper:
 
         in_df = {"x_1": 2.0, "x_2": 4.0}
 
-        ref_df = pd.DataFrame({"y": 28.0}, index=[0])
+        ref_serie = pd.Series({"y": 28.0})
 
         mumoso = MultiModelSO()
         mumoso.fit(ds[["x_1", "x_2"]], ds["y"])
         stat_mod = StaticScikitModel(mumoso)
-        pd.testing.assert_frame_equal(stat_mod.simulate(in_df), ref_df)
+        pd.testing.assert_series_equal(stat_mod.simulate(in_df), ref_serie)
 
         line_reg = LinearRegression()
         line_reg.fit(ds[["x_1", "x_2"]], ds["y"])
         scikit_mod = StaticScikitModel(line_reg, target_name="y")
-        pd.testing.assert_frame_equal(scikit_mod.simulate(in_df), ref_df)
+        pd.testing.assert_series_equal(scikit_mod.simulate(in_df), ref_serie)

@@ -8,3 +8,7 @@ Surrogate Module
 .. autoclass:: corrai.surrogate.MultiModelSO
    :members:
    :show-inheritance:
+
+.. autoclass:: corrai.surrogate.StaticScikitModel
+   :members:
+   :show-inheritance:

@@ -48,6 +48,14 @@ class TestSample:
     def test_sample_methods(self):
         # Dynamic sample
         sample = Sample(REAL_PARAM)
+
+        assert sample.__repr__() == (
+            "is dynamic: True \n"
+            "n computed sample: 0 \n"
+            "parameters: ['param_1', 'param_2', 'param_3'] \n"
+            "indicators: [None]"
+        )
+
         assert sample.values.shape == (0, 3)
         pd.testing.assert_series_equal(sample.results, pd.Series())
 
@@ -127,6 +135,32 @@ class TestSample:
         fig = sample.plot_sample("res")
         assert fig
 
+        ref = pd.Series(
+            [123, 456],
+            index=pd.date_range("2009-01-02", periods=2, freq="d"),
+            name="ref",
+        )
+
+        sample.results[0].loc[pd.Timestamp("2009-01-02"), "res"] = 456
+        sample.results[1].loc[pd.Timestamp("2009-01-02"), "res"] = 43
+
+        score_res = sample.get_score_df("res", ref)
+
+        pd.testing.assert_frame_equal(
+            score_res,
+            pd.DataFrame(
+                {
+                    "r2_score": {0: 1.0, 1: -2.19},
+                    "nmbe": {0: -57.51, 1: 94.11},
+                    "cv_rmse": {0: 115.02, 1: 188.23},
+                    "mean_absolute_error": {0: 0.0, 1: 247.0},
+                    "root_mean_squared_error": {0: 0.0, 1: 297.59},
+                    "max_error": {0: 0.0, 1: 413.0},
+                }
+            ).rename_axis(ref.index.freq),
+            atol=0.1,
+        )
+
         sample._validate()
 
         # Static Sample
@@ -140,6 +174,13 @@ class TestSample:
         pd.testing.assert_frame_equal(
             sample_static.get_static_results_as_df(),
             pd.DataFrame({"res": {0: np.nan, 1: 2.0}}),
+        )
+
+        assert sample.__repr__() == (
+            "is dynamic: True \n"
+            "n computed sample: 2 \n"
+            "parameters: ['param_1', 'param_2', 'param_3'] \n"
+            "indicators: ['res']"
         )
 
     def test_plot_sample(self):
@@ -422,6 +463,23 @@ class TestSample:
             ),
             check_exact=False,
         )
+
+        sampler.append_sample_from_param_dict(
+            {
+                "param_1": 0,
+                "param_2": 0,
+                "param_3": 0,
+            }
+        )
+
+        assert sampler.values.iloc[-1, :].to_dict() == {
+            "param_1": 0.0,
+            "param_2": 0.0,
+            "param_3": 0.0,
+        }
+        assert sampler.results.iloc[-1].to_dict() == {
+            "res": {pd.Timestamp("2009-01-01 00:00:00"): 0.0}
+        }
 
         # Static
         sampler = LHSSampler(

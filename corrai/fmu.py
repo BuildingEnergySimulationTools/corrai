@@ -52,7 +52,13 @@ def parse_simulation_times(start, stop, step, output_int):
         and isinstance(step, (pd.Timedelta, dt.timedelta))
         and isinstance(output_int, (pd.Timedelta, dt.timedelta))
     ):
-        return map(datetime_to_second, (start, stop, step, output_int))
+        # Handle 2 years with datetime_index_to_seconds_index function
+        start_s, stop_s = datetime_index_to_seconds_index(
+            pd.date_range(start, stop, periods=2)
+        ).astype(int)
+        step_s, output_int_s = map(datetime_to_second, (step, output_int))
+        return start_s, stop_s, step_s, output_int_s
+
     raise ValueError("Invalid 'startTime', 'stopTime', 'stepSize', or 'outputInterval")
 
 
@@ -111,7 +117,7 @@ def datetime_to_second(datetime_in: dt.datetime | pd.Timestamp | pd.Timedelta):
     """
     if isinstance(datetime_in, (dt.datetime | pd.Timestamp)):
         year = datetime_in.year
-        origin = dt.datetime(year, 1, 1)
+        origin = dt.datetime(year, 1, 1, tzinfo=datetime_in.tz)
         return int((datetime_in - origin).total_seconds())
     return int(datetime_in.total_seconds())
 
@@ -327,8 +333,11 @@ class ModelicaFmuModel(Model):
         values = []
         for prop in property_list:
             if prop in variable_map:
-                val = variable_map[prop].start
-                values.append(val if val is not None else None)
+                try:
+                    val = float(variable_map[prop].start)
+                except (ValueError, TypeError):
+                    val = variable_map[prop].start
+                values.append(val)
             else:
                 values.append(None)
         return values
@@ -515,7 +524,8 @@ class ModelicaFmuModel(Model):
                 logger=logger,
             )
 
-        df = pd.DataFrame(result, columns=["time"] + self.output_list)
+        columns = ["time"] + self.output_list if self.output_list else None
+        df = pd.DataFrame(result, columns=columns)
 
         if isinstance(start, (pd.Timestamp, dt.datetime)):
             df.index = seconds_index_to_datetime_index(df["time"], start.year)
