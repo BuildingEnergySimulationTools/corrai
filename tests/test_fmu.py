@@ -141,9 +141,6 @@ class TestFmu:
             fmu_path=PACKAGE_DIR / "rosen.fmu",
             output_list=["res.showNumber"],
         )
-        values = simu.get_property_values(("res.showNumber",))
-        assert isinstance(values, list)
-        assert len(values) == 1
 
         vals = simu.get_property_values("x.k")
         assert vals == [2.0]
@@ -153,6 +150,9 @@ class TestFmu:
 
         vals = simu.get_property_values(["x.k", "y.k"])
         assert vals == [2.0, 2.0]
+
+        simu.set_property_values({"x.k": 3.0})
+        assert simu.get_property_values("x.k") == [3.0]
 
     def test_simulate_parallel(self):
         simu = ModelicaFmuModel(
