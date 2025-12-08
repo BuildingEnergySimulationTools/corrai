@@ -964,7 +964,15 @@ class Sample:
             results = pd.DataFrame()
             for config in indicators_configs:
                 col, func, *extra = config
-                results[f"{func}_{col}"] = self.get_aggregated_time_series(
+                if extra and isinstance(extra[0], str):
+                    name = extra[0]
+                elif callable(func):
+                    name = func.__name__
+                elif isinstance(func, str):
+                    name = func
+                else:
+                    raise TypeError(f"Invalid aggregation function: {func}")
+                results[f"{name}_{col}"] = self.get_aggregated_time_series(
                     col, func, reference_time_series=None if not extra else extra[0]
                 )
         else:
