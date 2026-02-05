@@ -52,7 +52,7 @@ class TestFmu:
         ref = pd.DataFrame(
             data=np.array([[401.0]] * 6),
             index=pd.date_range(
-                "2009-01-01 00:00:00", "2009-01-01 05:00:00", freq="1h", name="time"
+                "2009-01-01 00:00:00", "2009-01-01 05:00:00", freq="1h", name="time", unit="us"
             ),
             columns=["res.showNumber"],
         )
@@ -105,7 +105,7 @@ class TestFmu:
                     "Boundaries.y[1]": [1, 2, 3, 4, 5],
                     "Boundaries.y[2]": [3, 4, 5, 6, 7],
                 },
-                index=pd.date_range("2009-07-13 00:00:00", periods=5, freq="h"),
+                index=pd.date_range("2009-07-13 00:00:00", periods=5, freq="h", unit='us'),
             )
             x_datetime.index.name = "time"
             x_datetime.index.freq = None

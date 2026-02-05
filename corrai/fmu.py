@@ -113,8 +113,9 @@ def seconds_index_to_datetime_index(
     """
     since = dt.datetime(ref_year, 1, 1, tzinfo=dt.timezone.utc)
     diff_seconds = index_second + since.timestamp()
-    return pd.DatetimeIndex(pd.to_datetime(diff_seconds, unit="s"))
-
+    idx = pd.DatetimeIndex(pd.to_datetime(diff_seconds, unit="s"))
+    idx = idx.astype("datetime64[us]")
+    return idx
 
 def datetime_to_second(datetime_in: dt.datetime | pd.Timestamp | pd.Timedelta):
     """
