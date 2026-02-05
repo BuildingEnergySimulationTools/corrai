@@ -657,7 +657,7 @@ class Sample:
         fig = ff.create_distplot(
             [res.squeeze().to_numpy()],
             [hist_label],
-            bin_size=(res.max() - res.min()) / bins,
+            bin_size=((res.max() - res.min()) / bins).iloc[0],
             colors=[colors],
             show_rug=show_rug,
         )
@@ -1318,8 +1318,9 @@ class RealSampler(Sampler):
     def get_salib_problem(self):
         return {
             "num_vars": len(self.parameters),
-            "names": [p.name for p in self.parameters],
+            "names": np.array([p.name for p in self.parameters]),
             "bounds": [p.interval for p in self.parameters],
+            "groups": None,
         }
 
 
