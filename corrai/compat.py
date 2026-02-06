@@ -7,7 +7,11 @@ import pandas as pd
 
 import SALib.util
 import SALib.analyze.morris
-
+import SALib.util.util_funcs
+import SALib.analyze.morris
+import SALib.analyze.fast
+import SALib.analyze.sobol
+import SALib.sample.sobol
 
 # -------------------------------
 # Patch compute_groups_matrix
@@ -53,3 +57,26 @@ def _define_problem_with_groups_patched(problem):
 
 SALib.util._define_problem_with_groups = _define_problem_with_groups_patched
 SALib.analyze.morris._define_problem_with_groups = _define_problem_with_groups_patched
+
+def _check_groups(problem):
+    """Check if there is more than 1 group."""
+    groups = problem.get("groups")
+
+    if isinstance(groups, np.ndarray):
+        groups = groups.tolist()
+
+    if not groups:
+        return False
+
+    if len(set(groups)) == 1:
+        return False
+    return groups
+
+# Patch in source module
+SALib.util.util_funcs._check_groups = _check_groups
+
+# Patch in consumers
+SALib.analyze.morris._check_groups = _check_groups
+SALib.analyze.fast._check_groups = _check_groups
+SALib.analyze.sobol._check_groups = _check_groups
+SALib.sample.sobol._check_groups = _check_groups
