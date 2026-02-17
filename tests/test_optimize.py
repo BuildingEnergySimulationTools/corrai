@@ -1,26 +1,31 @@
-import pandas as pd
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 import pytest
-
-from corrai.optimize import (
-    MixedProblem,
-    RealContinuousProblem,
-    PymooModelEvaluator,
-    check_duplicate_params,
-    ModelEvaluator,
-    SciOptimizer,
-)
-from corrai.base.parameter import Parameter
-from corrai.base.model import Ishigami, IshigamiDynamic, PyModel
-
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.soo.nonconvex.de import DE
+from pymoo.core.mixed import MixedVariableGA
 from pymoo.operators.sampling.lhs import LHS
 from pymoo.optimize import minimize
-from pymoo.core.mixed import MixedVariableGA
 from pymoo.termination import get_termination
 
+from corrai.base.model import (
+    Ishigami,
+    IshigamiDynamic,
+    PyModel,
+    RosenFiveParam,
+    RosenFiveParamDynamic,
+)
+from corrai.base.parameter import Parameter
+from corrai.optimize import (
+    MixedProblem,
+    ModelEvaluator,
+    PymooModelEvaluator,
+    RealContinuousProblem,
+    SciOptimizer,
+    check_duplicate_params,
+)
 
 PACKAGE_DIR = Path(__file__).parent / "TestLib"
 
@@ -291,6 +296,9 @@ class TestModelEvaluator:
 
 class TestSciOptimizer:
     def test_sci_optimizer(self):
+        ########################
+        # Differential Evolution
+        ########################
         param_list = [
             Parameter(
                 "par_x1",
@@ -305,9 +313,8 @@ class TestSciOptimizer:
             ),
         ]
         # Dynamic optimization
-        sci_opt = SciOptimizer(parameters=param_list, model=IshigamiDynamic())
-
-        opt_res = sci_opt.diff_evo_minimize(
+        sci_opt_dyn = SciOptimizer(parameters=param_list, model=IshigamiDynamic())
+        opt_res = sci_opt_dyn.diff_evo_minimize(
             indicator_config=("res", "mean"),
             simulation_options={
                 "start": "2009-01-01 00:00:00",
@@ -316,20 +323,46 @@ class TestSciOptimizer:
             },
             rng=42,
         )
-
         assert round(opt_res.fun, 4) == -10.7409
 
         # Static optimization
-        sci_opt = SciOptimizer(parameters=param_list, model=Ishigami())
-
-        opt_res = sci_opt.diff_evo_minimize(
+        sci_opt_stat = SciOptimizer(parameters=param_list, model=Ishigami())
+        opt_res = sci_opt_stat.diff_evo_minimize(
             indicator_config="res",
             rng=42,
         )
-
         assert round(opt_res.fun, 4) == -10.7409
 
+        ##########
+        # minimize
+        ##########
+        param_list = [
+            Parameter(f"x{i}", (-100, 100), model_property=f"x{i}") for i in range(1, 6)
+        ]
+        x_expected = np.array([1, 1, 1, 1, 1])
+
+        # Dynamic optimization
+        sci_opt_dyn = SciOptimizer(parameters=param_list, model=RosenFiveParamDynamic())
+        opt_res = sci_opt_dyn.minimize(
+            indicator_config=("res", "mean"),
+            simulation_options={
+                "start": "2009-01-01 00:00:00",
+                "end": "2009-01-01 00:00:00",
+                "timestep": "h",
+            },
+        )
+        assert np.allclose(opt_res.x, x_expected, atol=1e-5)
+
+        # Static optimization
+        sci_opt_stat = SciOptimizer(parameters=param_list, model=RosenFiveParam())
+        opt_res = sci_opt_stat.minimize(
+            indicator_config="res",
+        )
+        assert np.allclose(opt_res.x, x_expected, atol=1e-5)
+
+        #####################
         # Scalar optimization
+        #####################
         parameter = Parameter("x_param", interval=(-10, 10), model_property="x")
 
         sci_opt = SciOptimizer(parameters=[parameter], model=X2())
