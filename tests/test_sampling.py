@@ -378,6 +378,15 @@ class TestSample:
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 1
 
+        def last_val(x):
+            return x.iloc[-1]
+
+        fig2 = sampler.sample.plot_pcp([("res", last_val)])
+
+        dims2 = fig2.data[0]["dimensions"]
+        labels2 = [d["label"] for d in dims2]
+        assert "last_val_res" in labels2
+
     def test_lhs_sampler(self):
         # Dynamic
         sampler = LHSSampler(
