@@ -3,17 +3,15 @@ from typing import Callable
 
 import numpy as np
 import pandas as pd
-
-from scipy.optimize import differential_evolution, minimize_scalar
-
 from pymoo.core.problem import ElementwiseProblem
-from pymoo.core.variable import Integer, Real, Choice, Binary
+from pymoo.core.variable import Binary, Choice, Integer, Real
+from scipy.optimize import differential_evolution, minimize_scalar, minimize
 
 from corrai.base.math import METHODS
 from corrai.base.model import Model
+from corrai.base.parameter import Parameter
 from corrai.base.utils import check_indicators_configs
 from corrai.sampling import Sample, SampleMethodsMixin
-from corrai.base.parameter import Parameter
 
 
 def check_duplicate_params(params: list["Parameter"]) -> None:
@@ -721,6 +719,117 @@ class SciOptimizer(SampleMethodsMixin):
             bracket=bracket,
             method=method,
             tol=tol,
+            options=options,
+        )
+
+    def minimize(
+        self,
+        indicator_config: str
+        | tuple[str, str | Callable]
+        | tuple[str, str | Callable, pd.Series],
+        simulation_options: dict = None,
+        simulation_kwargs=None,
+        x0: list[float] = None,
+        method=None,
+        jac=None,
+        hess=None,
+        hessp=None,
+        bounds=None,
+        constraints=(),
+        tol=None,
+        callback=None,
+        options=None,
+    ):
+        """
+        This method wraps `scipy.optimize.minimize`
+
+        Parameters
+        ----------
+        indicator_config : str or tuple
+            Indicator configuration passed to `ModelEvaluator.scipy_obj_function`:
+            - If the model is **static**: a string representing the indicator name.
+            - If the model is **dynamic**: a tuple of the form
+              (indicator, func) or (indicator, func, reference) where:
+                * indicator : str
+                  Indicator name in the simulation results.
+                * func : str or Callable
+                  Aggregation function (method name registered in `METHODS`
+                  or a Python callable).
+                * reference : optional
+                  Reference time series if the aggregation function is an
+                  error metric such as nmbe, cv_rmse, or mean_squared_error.
+
+        simulation_options : dict, optional
+            Options for the simulation (e.g., stop time, solver settings).
+
+        simulation_kwargs : dict, optional
+            Additional keyword arguments for simulation.
+
+        x0 : list of float, optional
+            Initial guess for the optimization variables.
+            If None, the initial values are set to the mean of each
+            parameter interval.
+
+        method : str or callable, optional
+            Optimization method to use (e.g., 'BFGS', 'L-BFGS-B', 'SLSQP').
+            Passed directly to `scipy.optimize.minimize`.
+
+        jac : callable or bool, optional
+            Function computing the gradient of the objective, or a boolean
+            indicating whether the objective returns the gradient.
+
+        hess : callable, optional
+            Function computing the Hessian matrix of the objective.
+
+        hessp : callable, optional
+            Function computing the Hessian-vector product.
+
+        bounds : sequence, optional
+            Bounds on variables for bounded optimization methods.
+
+        constraints : sequence, optional
+            Constraints definition for constrained optimization.
+
+        tol : float, optional
+            Tolerance for convergence.
+
+        callback : callable, optional
+            Function called after each iteration.
+
+        options : dict, optional
+            Additional solver-specific options.
+
+        Returns
+        -------
+        scipy.optimize.OptimizeResult
+            Result of the optimization. Accessible also via the `result`
+            attribute.
+
+        Notes
+        -----
+        This method relies on `scipy.optimize.minimize`, which implements
+        gradient-based and derivative-free local optimization algorithms.
+        It is best suited for smooth problems and may converge to a local
+        minimum depending on the initial guess.
+
+        For global optimization, consider using `diff_evo_minimize`.
+        """
+
+        if x0 is None:
+            x0 = [float(np.mean(par.interval)) for par in self.parameters]
+
+        return minimize(
+            self.model_evaluator.scipy_obj_function,
+            x0,
+            args=(indicator_config, simulation_options, simulation_kwargs),
+            method=method,
+            jac=jac,
+            hess=hess,
+            hessp=hessp,
+            bounds=bounds,
+            constraints=constraints,
+            tol=tol,
+            callback=callback,
             options=options,
         )
 

@@ -1,11 +1,11 @@
 import datetime as dt
-from typing import Union
-
-import pandas as pd
-import numpy as np
-
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Union
+
+import numpy as np
+import pandas as pd
+from scipy.optimize import rosen
 
 from corrai.base.parameter import Parameter
 
@@ -255,6 +255,109 @@ class IshigamiDynamic(PyModel):
                 freq=simulation_options["timestep"],
             ),
         )
+
+
+class RosenFiveParamDynamic(PyModel):
+    """
+    Example implementation of the Ishigami function.
+
+    The Ishigami function is a standard benchmark for sensitivity analysis:
+        f(x) = sin(x1) + 7 sin^2(x2) + 0.1 x3^4 sin(x1)
+
+    Attributes
+    ----------
+    x1, x2, x3 : float
+        Model parameters controlling the output.
+
+    Methods
+    -------
+    get_property_values(property_list)
+        Retrieve current values of x1, x2, x3.
+    set_property_values(property_dict)
+        Set properties from a dictionary.
+    simulate(property_dict, simulation_options, simulation_kwargs)
+        Evaluate the Ishigami function and return as a time series DataFrame.
+    """
+
+    def __init__(self):
+        super().__init__(is_dynamic=True)
+        self.x1 = 1
+        self.x2 = 2
+        self.x3 = 3
+        self.x4 = 4
+        self.x5 = 5
+
+    def simulate(
+        self,
+        property_dict: dict[str, str | int | float] = None,
+        simulation_options: dict = None,
+        simulation_kwargs: dict = None,
+    ) -> pd.DataFrame:
+        if property_dict is not None:
+            self.set_property_values(property_dict)
+
+        res = rosen([self.x1, self.x2, self.x3, self.x4, self.x5])
+
+        return pd.DataFrame(
+            {"res": [res]},
+            index=pd.date_range(
+                simulation_options["start"],
+                simulation_options["end"],
+                freq=simulation_options["timestep"],
+            ),
+        )
+
+
+class RosenFiveParam(PyModel):
+    """
+    Five-dimensional Rosenbrock benchmark model.
+
+    This class implements the Rosenbrock function, a standard benchmark
+    in numerical optimization, defined as:
+
+        f(x) = sum_{i=1}^{4} [100 (x_{i+1} - x_i^2)^2 + (1 - x_i)^2]
+
+    for x = (x1, x2, x3, x4, x5).
+
+    The global minimum is located at:
+
+        x* = (1, 1, 1, 1, 1),   f(x*) = 0
+
+    Attributes
+    ----------
+    x1, x2, x3, x4, x5 : float
+        Model parameters defining the input vector.
+
+    Methods
+    -------
+    get_property_values(property_list)
+        Retrieve current values of model parameters.
+    set_property_values(property_dict)
+        Set model parameters from a dictionary.
+    simulate(property_dict, simulation_options, simulation_kwargs)
+        Evaluate the Rosenbrock function and return the result.
+    """
+
+    def __init__(self):
+        super().__init__(is_dynamic=False)
+        self.x1 = 1
+        self.x2 = 2
+        self.x3 = 3
+        self.x4 = 4
+        self.x5 = 5
+
+    def simulate(
+        self,
+        property_dict: dict[str, str | int | float] = None,
+        simulation_options: dict = None,
+        simulation_kwargs: dict = None,
+    ) -> pd.Series:
+        if property_dict is not None:
+            self.set_property_values(property_dict)
+
+        res = rosen([self.x1, self.x2, self.x3, self.x4, self.x5])
+
+        return pd.Series({"res": res})
 
 
 class Ishigami(PyModel):
