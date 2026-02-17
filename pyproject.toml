@@ -34,7 +34,7 @@ dependencies = [
     "fmpy>=0.3.6",
     "matplotlib>=3.5.1",
     "plotly>=5.3.1",
-    "fastprogress>=1.0.3",
+    "fastprogress<1.0.4",
 ]
 
 [build-system]
