@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Binary, Choice, Integer, Real
-from scipy.optimize import differential_evolution, minimize_scalar, minimize
+from scipy.optimize import differential_evolution, minimize_scalar, minimize, curve_fit
 
 from corrai.base.math import METHODS
 from corrai.base.model import Model
@@ -896,4 +896,100 @@ class SciOptimizer(SampleMethodsMixin):
             tol=tol,
             rng=rng,
             workers=workers,
+        )
+
+    def curve_fit(
+        self,
+        indicator_config,
+        simulation_options=None,
+        simulation_kwargs=None,
+        p0=None,
+        bounds=None,
+        **kwargs,
+    ):
+        """
+        Use non-linear least squares to fit model parameters.
+
+        This method wraps :func:`scipy.optimize.curve_fit` to calibrate the
+        parameters of the underlying model so that simulated outputs best match
+        reference data.
+
+        Parameters
+        ----------
+        indicator_config : list or tuple
+            Configuration(s) describing the outputs to match. Each config should be:
+            (col, func, reference), where:
+                * col : str
+                  Column name in simulation results.
+                * func : str or Callable
+                  Aggregation function (currently unused here but kept for consistency).
+                * reference : pd.Series
+                  Reference data to fit against.
+            Multiple configs can be provided as a list.
+        simulation_options : dict, optional
+            Options passed to the simulation routine.
+        simulation_kwargs : dict, optional
+            Additional keyword arguments passed to the simulation.
+        p0 : array-like, optional
+            Initial guess for the parameters. If None, uses the midpoint of intervals.
+        bounds : 2-tuple of array-like, optional
+            Lower and upper bounds on parameters. If None, derived from
+            `self.model_evaluator.intervals`.
+        **kwargs :
+            Additional keyword arguments passed to :func:`scipy.optimize.curve_fit`.
+
+        Returns
+        -------
+        popt : array
+            Optimal values for the parameters.
+        pcov : 2-D array
+            Estimated covariance of `popt`.
+
+        Notes
+        -----
+        - The function being fitted internally runs a full model simulation.
+        - The independent variable is a dummy index, as only the output values matter.
+        - Multiple indicators are concatenated into a single residual vector.
+        """
+
+        if bounds is None:
+            bounds = list(zip(*self.model_evaluator.intervals))
+
+        if p0 is None:
+            p0 = [np.mean(b) for b in self.model_evaluator.intervals]
+
+        configs = (
+            indicator_config
+            if isinstance(indicator_config, list)
+            else [indicator_config]
+        )
+
+        references = [cfg[2].values for cfg in configs]
+        reference = np.concatenate(references)
+
+        def wrapped_func(x, *params):
+            self.model_evaluator.scipy_obj_function(
+                params,
+                configs[0],
+                simulation_options,
+                simulation_kwargs,
+            )
+
+            res = self.model_evaluator.model.simulate(
+                simulation_options=simulation_options,
+                **(simulation_kwargs or {}),
+            )
+
+            outputs = [res[cfg[0]].values for cfg in configs]
+            return np.concatenate(outputs)
+
+        x_dummy = np.arange(len(reference))
+
+        return curve_fit(
+            wrapped_func,
+            x_dummy,
+            reference,
+            p0=p0,
+            bounds=bounds,
+            **kwargs,
         )
