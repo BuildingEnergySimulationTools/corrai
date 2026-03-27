@@ -45,6 +45,23 @@ class X2(PyModel):
         return pd.Series({"f_out": self.x**2})
 
 
+class X2Curve(PyModel):
+    def __init__(self):
+        super().__init__(is_dynamic=True)
+        self.x = 10
+
+    def simulate(
+        self,
+        property_dict=None,
+        simulation_options=None,
+        **simulation_kwargs,
+    ):
+        if property_dict is not None:
+            self.set_property_values(property_dict)
+
+        return pd.DataFrame({"f_out": [self.x**2]})
+
+
 class PyRosen(PyModel):
     def __init__(self, x_init=1.0, y_init=1.0):
         super().__init__(is_dynamic=False)
@@ -370,3 +387,15 @@ class TestSciOptimizer:
         res = sci_opt.scalar_minimize("f_out")
 
         assert res.x == 0
+
+    def test_curve_fit_simple(self):
+        parameter = Parameter("x_param", interval=(-10, 10), model_property="x")
+        sci_opt = SciOptimizer(parameters=[parameter], model=X2Curve())
+        reference = pd.Series([4.0])
+
+        popt, _ = sci_opt.curve_fit(
+            indicator_config=("f_out", lambda x, y: x, reference),
+            p0=[3.0],
+        )
+
+        assert np.isclose(popt[0], 2.0, atol=1e-2)
