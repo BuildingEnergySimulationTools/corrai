@@ -294,6 +294,30 @@ class TestPlots:
         assert fig["layout"]["paper_bgcolor"] == "green"
         assert fig["layout"]["title"]["text"] == "Custom S2"
 
+    def test_plot_s2_matrix_fixed_range(self):
+        result = {"S2": np.array([[0.0, 0.1, 0.0], [0.1, 0.0, 0.2], [0.0, 0.2, 0.0]])}
+        param_names = ["p1", "p2", "p3"]
+
+        fig_fixed = plot_s2_matrix(
+            result, param_names, fixed_range=True, colorscale="Blues"
+        )
+        assert fig_fixed.data[0].zmin == -1
+        assert fig_fixed.data[0].zmax == 1
+
+        fig_auto = plot_s2_matrix(result, param_names, fixed_range=False)
+        assert fig_auto.data[0].zmin == 0.0
+        assert fig_auto.data[0].zmax == 0.2
+
+    def test_plot_s2_matrix_trace_kwargs(self):
+        result = {"S2": np.array([[0.0, 0.1, 0.0], [0.1, 0.0, 0.2], [0.0, 0.2, 0.0]])}
+        fig = plot_s2_matrix(
+            result,
+            ["p1", "p2", "p3"],
+            trace_kwargs={"zmin": -0.5, "zmax": 0.5},
+        )
+        assert fig.data[0].zmin == -0.5
+        assert fig.data[0].zmax == 0.5
+
     def test_plot_morris_scatter_plot_kwargs(self):
         morris_df = pd.DataFrame(
             {"mu_star": [1.0, 2.0], "sigma": [0.5, 0.8], "mu_star_conf": [0.1, 0.2]},

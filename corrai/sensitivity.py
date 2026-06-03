@@ -340,7 +340,9 @@ class Sanalysis(ABC, SampleMethodsMixin):
         reference_time_series: pd.Series = None,
         agg_method_kwarg: dict = None,
         title: str = None,
+        fixed_range: bool = True,
         plot_kwargs: dict = None,
+        trace_kwargs: dict = None,
         **analyse_kwarg,
     ):
         """
@@ -385,7 +387,12 @@ class Sanalysis(ABC, SampleMethodsMixin):
 
         parameter_names = [p.name for p in self.sampler.sample.parameters]
         return plot_s2_matrix(
-            result, parameter_names, title=title, plot_kwargs=plot_kwargs
+            result,
+            parameter_names,
+            title=title,
+            fixed_range=fixed_range,
+            plot_kwargs=plot_kwargs,
+            trace_kwargs=trace_kwargs,
         )
 
 
@@ -517,7 +524,9 @@ class SobolSanalysis(Sanalysis):
         reference_time_series: pd.Series = None,
         agg_method_kwarg: dict = None,
         title: str = None,
+        fixed_range: bool = True,
         plot_kwargs: dict = None,
+        trace_kwargs: dict = None,
         **analyse_kwargs,
     ):
         return super().salib_plot_matrix(
@@ -527,7 +536,9 @@ class SobolSanalysis(Sanalysis):
             reference_time_series=reference_time_series,
             agg_method_kwarg=agg_method_kwarg,
             title=title,
+            fixed_range=fixed_range,
             plot_kwargs=plot_kwargs,
+            trace_kwargs=trace_kwargs,
             **analyse_kwargs,
         )
 
@@ -1047,9 +1058,14 @@ def plot_s2_matrix(
     param_names: list[str],
     title: str = "Sobol 2nd-order interactions (S2)",
     colorscale: str = "Reds",
+    fixed_range: bool = True,
     plot_kwargs: dict = None,
+    trace_kwargs: dict = None,
 ):
     df_S2 = pd.DataFrame(result["S2"], index=param_names, columns=param_names)
+
+    zmin = -1 if fixed_range else df_S2.values.min()
+    zmax = 1 if fixed_range else df_S2.values.max()
 
     fig = go.Figure(
         data=go.Heatmap(
@@ -1057,8 +1073,8 @@ def plot_s2_matrix(
             x=df_S2.columns,
             y=df_S2.index,
             colorscale=colorscale,
-            zmin=0,
-            zmax=df_S2.values.max(),
+            zmin=zmin,
+            zmax=zmax,
             colorbar=dict(title="S2"),
             text=df_S2.round(3).astype(str),
             texttemplate="%{text}",
@@ -1072,5 +1088,7 @@ def plot_s2_matrix(
     )
     if plot_kwargs:
         fig.update_layout(**plot_kwargs)
+    if trace_kwargs:
+        fig.update_traces(**trace_kwargs)
 
     return fig
