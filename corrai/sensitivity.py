@@ -214,7 +214,6 @@ class Sanalysis(ABC, SampleMethodsMixin):
         agg_method_kwarg: dict = None,
         title: str = None,
         plot_kwargs: dict = None,
-        trace_kwargs: dict = None,
         **analyse_kwarg,
     ):
         """
@@ -258,15 +257,16 @@ class Sanalysis(ABC, SampleMethodsMixin):
             **analyse_kwarg,
         )[f"{method}_{indicator}"]
 
+        _kwargs = dict(plot_kwargs or {})
+        effective_title = _kwargs.pop("title", title)
         return plot_bars(
             pd.Series(
                 data=res[sensitivity_metric],
                 index=[par.name for par in self.sampler.sample.parameters],
                 name=f"{sensitivity_metric} {unit}",
             ).sort_values(),
-            title=title,
-            plot_kwargs=plot_kwargs,
-            trace_kwargs=trace_kwargs,
+            title=effective_title,
+            **_kwargs,
         )
 
     def salib_plot_dynamic_metric(
@@ -328,8 +328,10 @@ class Sanalysis(ABC, SampleMethodsMixin):
             index=res.index,
         )
 
+        _kwargs = dict(plot_kwargs or {})
+        effective_title = _kwargs.pop("title", title)
         return plot_dynamic_metric(
-            metrics, sensitivity_metric, unit, title, stacked, plot_kwargs
+            metrics, sensitivity_metric, unit, effective_title, stacked, **_kwargs
         )
 
     def salib_plot_matrix(
@@ -342,7 +344,6 @@ class Sanalysis(ABC, SampleMethodsMixin):
         title: str = None,
         fixed_range: bool = True,
         plot_kwargs: dict = None,
-        trace_kwargs: dict = None,
         **analyse_kwarg,
     ):
         """
@@ -386,13 +387,14 @@ class Sanalysis(ABC, SampleMethodsMixin):
         )[f"{method}_{indicator}"]
 
         parameter_names = [p.name for p in self.sampler.sample.parameters]
+        _kwargs = dict(plot_kwargs or {})
+        effective_title = _kwargs.pop("title", title)
         return plot_s2_matrix(
             result,
             parameter_names,
-            title=title,
+            title=effective_title,
             fixed_range=fixed_range,
-            plot_kwargs=plot_kwargs,
-            trace_kwargs=trace_kwargs,
+            **_kwargs,
         )
 
 
@@ -471,7 +473,6 @@ class SobolSanalysis(Sanalysis):
         agg_method_kwarg: dict = None,
         title: str = None,
         plot_kwargs: dict = None,
-        trace_kwargs: dict = None,
         **analyse_kwargs,
     ):
         return super().salib_plot_bar(
@@ -484,7 +485,6 @@ class SobolSanalysis(Sanalysis):
             agg_method_kwarg=agg_method_kwarg,
             title=title,
             plot_kwargs=plot_kwargs,
-            trace_kwargs=trace_kwargs,
             calc_second_order=calc_second_order,
             **analyse_kwargs,
         )
@@ -526,7 +526,6 @@ class SobolSanalysis(Sanalysis):
         title: str = None,
         fixed_range: bool = True,
         plot_kwargs: dict = None,
-        trace_kwargs: dict = None,
         **analyse_kwargs,
     ):
         return super().salib_plot_matrix(
@@ -538,7 +537,6 @@ class SobolSanalysis(Sanalysis):
             title=title,
             fixed_range=fixed_range,
             plot_kwargs=plot_kwargs,
-            trace_kwargs=trace_kwargs,
             **analyse_kwargs,
         )
 
@@ -626,13 +624,15 @@ class MorrisSanalysis(Sanalysis):
             )[f"{method}_{indicator}"]
             self._analysis_cache[cache_key] = {f"{method}_{indicator}": result}
 
+        _kwargs = dict(plot_kwargs or {})
+        effective_title = _kwargs.pop("title", title)
         return plot_morris_scatter(
             result,
-            title=title,
+            title=effective_title,
             unit=unit,
             scaler=scaler,
             autosize=autosize,
-            plot_kwargs=plot_kwargs,
+            **_kwargs,
         )
 
     def plot_bar(
@@ -645,7 +645,6 @@ class MorrisSanalysis(Sanalysis):
         agg_method_kwarg: dict = None,
         title: str = None,
         plot_kwargs: dict = None,
-        trace_kwargs: dict = None,
         **analyse_kwargs,
     ):
         return super().salib_plot_bar(
@@ -658,7 +657,6 @@ class MorrisSanalysis(Sanalysis):
             agg_method_kwarg=agg_method_kwarg,
             title=title,
             plot_kwargs=plot_kwargs,
-            trace_kwargs=trace_kwargs,
             **analyse_kwargs,
         )
 
@@ -747,7 +745,6 @@ class FASTSanalysis(Sanalysis):
         agg_method_kwarg: dict = None,
         title: str = None,
         plot_kwargs: dict = None,
-        trace_kwargs: dict = None,
         **analyse_kwargs,
     ):
         return super().salib_plot_bar(
@@ -760,7 +757,6 @@ class FASTSanalysis(Sanalysis):
             agg_method_kwarg=agg_method_kwarg,
             title=title,
             plot_kwargs=plot_kwargs,
-            trace_kwargs=trace_kwargs,
             **analyse_kwargs,
         )
 
@@ -847,7 +843,6 @@ class RBDFASTSanalysis(Sanalysis):
         agg_method_kwarg: dict = None,
         title: str = None,
         plot_kwargs: dict = None,
-        trace_kwargs: dict = None,
         **analyse_kwargs,
     ):
         return super().salib_plot_bar(
@@ -860,7 +855,6 @@ class RBDFASTSanalysis(Sanalysis):
             agg_method_kwarg=agg_method_kwarg,
             title=title,
             plot_kwargs=plot_kwargs,
-            trace_kwargs=trace_kwargs,
             **analyse_kwargs,
         )
 
@@ -891,13 +885,21 @@ class RBDFASTSanalysis(Sanalysis):
         )
 
 
+def _apply_figure_kwargs(fig, **kwargs):
+    for key, val in kwargs.items():
+        try:
+            fig.update_layout(**{key: val})
+        except ValueError:
+            fig.update_traces(**{key: val})
+
+
 def plot_dynamic_metric(
     metrics: pd.DataFrame,
     metric_name: str = "",
     unit: str = "",
     title: str = None,
     stacked: bool = False,
-    plot_kwargs: dict = None,
+    **plot_kwargs,
 ):
     fig = go.Figure()
     for param in metrics.columns:
@@ -916,8 +918,7 @@ def plot_dynamic_metric(
         xaxis_title="Time",
         yaxis_title=f"{metric_name} {unit}",
     )
-    if plot_kwargs:
-        fig.update_layout(**plot_kwargs)
+    _apply_figure_kwargs(fig, **plot_kwargs)
 
     return fig
 
@@ -926,8 +927,7 @@ def plot_bars(
     sensitivity_results: pd.Series,
     title: str = None,
     error: pd.Series = None,
-    plot_kwargs: dict = None,
-    trace_kwargs: dict = None,
+    **plot_kwargs,
 ):
     error = {} if error is None else dict(type="data", array=error.values)
     fig = go.Figure()
@@ -946,10 +946,7 @@ def plot_bars(
         xaxis_title="Parameters",
         yaxis_title=f"{sensitivity_results.name}",
     )
-    if plot_kwargs:
-        fig.update_layout(**plot_kwargs)
-    if trace_kwargs:
-        fig.update_traces(**trace_kwargs)
+    _apply_figure_kwargs(fig, **plot_kwargs)
 
     return fig
 
@@ -960,7 +957,7 @@ def plot_morris_scatter(
     unit: str = "",
     scaler: float = 100,
     autosize: bool = True,
-    plot_kwargs: dict = None,
+    **plot_kwargs,
 ) -> go.Figure:
     """
     Plot a Morris sensitivity analysis scatter plot using μ* and σ.
@@ -1047,8 +1044,7 @@ def plot_morris_scatter(
         yaxis_title=f"Standard deviation of elementary effects σ [{unit}]",
         yaxis_range=[-0.1 * y_max, y_max],
     )
-    if plot_kwargs:
-        fig.update_layout(**plot_kwargs)
+    _apply_figure_kwargs(fig, **plot_kwargs)
 
     return fig
 
@@ -1059,8 +1055,7 @@ def plot_s2_matrix(
     title: str = "Sobol 2nd-order interactions (S2)",
     colorscale: str = "Reds",
     fixed_range: bool = True,
-    plot_kwargs: dict = None,
-    trace_kwargs: dict = None,
+    **plot_kwargs,
 ):
     df_S2 = pd.DataFrame(result["S2"], index=param_names, columns=param_names)
 
@@ -1086,9 +1081,6 @@ def plot_s2_matrix(
         xaxis_title="Parameter",
         yaxis_title="Parameter",
     )
-    if plot_kwargs:
-        fig.update_layout(**plot_kwargs)
-    if trace_kwargs:
-        fig.update_traces(**trace_kwargs)
+    _apply_figure_kwargs(fig, **plot_kwargs)
 
     return fig
