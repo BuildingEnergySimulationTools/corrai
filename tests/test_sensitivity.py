@@ -8,6 +8,10 @@ from corrai.sensitivity import (
     MorrisSanalysis,
     FASTSanalysis,
     RBDFASTSanalysis,
+    plot_bars,
+    plot_dynamic_metric,
+    plot_morris_scatter,
+    plot_s2_matrix,
 )
 
 
@@ -257,3 +261,63 @@ class TestPlots:
             fig_dyn["layout"]["title"]["text"]
             == "Morris dynamic euclidian_distance mean res"
         )
+
+    def test_plot_bars_plot_kwargs(self):
+        s = pd.Series([0.3, 0.5, 0.2], index=["p1", "p2", "p3"], name="ST")
+        fig = plot_bars(
+            s,
+            title="Default",
+            plot_kwargs={"title": "Override", "paper_bgcolor": "red"},
+        )
+        assert fig["layout"]["title"]["text"] == "Override"
+        assert fig["layout"]["paper_bgcolor"] == "red"
+
+    def test_plot_dynamic_metric_plot_kwargs(self):
+        metrics = pd.DataFrame(
+            {"p1": [0.1, 0.2], "p2": [0.3, 0.4]},
+            index=pd.date_range("2009-01-01", periods=2, freq="h"),
+        )
+        fig = plot_dynamic_metric(
+            metrics,
+            plot_kwargs={"font": {"size": 20}, "paper_bgcolor": "blue"},
+        )
+        assert fig["layout"]["font"]["size"] == 20
+        assert fig["layout"]["paper_bgcolor"] == "blue"
+
+    def test_plot_s2_matrix_plot_kwargs(self):
+        result = {"S2": np.array([[0.0, 0.1, 0.0], [0.1, 0.0, 0.2], [0.0, 0.2, 0.0]])}
+        fig = plot_s2_matrix(
+            result,
+            ["p1", "p2", "p3"],
+            plot_kwargs={"paper_bgcolor": "green", "title": "Custom S2"},
+        )
+        assert fig["layout"]["paper_bgcolor"] == "green"
+        assert fig["layout"]["title"]["text"] == "Custom S2"
+
+    def test_plot_morris_scatter_plot_kwargs(self):
+        morris_df = pd.DataFrame(
+            {"mu_star": [1.0, 2.0], "sigma": [0.5, 0.8], "mu_star_conf": [0.1, 0.2]},
+            index=["p1", "p2"],
+        )
+        fig = plot_morris_scatter(
+            morris_df,
+            plot_kwargs={"title": "Custom Morris", "paper_bgcolor": "yellow"},
+        )
+        assert fig["layout"]["title"]["text"] == "Custom Morris"
+        assert fig["layout"]["paper_bgcolor"] == "yellow"
+
+    def test_sobol_plot_bar_plot_kwargs(self):
+        sobol_analysis = SobolSanalysis(
+            parameters=PARAMETER_LIST,
+            model=Ishigami(),
+        )
+        sobol_analysis.add_sample(N=2**4, n_cpu=1, calc_second_order=True, seed=42)
+        fig = sobol_analysis.plot_bar(
+            plot_kwargs={
+                "title": "My Custom Title",
+                "font": {"family": "Arial", "size": 14},
+            },
+        )
+        assert fig["layout"]["title"]["text"] == "My Custom Title"
+        assert fig["layout"]["font"]["family"] == "Arial"
+        assert fig["layout"]["font"]["size"] == 14
