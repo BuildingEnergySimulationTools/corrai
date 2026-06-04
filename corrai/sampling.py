@@ -111,7 +111,7 @@ class Sample:
 
     Parameters
     ----------
-    parameters : list of Parameter
+    parameters : list of Parameters
         List of model parameters used to generate the samples.
 
     Attributes
@@ -119,7 +119,7 @@ class Sample:
     parameters : list of Parameter
         Parameters associated with this sample.
     is_dynamic : Bool default True
-        Specify if stored results are timeeries in a DataFrame for dynamic models
+        Specify if stored results are timeseries in a DataFrame for dynamic models
         or a Series of float for static models
     values : ndarray of shape (n_samples, n_parameters)
         Numerical values of the sampled parameters.
@@ -696,6 +696,7 @@ class Sample:
         round_ndigits: int = 2,
         quantile_band: float = 0.75,
         type_graph: str = "area",
+        plot_kwargs: dict = None,
     ) -> go.Figure:
         """
         Plot simulation results with different visualization modes.
@@ -736,6 +737,9 @@ class Sample:
             - ``"scatter"`` : plot all samples individually as scatter markers.
             - ``"area"`` : plot aggregated area with min–max envelope,
               median line, and quantile bands.
+        plot_kwargs : dict, optional
+            Extra keyword arguments passed to ``fig.update_layout()``.
+            Use to override any layout property (font, colors, axis sizes, etc.).
 
         Examples
         --------
@@ -889,6 +893,8 @@ class Sample:
             showlegend=True,
             legend_traceorder="normal",
         )
+        if plot_kwargs:
+            fig.update_layout(**plot_kwargs)
         return fig
 
     def plot_pcp(
@@ -1020,6 +1026,7 @@ class SampleMethodsMixin:
         round_ndigits: int = 2,
         quantile_band: float = 0.75,
         type_graph: str = "area",
+        plot_kwargs: dict = None,
     ) -> go.Figure:
         return self.sample.plot_sample(
             indicator=indicator,
@@ -1032,6 +1039,7 @@ class SampleMethodsMixin:
             round_ndigits=round_ndigits,
             quantile_band=quantile_band,
             type_graph=type_graph,
+            plot_kwargs=plot_kwargs,
         )
 
     @wraps(Sample.plot_pcp)
