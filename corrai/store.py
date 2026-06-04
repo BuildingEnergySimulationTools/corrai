@@ -386,9 +386,22 @@ class BaseStudyStore(ABC):
     def _build_manifest(self, has_results: bool, path: Path) -> dict:
         """Return the manifest dict."""
 
+    def _get_indicators(self) -> list[str] | None:
+        if self._sample is None:
+            return None
+        results = self._sample.results.dropna()
+        if results.empty:
+            return None
+        first = results.iloc[0]
+        if isinstance(first, pd.DataFrame):
+            return list(first.columns) if not first.empty else None
+        if isinstance(first, pd.Series):
+            return list(first.index) if not first.empty else None
+        return None
+
     def _base_manifest(self, study_type: str, has_results: bool) -> dict:
         sim_opts = self._simulation_options or {}
-        return {
+        manifest = {
             "study_id": str(uuid.uuid4()),
             "created_at": datetime.now().isoformat(),
             "study_type": study_type,
@@ -400,6 +413,10 @@ class BaseStudyStore(ABC):
             "simulation_start": sim_opts.get("startTime", sim_opts.get("start")),
             "simulation_stop": sim_opts.get("stopTime", sim_opts.get("stop", sim_opts.get("end"))),
         }
+        indicators = self._get_indicators()
+        if indicators is not None:
+            manifest["indicators"] = indicators
+        return manifest
 
     def _require_model(self):
         if self._model is None:
@@ -496,18 +513,9 @@ class SensitivityAnalysisStore(BaseStudyStore):
     def _save_extra(self, path: Path, has_results: bool) -> None:
         if not has_results:
             return
-        first = self._sample.results.dropna()
-        if first.empty:
+        indicators = self._get_indicators()
+        if not indicators:
             return
-        first_result = first.iloc[0]
-        if isinstance(first_result, pd.DataFrame) and first_result.empty:
-            return
-
-        indicators = (
-            list(first_result.columns)
-            if self._sample.is_dynamic
-            else list(first_result.index)
-        )
         sensitivity_indices = {}
         for indicator in indicators:
             try:

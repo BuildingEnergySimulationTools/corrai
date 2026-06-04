@@ -188,6 +188,8 @@ class TestSensitivityAnalysisStore:
         manifest = json.loads((tmp_path / "sa_full" / "manifest.json").read_text())
         assert manifest["has_results"] is True
         assert manifest["n_samples"] == len(sa.sample)
+        assert "indicators" in manifest
+        assert manifest["indicators"] == ["res"]
 
         # reload and check sample fidelity
         loaded = SensitivityAnalysisStore.load(tmp_path / "sa_full", model=Ishigami())
