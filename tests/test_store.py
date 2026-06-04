@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -62,7 +61,9 @@ class TestParameterSerialization:
         assert p2.interval == (0.0, 1.0)
 
     def test_roundtrip_choice_param(self):
-        p = Parameter("algo", values=("A", "B", "C"), ptype="Choice", model_property="m")
+        p = Parameter(
+            "algo", values=("A", "B", "C"), ptype="Choice", model_property="m"
+        )
         d = _serialize_parameter(p)
         p2 = _deserialize_parameter(d)
         assert p2.values == ("A", "B", "C")
@@ -75,9 +76,7 @@ class TestSensitivityAnalysisStore:
         )
         store.save(tmp_path / "sa_config")
 
-        loaded = SensitivityAnalysisStore.load(
-            tmp_path / "sa_config", model=Ishigami()
-        )
+        loaded = SensitivityAnalysisStore.load(tmp_path / "sa_config", model=Ishigami())
         assert loaded._study_class_name == "SobolSanalysis"
         assert len(loaded._parameters) == 3
         assert loaded._sample is None or loaded._sample.values.empty
@@ -88,9 +87,7 @@ class TestSensitivityAnalysisStore:
         )
         store.save(tmp_path / "sa_config")
 
-        loaded = SensitivityAnalysisStore.load(
-            tmp_path / "sa_config", model=Ishigami()
-        )
+        loaded = SensitivityAnalysisStore.load(tmp_path / "sa_config", model=Ishigami())
         sa = loaded.to_study()
         sa.add_sample(N=64, simulate=True, calc_second_order=False)
         assert len(sa.sample) > 0
@@ -111,9 +108,7 @@ class TestSensitivityAnalysisStore:
         assert manifest["n_samples"] == len(sa.sample)
 
         # reload and check sample fidelity
-        loaded = SensitivityAnalysisStore.load(
-            tmp_path / "sa_full", model=Ishigami()
-        )
+        loaded = SensitivityAnalysisStore.load(tmp_path / "sa_full", model=Ishigami())
         assert loaded._sample is not None
         pd.testing.assert_frame_equal(
             loaded._sample.values.reset_index(drop=True),
@@ -136,9 +131,7 @@ class TestOptimizationStore:
         store = OptimizationStore.from_config(PARAMETERS, StaticSquare())
         store.save(tmp_path / "opt_config")
 
-        loaded = OptimizationStore.load(
-            tmp_path / "opt_config", model=StaticSquare()
-        )
+        loaded = OptimizationStore.load(tmp_path / "opt_config", model=StaticSquare())
         assert loaded._study_class_name == "SciOptimizer"
         assert len(loaded._parameters) == 3
 

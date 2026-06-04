@@ -245,8 +245,7 @@ class BaseStudyStore(ABC):
             self._sample is not None
             and not self._sample.results.empty
             and not all(
-                isinstance(r, pd.DataFrame) and r.empty
-                for r in self._sample.results
+                isinstance(r, pd.DataFrame) and r.empty for r in self._sample.results
             )
         )
         has_values = self._sample is not None and not self._sample.values.empty
@@ -261,9 +260,7 @@ class BaseStudyStore(ABC):
         )
 
     @classmethod
-    def load(
-        cls, path: str | Path, model: Model | None = None
-    ) -> "BaseStudyStore":
+    def load(cls, path: str | Path, model: Model | None = None) -> "BaseStudyStore":
         """Load a study bundle from *path*.
 
         Parameters
@@ -366,9 +363,7 @@ class SensitivityAnalysisStore(BaseStudyStore):
 
     Save a configuration before simulating::
 
-        store = SensitivityAnalysisStore.from_config(
-            "SobolSanalysis", params, model, opts
-        )
+        store = SensitivityAnalysisStore.from_config("SobolSanalysis", params, model, opts)
         store.save("my_study/")
 
     Load and resume::
@@ -429,9 +424,7 @@ class SensitivityAnalysisStore(BaseStudyStore):
         """Return a ready-to-use Sanalysis object."""
         self._require_model()
         study_cls = _import_class(self._study_class_name)
-        sanalysis = study_cls(
-            self._parameters, self._model, self._simulation_options
-        )
+        sanalysis = study_cls(self._parameters, self._model, self._simulation_options)
         if self._sample is not None and not self._sample.values.empty:
             sanalysis.sampler.sample = self._sample
         return sanalysis
@@ -490,8 +483,9 @@ class OptimizationStore(BaseStudyStore):
 
         optimizer = SciOptimizer(params, model)
         result = optimizer.minimize(indicator_config, simulation_options=opts)
-        store = OptimizationStore(optimizer, optimize_result=result,
-                                  algorithm_params={"method": "L-BFGS-B"})
+        store = OptimizationStore(
+            optimizer, optimize_result=result, algorithm_params={"method": "L-BFGS-B"}
+        )
         store.save("optim_study/")
 
         store = OptimizationStore.load("optim_study/")
@@ -546,7 +540,9 @@ class OptimizationStore(BaseStudyStore):
 
         opt_result_path = bundle_path / "optimize_result.json"
         store._optimize_result = (
-            json.loads(opt_result_path.read_text()) if opt_result_path.exists() else None
+            json.loads(opt_result_path.read_text())
+            if opt_result_path.exists()
+            else None
         )
         method_data = json.loads((bundle_path / "method.json").read_text())
         store._algorithm_params = method_data.get("algorithm_params", {})
@@ -665,9 +661,7 @@ class SamplingStore(BaseStudyStore):
         """Return a ready-to-use Sampler with the loaded sample."""
         self._require_model()
         sampler_cls = _import_class(self._study_class_name)
-        sampler = sampler_cls(
-            self._parameters, self._model, self._simulation_options
-        )
+        sampler = sampler_cls(self._parameters, self._model, self._simulation_options)
         if self._sample is not None and not self._sample.values.empty:
             sampler.sample = self._sample
         return sampler
