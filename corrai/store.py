@@ -191,7 +191,11 @@ def _load_sample(sample_dir: Path, parameters: list[Parameter]) -> Sample:
 def _save_model(model: Model, model_dir: Path) -> None:
     model_dir.mkdir(parents=True, exist_ok=True)
     model_type = type(model).__name__
-    meta = {"model_type": model_type, "serializable": False}
+    meta = {
+        "model_type": model_type,
+        "model_module": type(model).__module__,
+        "serializable": False,
+    }
 
     if model_type == "ModelicaFmuModel":
         fmu_dest = model_dir / "model.fmu"
@@ -253,6 +257,14 @@ def _load_model(model_dir: Path, user_model: Model | None = None) -> Model | Non
 
         scikit_model = joblib.load(model_dir / meta["model_pkl"])
         return StaticScikitModel(scikit_model, target_name=meta.get("target_name"))
+
+    if meta.get("saved_path") and meta.get("model_module"):
+        import importlib
+
+        mod = importlib.import_module(meta["model_module"])
+        cls = getattr(mod, model_type)
+        if hasattr(cls, "load"):
+            return cls.load(model_dir / meta["saved_path"])
 
     return None
 
@@ -386,7 +398,7 @@ class BaseStudyStore(ABC):
             "parameter_names": [p.name for p in self._parameters],
             "has_results": has_results,
             "simulation_start": sim_opts.get("startTime", sim_opts.get("start")),
-            "simulation_stop": sim_opts.get("stopTime", sim_opts.get("end")),
+            "simulation_stop": sim_opts.get("stopTime", sim_opts.get("stop", sim_opts.get("end"))),
         }
 
     def _require_model(self):
