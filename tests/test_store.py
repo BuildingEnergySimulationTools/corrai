@@ -11,7 +11,9 @@ from corrai.store import (
     SamplingStore,
     SensitivityAnalysisStore,
     _deserialize_parameter,
+    _pack_simulation_options,
     _serialize_parameter,
+    _unpack_simulation_options,
 )
 
 PARAMETERS = [
@@ -41,6 +43,86 @@ class StaticSquare(PyModel):
         if property_dict:
             self.set_property_values(property_dict)
         return pd.Series({"res": self.x1**2 + self.x2**2})
+
+
+class TestSimulationOptionsPacking:
+    def test_file_path_is_copied_and_restored(self, tmp_path):
+        scenario = tmp_path / "scenario.csv"
+        scenario.write_text("a,b\n1,2\n")
+
+        bundle = tmp_path / "bundle"
+        bundle.mkdir()
+
+        opts = {"startTime": 0, "stopTime": 3600, "scenario_file": scenario}
+        packed = _pack_simulation_options(opts, bundle)
+
+        assert "__bundle_file__" in packed["scenario_file"]
+        assert (bundle / "simulation_files" / "scenario.csv").exists()
+        assert packed["startTime"] == 0
+
+        unpacked = _unpack_simulation_options(packed, bundle)
+        assert unpacked["scenario_file"] == bundle / "simulation_files" / "scenario.csv"
+        assert unpacked["startTime"] == 0
+
+    def test_string_path_is_detected(self, tmp_path):
+        ray_file = tmp_path / "weather.ray"
+        ray_file.write_text("data")
+
+        bundle = tmp_path / "bundle"
+        bundle.mkdir()
+
+        opts = {"ray_file": str(ray_file)}
+        packed = _pack_simulation_options(opts, bundle)
+
+        assert "__bundle_file__" in packed["ray_file"]
+
+    def test_name_collision_is_handled(self, tmp_path):
+        dir_a = tmp_path / "a"
+        dir_b = tmp_path / "b"
+        dir_a.mkdir()
+        dir_b.mkdir()
+        (dir_a / "data.csv").write_text("1")
+        (dir_b / "data.csv").write_text("2")
+
+        bundle = tmp_path / "bundle"
+        bundle.mkdir()
+
+        opts = {"file_a": dir_a / "data.csv", "file_b": dir_b / "data.csv"}
+        packed = _pack_simulation_options(opts, bundle)
+
+        files = list((bundle / "simulation_files").iterdir())
+        assert len(files) == 2
+
+    def test_nonexistent_path_string_not_treated_as_file(self, tmp_path):
+        bundle = tmp_path / "bundle"
+        bundle.mkdir()
+
+        opts = {"solver": "CVode", "label": "/not/a/real/file.txt"}
+        packed = _pack_simulation_options(opts, bundle)
+
+        assert packed["solver"] == "CVode"
+        assert packed["label"] == "/not/a/real/file.txt"
+        assert not (bundle / "simulation_files").exists()
+
+    def test_simulation_files_survive_full_store_roundtrip(self, tmp_path):
+        scenario = tmp_path / "scenario.csv"
+        scenario.write_text("col\n1\n2\n")
+
+        params = [Parameter("x1", (0.0, 2.0), model_property="x1")]
+        sampler = LHSSampler(
+            params,
+            StaticSquare(),
+            simulation_options={"scenario_file": scenario, "startTime": 0},
+        )
+
+        store = SamplingStore(sampler)
+        store.save(tmp_path / "bundle")
+
+        loaded = SamplingStore.load(tmp_path / "bundle", model=StaticSquare())
+        restored_path = loaded._simulation_options["scenario_file"]
+        assert isinstance(restored_path, __import__("pathlib").Path)
+        assert restored_path.exists()
+        assert restored_path.read_text() == "col\n1\n2\n"
 
 
 class TestParameterSerialization:

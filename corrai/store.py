@@ -75,6 +75,56 @@ def _deserialize_parameter(d: dict) -> Parameter:
     return Parameter(**d)
 
 
+# ─── Simulation options serialization ────────────────────────────────────────
+
+_BUNDLE_FILE_KEY = "__bundle_file__"
+
+
+def _pack_simulation_options(opts: dict, bundle_path: Path) -> dict:
+    """Copy referenced files into the bundle and replace their values with markers."""
+    if not opts:
+        return opts
+
+    files_dir = bundle_path / "simulation_files"
+    packed = {}
+    name_counts: dict[str, int] = {}
+
+    for key, value in opts.items():
+        p = None
+        if isinstance(value, Path):
+            p = value
+        elif isinstance(value, str):
+            candidate = Path(value)
+            if candidate.is_file():
+                p = candidate
+
+        if p is not None and p.is_file():
+            stem = p.stem
+            suffix = p.suffix
+            count = name_counts.get(p.name, 0)
+            dest_name = p.name if count == 0 else f"{stem}_{count}{suffix}"
+            name_counts[p.name] = count + 1
+
+            files_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(p, files_dir / dest_name)
+            packed[key] = {_BUNDLE_FILE_KEY: f"simulation_files/{dest_name}"}
+        else:
+            packed[key] = value
+
+    return packed
+
+
+def _unpack_simulation_options(opts_data: dict, bundle_path: Path) -> dict:
+    """Restore file paths from bundle markers to absolute Path objects."""
+    unpacked = {}
+    for key, value in opts_data.items():
+        if isinstance(value, dict) and _BUNDLE_FILE_KEY in value:
+            unpacked[key] = bundle_path / value[_BUNDLE_FILE_KEY]
+        else:
+            unpacked[key] = value
+    return unpacked
+
+
 # ─── Sample serialization ─────────────────────────────────────────────────────
 
 
@@ -231,8 +281,9 @@ class BaseStudyStore(ABC):
         (path / "parameters.json").write_text(json.dumps(params_data, indent=2))
 
         if self._simulation_options:
+            packed_opts = _pack_simulation_options(self._simulation_options, path)
             (path / "simulation_options.json").write_text(
-                json.dumps(self._simulation_options, indent=2, default=str)
+                json.dumps(packed_opts, indent=2, default=str)
             )
 
         (path / "method.json").write_text(
@@ -278,7 +329,8 @@ class BaseStudyStore(ABC):
         ]
         sim_opts = None
         if (path / "simulation_options.json").exists():
-            sim_opts = json.loads((path / "simulation_options.json").read_text())
+            raw_opts = json.loads((path / "simulation_options.json").read_text())
+            sim_opts = _unpack_simulation_options(raw_opts, path)
 
         loaded_model = _load_model(path / "model", model)
 
