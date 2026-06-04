@@ -55,11 +55,11 @@ def _import_class(class_name: str):
 # ─── Parameter serialization ──────────────────────────────────────────────────
 
 
-def _serialize_parameter(param: Parameter) -> dict:
+def serialize_parameter(param: Parameter) -> dict:
     return dataclasses.asdict(param)
 
 
-def _deserialize_parameter(d: dict) -> Parameter:
+def deserialize_parameter(d: dict) -> Parameter:
     if d.get("interval") is not None:
         d["interval"] = tuple(d["interval"])
     if d.get("values") is not None:
@@ -73,6 +73,16 @@ def _deserialize_parameter(d: dict) -> Parameter:
         elif isinstance(mmv, list):
             d["min_max_interval"] = tuple(mmv)
     return Parameter(**d)
+
+
+def save_parameters(parameters: list[Parameter], path: str | Path) -> None:
+    data = [serialize_parameter(p) for p in parameters]
+    Path(path).write_text(json.dumps(data, indent=2))
+
+
+def load_parameters(path: str | Path) -> list[Parameter]:
+    data = json.loads(Path(path).read_text())
+    return [deserialize_parameter(d) for d in data]
 
 
 # ─── Simulation options serialization ────────────────────────────────────────
@@ -289,7 +299,7 @@ class BaseStudyStore(ABC):
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
 
-        params_data = [_serialize_parameter(p) for p in self._parameters]
+        params_data = [serialize_parameter(p) for p in self._parameters]
         (path / "parameters.json").write_text(json.dumps(params_data, indent=2))
 
         if self._simulation_options:
@@ -336,7 +346,7 @@ class BaseStudyStore(ABC):
         """
         path = Path(path)
         params = [
-            _deserialize_parameter(d)
+            deserialize_parameter(d)
             for d in json.loads((path / "parameters.json").read_text())
         ]
         sim_opts = None

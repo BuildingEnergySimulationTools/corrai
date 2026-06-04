@@ -10,9 +10,11 @@ from corrai.store import (
     OptimizationStore,
     SamplingStore,
     SensitivityAnalysisStore,
-    _deserialize_parameter,
+    deserialize_parameter,
+    load_parameters,
+    save_parameters,
+    serialize_parameter,
     _pack_simulation_options,
-    _serialize_parameter,
     _unpack_simulation_options,
 )
 
@@ -128,8 +130,8 @@ class TestSimulationOptionsPacking:
 class TestParameterSerialization:
     def test_roundtrip_basic(self):
         p = PARAMETERS[0]
-        d = _serialize_parameter(p)
-        p2 = _deserialize_parameter(d)
+        d = serialize_parameter(p)
+        p2 = deserialize_parameter(d)
         assert p2.name == p.name
         assert p2.interval == p.interval
         assert p2.ptype == p.ptype
@@ -137,8 +139,8 @@ class TestParameterSerialization:
 
     def test_roundtrip_tuple_model_property(self):
         p = MULTI_PROP_PARAM
-        d = _serialize_parameter(p)
-        p2 = _deserialize_parameter(d)
+        d = serialize_parameter(p)
+        p2 = deserialize_parameter(d)
         assert p2.model_property == ("x1", "x2")
         assert p2.interval == (0.0, 1.0)
 
@@ -146,9 +148,19 @@ class TestParameterSerialization:
         p = Parameter(
             "algo", values=("A", "B", "C"), ptype="Choice", model_property="m"
         )
-        d = _serialize_parameter(p)
-        p2 = _deserialize_parameter(d)
+        d = serialize_parameter(p)
+        p2 = deserialize_parameter(d)
         assert p2.values == ("A", "B", "C")
+
+    def test_save_load_parameters(self, tmp_path):
+        path = tmp_path / "params.json"
+        save_parameters(PARAMETERS, path)
+        loaded = load_parameters(path)
+        assert len(loaded) == len(PARAMETERS)
+        for orig, restored in zip(PARAMETERS, loaded):
+            assert restored.name == orig.name
+            assert restored.interval == orig.interval
+            assert restored.model_property == orig.model_property
 
 
 class TestSensitivityAnalysisStore:
