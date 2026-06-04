@@ -111,7 +111,7 @@ class Sample:
 
     Parameters
     ----------
-    parameters : list of Parameter
+    parameters : list of Parameters
         List of model parameters used to generate the samples.
 
     Attributes
