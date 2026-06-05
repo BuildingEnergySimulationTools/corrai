@@ -212,6 +212,15 @@ class TestSensitivityAnalysisStore:
         )
         assert len(loaded._sample.results) == len(sa.sample.results)
 
+    def test_calc_second_order_persisted(self, tmp_path):
+        sa = SobolSanalysis(PARAMETERS, Ishigami(), calc_second_order=False)
+        store = SensitivityAnalysisStore(sa)
+        store.save(tmp_path / "sa_cso")
+
+        loaded = SensitivityAnalysisStore.load(tmp_path / "sa_cso", model=Ishigami())
+        restored = loaded.to_study()
+        assert restored._calc_second_order is False
+
     def test_to_study_without_model_raises(self, tmp_path):
         sa = SobolSanalysis(PARAMETERS, StaticSquare())
         store = SensitivityAnalysisStore(sa)

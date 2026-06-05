@@ -472,6 +472,9 @@ class SensitivityAnalysisStore(BaseStudyStore):
         self._simulation_options = sanalysis.sampler.simulation_options or {}
         self._sample = sanalysis.sample
         self._sanalysis = sanalysis
+        self._study_options = {}
+        if hasattr(sanalysis, "_calc_second_order"):
+            self._study_options["calc_second_order"] = sanalysis._calc_second_order
 
     @classmethod
     def from_config(
@@ -480,10 +483,11 @@ class SensitivityAnalysisStore(BaseStudyStore):
         parameters: list[Parameter],
         model: Model,
         simulation_options: dict | None = None,
+        study_options: dict | None = None,
     ) -> "SensitivityAnalysisStore":
         """Create a store from a configuration (no results yet)."""
         study_cls = _import_class(method)
-        sanalysis = study_cls(parameters, model, simulation_options)
+        sanalysis = study_cls(parameters, model, simulation_options, **(study_options or {}))
         return cls(sanalysis)
 
     @classmethod
@@ -497,9 +501,11 @@ class SensitivityAnalysisStore(BaseStudyStore):
         sample,
         bundle_path,
     ):
+        method_data = json.loads((bundle_path / "method.json").read_text())
+        study_options = method_data.get("study_options", {})
         study_cls = _import_class(study_class_name)
         dummy_model = model or _DummyModel()
-        sanalysis = study_cls(parameters, dummy_model, simulation_options)
+        sanalysis = study_cls(parameters, dummy_model, simulation_options, **study_options)
         if sample is not None:
             sanalysis.sampler.sample = sample
         store = object.__new__(cls)
@@ -509,18 +515,27 @@ class SensitivityAnalysisStore(BaseStudyStore):
         store._simulation_options = simulation_options
         store._sample = sample
         store._sanalysis = sanalysis
+        store._study_options = study_options
         return store
 
     def to_study(self):
         """Return a ready-to-use Sanalysis object."""
         self._require_model()
         study_cls = _import_class(self._study_class_name)
-        sanalysis = study_cls(self._parameters, self._model, self._simulation_options)
+        sanalysis = study_cls(
+            self._parameters, self._model, self._simulation_options, **self._study_options
+        )
         if self._sample is not None and not self._sample.values.empty:
             sanalysis.sampler.sample = self._sample
         return sanalysis
 
     def _save_extra(self, path: Path, has_results: bool) -> None:
+        method_data = {
+            "study_class": self._study_class_name,
+            "study_options": self._study_options,
+        }
+        (path / "method.json").write_text(json.dumps(method_data, indent=2))
+
         if not has_results:
             return
         indicators = self._get_indicators()
