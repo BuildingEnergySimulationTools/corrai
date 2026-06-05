@@ -90,6 +90,14 @@ class Sanalysis(ABC, SampleMethodsMixin):
     def results(self):
         return self.sampler.results
 
+    @property
+    def model(self):
+        return self.sampler.model
+
+    @property
+    def simulation_options(self):
+        return self.sampler.simulation_options
+
     @abstractmethod
     def _set_sampler(
         self, parameters: list[Parameter], model: Model, simulation_options: dict = None
@@ -700,15 +708,15 @@ class MorrisSanalysis(Sanalysis):
         plot_kwargs: dict = None,
     ):
         return super().salib_plot_dynamic_metric(
-            indicator,
-            sensitivity_metric,
-            "Morris",
-            freq,
-            method,
-            unit,
-            agg_method_kwarg,
-            reference_time_series,
-            title,
+            indicator=indicator,
+            sensitivity_metric=sensitivity_metric,
+            sensitivity_method_name="Morris",
+            freq=freq,
+            method=method,
+            unit=unit,
+            agg_method_kwarg=agg_method_kwarg,
+            reference_time_series=reference_time_series,
+            title=title,
             plot_kwargs=plot_kwargs,
         )
 
@@ -728,6 +736,7 @@ class FASTSanalysis(Sanalysis):
     def _set_analyser(self):
         return fast
 
+    # noinspection PyMethodOverriding
     def add_sample(
         self,
         N: int,
@@ -742,24 +751,6 @@ class FASTSanalysis(Sanalysis):
             n_cpu=n_cpu,
             M=M,
             **sample_kwargs,
-        )
-
-    def analyze(
-        self,
-        indicator: str,
-        method: str = "mean",
-        agg_method_kwarg: dict = None,
-        reference_time_series: pd.Series = None,
-        freq: str | pd.Timedelta | dt.timedelta = None,
-        **analyse_kwargs,
-    ):
-        return super().analyze(
-            indicator=indicator,
-            method=method,
-            agg_method_kwarg=agg_method_kwarg,
-            reference_time_series=reference_time_series,
-            freq=freq,
-            **analyse_kwargs,
         )
 
     def plot_bar(
@@ -827,38 +818,6 @@ class RBDFASTSanalysis(Sanalysis):
 
     def _set_analyser(self):
         return rbd_fast
-
-    def add_sample(
-        self,
-        N: int,
-        simulate: bool = True,
-        n_cpu: int = 1,
-        **sample_kwargs,
-    ):
-        super().add_sample(
-            N=N,
-            simulate=simulate,
-            n_cpu=n_cpu,
-            **sample_kwargs,
-        )
-
-    def analyze(
-        self,
-        indicator: str,
-        method: str = "mean",
-        agg_method_kwarg: dict = None,
-        reference_time_series: pd.Series = None,
-        freq: str | pd.Timedelta | dt.timedelta = None,
-        **analyse_kwargs,
-    ):
-        return super().analyze(
-            indicator=indicator,
-            method=method,
-            agg_method_kwarg=agg_method_kwarg,
-            reference_time_series=reference_time_series,
-            freq=freq,
-            **analyse_kwargs,
-        )
 
     def plot_bar(
         self,
