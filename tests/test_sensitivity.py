@@ -1,5 +1,8 @@
+import warnings
+
 import numpy as np
 import pandas as pd
+import pytest
 
 from corrai.base.parameter import Parameter
 from corrai.base.model import IshigamiDynamic, Ishigami
@@ -29,55 +32,82 @@ PARAMETER_LIST = [
 
 
 class TestSensitivity:
-    def test_sanalysis_sobol_with_sobol_sampler(self):
-        # sobol_analysis = SobolSanalysis(
-        #     parameters=PARAMETER_LIST,
-        #     model=IshigamiDynamic(),
-        #     simulation_options=SIMULATION_OPTIONS,
-        # )
-        #
-        # sobol_analysis.add_sample(N=1000, n_cpu=1, calc_second_order=True, seed=42)
-        # res = sobol_analysis.analyze("res", calc_second_order=True, seed=42)
-        #
-        # np.testing.assert_almost_equal(
-        #     res["mean_res"]["S1"],
-        #     np.array([0.33080399, 0.44206835, 0.00946747]),
-        # )
-        #
-        # res = sobol_analysis.analyze("res", freq="h", calc_second_order=True, seed=42)
-        # assert res.index.tolist() == [
-        #     pd.Timestamp("2009-01-01 00:00:00"),
-        #     pd.Timestamp("2009-01-01 01:00:00"),
-        #     pd.Timestamp("2009-01-01 02:00:00"),
-        #     pd.Timestamp("2009-01-01 03:00:00"),
-        #     pd.Timestamp("2009-01-01 04:00:00"),
-        #     pd.Timestamp("2009-01-01 05:00:00"),
-        # ]
-        #
-        # sobol_analysis.plot_sample_hist(
-        #     "res", bins=10, reference_value=10, reference_label="ref"
-        # )
-        #
-        # np.testing.assert_almost_equal(
-        #     res["2009-01-01 00:00:00"]["S1"],
-        #     np.array([0.33080399, 0.44206835, 0.00946747]),
-        #     decimal=3,
-        # )
-        #
+    def test_sanalysis_sobol_static(self):
         sobol_analysis = SobolSanalysis(
             parameters=PARAMETER_LIST,
             model=Ishigami(),
+            calc_second_order=True,
         )
 
-        sobol_analysis.add_sample(N=1000, n_cpu=1, calc_second_order=True, seed=42)
-        res = sobol_analysis.analyze("res", calc_second_order=True, seed=42)
+        sobol_analysis.add_sample(N=1000, n_cpu=1, seed=42)
+        res = sobol_analysis.analyze("res", seed=42)
 
         np.testing.assert_almost_equal(
             res["mean_res"]["S1"],
             np.array([0.33080399, 0.44206835, 0.00946747]),
         )
 
-        assert True
+    def test_sanalysis_sobol_dynamic(self):
+        sobol_analysis = SobolSanalysis(
+            parameters=PARAMETER_LIST,
+            model=IshigamiDynamic(),
+            simulation_options=SIMULATION_OPTIONS,
+            calc_second_order=True,
+        )
+
+        sobol_analysis.add_sample(N=1000, n_cpu=1, seed=42)
+        res = sobol_analysis.analyze("res", seed=42)
+
+        np.testing.assert_almost_equal(
+            res["mean_res"]["S1"],
+            np.array([0.33080399, 0.44206835, 0.00946747]),
+        )
+
+        res_freq = sobol_analysis.analyze("res", freq="h", seed=42)
+        assert res_freq.index.tolist() == [
+            pd.Timestamp("2009-01-01 00:00:00"),
+            pd.Timestamp("2009-01-01 01:00:00"),
+            pd.Timestamp("2009-01-01 02:00:00"),
+            pd.Timestamp("2009-01-01 03:00:00"),
+            pd.Timestamp("2009-01-01 04:00:00"),
+            pd.Timestamp("2009-01-01 05:00:00"),
+        ]
+        np.testing.assert_almost_equal(
+            res_freq["2009-01-01 00:00:00"]["S1"],
+            np.array([0.33080399, 0.44206835, 0.00946747]),
+            decimal=3,
+        )
+
+    def test_sobol_incremental_sampling_raises(self):
+        sobol_analysis = SobolSanalysis(
+            parameters=PARAMETER_LIST,
+            model=Ishigami(),
+        )
+        sobol_analysis.add_sample(N=64, n_cpu=1, seed=42)
+        with pytest.raises(ValueError, match="does not support incremental sampling"):
+            sobol_analysis.add_sample(N=64, n_cpu=1, seed=0)
+
+    def test_sobol_plot_s2_matrix_raises_when_no_second_order(self):
+        sobol_analysis = SobolSanalysis(
+            parameters=PARAMETER_LIST,
+            model=Ishigami(),
+            calc_second_order=False,
+        )
+        sobol_analysis.add_sample(N=64, n_cpu=1, seed=42)
+        with pytest.raises(ValueError, match="requires second-order indices"):
+            sobol_analysis.plot_s2_matrix()
+
+    def test_sobol_static_model_no_spurious_warning(self):
+        sobol_analysis = SobolSanalysis(
+            parameters=PARAMETER_LIST,
+            model=Ishigami(),
+        )
+        sobol_analysis.add_sample(N=64, n_cpu=1, seed=42)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            sobol_analysis.analyze("res", seed=42)
+        our_warnings = [w for w in caught if "sensitivity" in str(w.filename)]
+        assert len(our_warnings) == 0, f"Unexpected warnings from sensitivity.py: {our_warnings}"
 
     def test_sanalysis_morris(self):
         morris_analysis = MorrisSanalysis(
@@ -202,8 +232,9 @@ class TestPlots:
             parameters=PARAMETER_LIST,
             model=IshigamiDynamic(),
             simulation_options=SIMULATION_OPTIONS,
+            calc_second_order=True,
         )
-        sobol_analysis.add_sample(N=2**2, n_cpu=1, calc_second_order=True)
+        sobol_analysis.add_sample(N=2**2, n_cpu=1)
         fig_matrix = sobol_analysis.plot_s2_matrix()
         assert fig_matrix["layout"]["title"]["text"] == (
             "Sobol mean res " "- 2nd order interactions"
@@ -321,7 +352,7 @@ class TestPlots:
             parameters=PARAMETER_LIST,
             model=Ishigami(),
         )
-        sobol_analysis.add_sample(N=2**4, n_cpu=1, calc_second_order=True, seed=42)
+        sobol_analysis.add_sample(N=2**4, n_cpu=1, seed=42)
         fig = sobol_analysis.plot_bar(
             plot_kwargs={
                 "title": "My Custom Title",

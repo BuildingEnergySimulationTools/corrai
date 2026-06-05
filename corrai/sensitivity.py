@@ -176,7 +176,7 @@ class Sanalysis(ABC, SampleMethodsMixin):
                 prefix=method,
             )
         else:
-            if method or agg_method_kwarg:
+            if agg_method_kwarg is not None or (method is not None and method != "mean"):
                 warnings.warn(
                     "'method' or 'agg_method_kwarg' was provided but Model is static."
                     " Arguments will be ignored"
@@ -406,6 +406,27 @@ class SobolSanalysis(Sanalysis):
     sensitivity analysis following the Sobol method. Sampling of the parameter
     space is performed using the Saltelli scheme, which ensures efficient
     estimation of first-order, second-order, and total-order Sobol indices.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        Parameters that define the sampling space.
+    model : Model
+        Model instance to be simulated.
+    simulation_options : dict, optional
+        Options passed to the model simulation.
+    calc_second_order : bool, default=True
+        Whether to compute second-order (interaction) Sobol indices.
+        This value is fixed at construction and used consistently for
+        both sampling and analysis. Setting it to False reduces the
+        required sample size from N*(2D+2) to N*(D+2).
+
+    Notes
+    -----
+    Sobol analysis requires a single call to :meth:`add_sample`. Calling it
+    more than once would concatenate independent Saltelli matrices, which
+    invalidates the variance decomposition. A ``ValueError`` is raised on
+    any subsequent call.
     """
 
     def __init__(
@@ -413,7 +434,9 @@ class SobolSanalysis(Sanalysis):
         parameters: list[Parameter],
         model: Model,
         simulation_options: dict = None,
+        calc_second_order: bool = True,
     ):
+        self._calc_second_order = calc_second_order
         super().__init__(parameters, model, simulation_options)
 
     def _set_sampler(
@@ -430,15 +453,19 @@ class SobolSanalysis(Sanalysis):
         N: int,
         simulate: bool = True,
         n_cpu: int = 1,
-        *,
-        calc_second_order: bool = True,
         **sample_kwargs,
     ):
+        if len(self.sampler.sample) > 0:
+            raise ValueError(
+                "SobolSanalysis does not support incremental sampling. "
+                f"The sample already contains {len(self.sampler.sample)} rows. "
+                "Create a new SobolSanalysis instance to generate a new sample."
+            )
         super().add_sample(
             N=N,
             simulate=simulate,
             n_cpu=n_cpu,
-            calc_second_order=calc_second_order,
+            calc_second_order=self._calc_second_order,
             **sample_kwargs,
         )
 
@@ -449,7 +476,6 @@ class SobolSanalysis(Sanalysis):
         agg_method_kwarg: dict = None,
         reference_time_series: pd.Series = None,
         freq: str | pd.Timedelta | dt.timedelta = None,
-        calc_second_order: bool = True,
         **analyse_kwargs,
     ):
         return super().analyze(
@@ -458,7 +484,7 @@ class SobolSanalysis(Sanalysis):
             agg_method_kwarg=agg_method_kwarg,
             reference_time_series=reference_time_series,
             freq=freq,
-            calc_second_order=calc_second_order,
+            calc_second_order=self._calc_second_order,
             **analyse_kwargs,
         )
 
@@ -468,7 +494,6 @@ class SobolSanalysis(Sanalysis):
         sensitivity_metric: str = "ST",
         method: str = "mean",
         reference_time_series: pd.Series = None,
-        calc_second_order: bool = True,
         unit: str = "",
         agg_method_kwarg: dict = None,
         title: str = None,
@@ -485,7 +510,6 @@ class SobolSanalysis(Sanalysis):
             agg_method_kwarg=agg_method_kwarg,
             title=title,
             plot_kwargs=plot_kwargs,
-            calc_second_order=calc_second_order,
             **analyse_kwargs,
         )
 
@@ -498,7 +522,6 @@ class SobolSanalysis(Sanalysis):
         reference_time_series: pd.Series = None,
         unit: str = "",
         agg_method_kwarg: dict = None,
-        calc_second_order: bool = True,
         title: str = None,
         plot_kwargs: dict = None,
     ):
@@ -511,7 +534,6 @@ class SobolSanalysis(Sanalysis):
             unit=unit,
             agg_method_kwarg=agg_method_kwarg,
             reference_time_series=reference_time_series,
-            calc_second_order=calc_second_order,
             stacked=True,
             title=title,
             plot_kwargs=plot_kwargs,
@@ -528,6 +550,11 @@ class SobolSanalysis(Sanalysis):
         plot_kwargs: dict = None,
         **analyse_kwargs,
     ):
+        if not self._calc_second_order:
+            raise ValueError(
+                "plot_s2_matrix() requires second-order indices. "
+                "Set calc_second_order=True when creating SobolSanalysis."
+            )
         return super().salib_plot_matrix(
             indicator=indicator,
             sensitivity_method_name="Sobol",
