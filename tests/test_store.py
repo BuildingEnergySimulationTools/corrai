@@ -183,13 +183,13 @@ class TestSensitivityAnalysisStore:
 
         loaded = SensitivityAnalysisStore.load(tmp_path / "sa_config", model=Ishigami())
         sa = loaded.to_study()
-        sa.add_sample(N=64, simulate=True, calc_second_order=False)
+        sa.add_sample(N=64, simulate=True)
         assert len(sa.sample) > 0
         assert not sa.sample.results.empty
 
     def test_full_cycle_with_results(self, tmp_path):
-        sa = SobolSanalysis(PARAMETERS, Ishigami())
-        sa.add_sample(N=64, simulate=True, calc_second_order=False)
+        sa = SobolSanalysis(PARAMETERS, Ishigami(), calc_second_order=False)
+        sa.add_sample(N=64, simulate=True)
 
         store = SensitivityAnalysisStore(sa)
         store.save(tmp_path / "sa_full")
