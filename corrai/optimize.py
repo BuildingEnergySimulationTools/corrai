@@ -3,6 +3,7 @@ from typing import Callable
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Binary, Choice, Integer, Real
 from scipy.optimize import differential_evolution, minimize_scalar, minimize, curve_fit
@@ -278,6 +279,37 @@ class ModelEvaluator:
 
     def scipy_scalar_obj_function(self, x: float, *args):
         return self.scipy_obj_function(np.array([x]), *args)
+
+    def plot_parameter_forest(
+        self,
+        optimal_values: "dict[str, float] | list[float] | pd.Series",
+        mode: str = "normalized",
+        title: str = None,
+        **plot_kwargs,
+    ) -> go.Figure:
+        """
+        Forest plot of this evaluator's parameters with bounds and optimal values.
+
+        Delegates to the module-level :func:`plot_parameter_forest`.
+        See that function for full documentation.
+
+        Parameters
+        ----------
+        optimal_values : dict, list, or pd.Series
+            Optimal value per parameter. When a list, order must match
+            ``self.parameters``.
+        mode : {"normalized", "absolute", "relative"}, default "normalized"
+        title : str, optional
+        **plot_kwargs
+            Forwarded to ``fig.update_layout`` / ``fig.update_traces``.
+        """
+        return plot_parameter_forest(
+            self.parameters,
+            optimal_values,
+            mode=mode,
+            title=title,
+            **plot_kwargs,
+        )
 
 
 class PymooModelEvaluator(ModelEvaluator):
@@ -993,3 +1025,307 @@ class SciOptimizer(SampleMethodsMixin):
             bounds=bounds,
             **kwargs,
         )
+
+
+_FOREST_MODES = ["normalized", "absolute", "relative"]
+
+
+def _apply_figure_kwargs(fig: go.Figure, **kwargs) -> None:
+    for key, val in kwargs.items():
+        try:
+            fig.update_layout(**{key: val})
+        except ValueError:
+            fig.update_traces(**{key: val})
+
+
+def _forest_label(value: float, relabs: str, mode: str) -> str:
+    """Format a bound or optimal value for forest plot annotation."""
+    if mode == "normalized":
+        return ""
+    if mode == "relative" and relabs == "Relative":
+        return f"{value * 100:.4g}%"
+    return f"{value:.4g}"
+
+
+def plot_parameter_forest(
+    parameters: list[Parameter],
+    optimal_values: dict[str, float] | list[float] | pd.Series,
+    mode: str = "normalized",
+    title: str = None,
+    template: str = "plotly_white",
+    **plot_kwargs,
+) -> go.Figure:
+    """
+    Forest plot of optimization parameters — parameters on the X-axis, normalized
+    values on the Y-axis.
+
+    Each parameter is drawn as a vertical bar spanning [0, 1] (normalized to its
+    own bounds) with a diamond marker at the optimal value. Parameters with
+    different units are thus comparable on the same scale.
+
+    How bounds are labelled depends on ``mode``:
+
+    * ``"normalized"`` — no value annotations; Y-axis ticks read 0 % … 100 %.
+    * ``"absolute"``   — actual lower, upper, and optimal values are shown as
+      text on each bar.
+    * ``"relative"``   — parameters with ``relabs="Relative"`` are annotated in
+      percent (e.g. ``interval=(0.2, 1.5)`` → ``"20 %"`` / ``"150 %"``);
+      parameters with ``relabs="Absolute"`` fall back to actual values.
+
+    Parameters without an ``interval`` (e.g. ``Choice``) are silently skipped.
+    Hover is disabled on all traces.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        Parameters defining the search space.
+    optimal_values : dict, list, or pd.Series
+        Optimal value per parameter after optimisation. When a list or array,
+        order must match ``parameters``.
+    mode : {"normalized", "absolute", "relative"}, default "normalized"
+        Annotation style (see above).
+    title : str, optional
+        Plot title.
+    **plot_kwargs
+        Forwarded to ``fig.update_layout`` or ``fig.update_traces``.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+
+    Examples
+    --------
+    >>> from corrai.base.parameter import Parameter
+    >>> from corrai.optimize import plot_parameter_forest
+    >>> params = [
+    ...     Parameter("conductivity", interval=(0.03, 0.06), model_property="x"),
+    ...     Parameter("thickness", interval=(0.05, 0.30), model_property="y"),
+    ...     Parameter("temp_setpoint", interval=(18.0, 24.0), model_property="z"),
+    ... ]
+    >>> fig = plot_parameter_forest(
+    ...     params,
+    ...     {"conductivity": 0.04, "thickness": 0.12, "temp_setpoint": 21.0},
+    ...     mode="absolute",
+    ... )
+    """
+    if mode not in _FOREST_MODES:
+        raise ValueError(f"mode must be one of {_FOREST_MODES}, got {mode!r}")
+
+    # Include continuous (interval) and categorical (values/Choice) params; skip Binary
+    params = [p for p in parameters if p.interval is not None or p.values is not None]
+    if not params:
+        raise ValueError("No parameters with interval bounds found.")
+
+    all_param_names = {p.name for p in params}
+    if isinstance(optimal_values, (list, np.ndarray)):
+        opt_dict = {
+            p.name: v
+            for p, v in zip(parameters, optimal_values)
+            if p.interval is not None or p.values is not None
+        }
+    elif isinstance(optimal_values, pd.Series):
+        opt_dict = {k: v for k, v in optimal_values.items() if k in all_param_names}
+    else:
+        opt_dict = {k: v for k, v in optimal_values.items() if k in all_param_names}
+
+    missing = [p.name for p in params if p.name not in opt_dict]
+    if missing:
+        raise ValueError(f"Missing optimal values for parameters: {missing}")
+
+    names = [p.name for p in params]
+    interval_params = [p for p in params if p.interval is not None]
+    choice_params = [p for p in params if p.values is not None]
+
+    # --- Normalized optimal positions
+    opt_norms: dict[str, float] = {}
+    for p in params:
+        if p.interval is not None:
+            lo, hi = p.interval
+            v = float(opt_dict[p.name])
+            opt_norms[p.name] = (v - lo) / (hi - lo) if hi != lo else 0.5
+        else:
+            n = len(p.values)
+            positions = [i / (n - 1) for i in range(n)] if n > 1 else [0.5]
+            try:
+                idx = list(p.values).index(opt_dict[p.name])
+            except ValueError:
+                raise ValueError(
+                    f"Optimal value {opt_dict[p.name]!r} not among choices "
+                    f"{p.values} for parameter {p.name!r}"
+                )
+            opt_norms[p.name] = positions[idx]
+
+    # --- Labels
+    annotate = mode != "normalized"
+    lower_texts = {
+        p.name: _forest_label(p.interval[0], p.relabs, mode) for p in interval_params
+    }
+    upper_texts = {
+        p.name: _forest_label(p.interval[1], p.relabs, mode) for p in interval_params
+    }
+    # Optimal text: mode-aware for interval; empty for choice (tick labels already mark each position)
+    all_opt_texts = {
+        p.name: (
+            _forest_label(float(opt_dict[p.name]), p.relabs, mode)
+            if p.interval is not None
+            else ""
+        )
+        for p in params
+    }
+    annotate_opt = annotate
+
+    _bar_color = "darkblue"
+    fig = go.Figure()
+
+    # Trace: vertical lines for all params
+    x_lines: list[str | None] = []
+    y_lines: list[float | None] = []
+    for name in names:
+        x_lines.extend([name, name, None])
+        y_lines.extend([0.0, 1.0, None])
+    fig.add_trace(
+        go.Scatter(
+            x=x_lines,
+            y=y_lines,
+            mode="lines",
+            line=dict(color=_bar_color, width=2),
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    )
+
+    # Trace: interval lower bound ticks (y=0, text below)
+    if interval_params:
+        inames = [p.name for p in interval_params]
+        fig.add_trace(
+            go.Scatter(
+                x=inames,
+                y=[0.0] * len(inames),
+                mode="markers+text" if annotate else "markers",
+                marker=dict(
+                    symbol="line-ew-open",
+                    size=14,
+                    color=_bar_color,
+                    line=dict(width=2, color=_bar_color),
+                ),
+                text=[lower_texts[n] for n in inames],
+                textposition="bottom center",
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+
+    # Trace: interval upper bound ticks (y=1, text above)
+    if interval_params:
+        inames = [p.name for p in interval_params]
+        fig.add_trace(
+            go.Scatter(
+                x=inames,
+                y=[1.0] * len(inames),
+                mode="markers+text" if annotate else "markers",
+                marker=dict(
+                    symbol="line-ew-open",
+                    size=14,
+                    color=_bar_color,
+                    line=dict(width=2, color=_bar_color),
+                ),
+                text=[upper_texts[n] for n in inames],
+                textposition="top center",
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+
+    # Trace: choice tick marks — one entry per choice value, always labelled
+    if choice_params:
+        cx: list[str] = []
+        cy: list[float] = []
+        ctexts: list[str] = []
+        ctextpositions: list[str] = []
+        for p in choice_params:
+            n = len(p.values)
+            positions = [i / (n - 1) for i in range(n)] if n > 1 else [0.5]
+            for i, (val, pos) in enumerate(zip(p.values, positions)):
+                cx.append(p.name)
+                cy.append(pos)
+                ctexts.append(str(val))
+                if n == 1:
+                    ctextpositions.append("top center")
+                elif i == 0:
+                    ctextpositions.append("bottom center")
+                elif i == n - 1:
+                    ctextpositions.append("top center")
+                else:
+                    ctextpositions.append("middle right")
+        fig.add_trace(
+            go.Scatter(
+                x=cx,
+                y=cy,
+                mode="markers+text",
+                marker=dict(
+                    symbol="line-ew-open",
+                    size=14,
+                    color=_bar_color,
+                    line=dict(width=2, color=_bar_color),
+                ),
+                text=ctexts,
+                textposition=ctextpositions,
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+
+    # Trace: optimal diamonds — always last
+    fig.add_trace(
+        go.Scatter(
+            x=names,
+            y=[opt_norms[n] for n in names],
+            mode="markers+text" if annotate_opt else "markers",
+            name="Optimal",
+            marker=dict(
+                symbol="diamond",
+                size=13,
+                color="orange",
+                line=dict(width=1.5, color="darkorange"),
+            ),
+            text=[all_opt_texts[n] for n in names],
+            textposition="middle right",
+            showlegend=True,
+            hoverinfo="skip",
+        )
+    )
+
+    # Lower text is "bottom center" → needs a bit of space below 0
+    y_range = [-0.05, 1.1] if mode == "normalized" else [-0.18, 1.25]
+    if mode == "normalized":
+        y_tickvals = [0.0, 0.25, 0.5, 0.75, 1.0]
+        y_ticktext = ["Lower (0%)", "25%", "50%", "75%", "Upper (100%)"]
+        title_y = "Normalized position with bounds"
+    else:
+        y_tickvals = [0.0, 1.0]
+        y_ticktext = ["Lower bound", "Upper bound"]
+        title_y = "Position with bounds"
+
+    b_margin = 100 if len(names) > 5 else 70
+
+    fig.update_layout(
+        title=title,
+        xaxis=dict(
+            tickangle=-30 if len(names) > 5 else 0,
+        ),
+        yaxis=dict(
+            title=title_y,
+            range=y_range,
+            tickvals=y_tickvals,
+            ticktext=y_ticktext,
+            showgrid=True,
+            zeroline=False,
+        ),
+        template=template,
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="right", x=1),
+        autosize=True,
+        margin=dict(l=70, r=30, t=40, b=b_margin),
+    )
+
+    _apply_figure_kwargs(fig, **plot_kwargs)
+    return fig
