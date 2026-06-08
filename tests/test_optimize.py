@@ -18,6 +18,8 @@ from corrai.base.model import (
     RosenFiveParamDynamic,
 )
 from corrai.base.parameter import Parameter
+import plotly.graph_objects as go
+
 from corrai.optimize import (
     MixedProblem,
     ModelEvaluator,
@@ -25,6 +27,7 @@ from corrai.optimize import (
     RealContinuousProblem,
     SciOptimizer,
     check_duplicate_params,
+    plot_parameter_forest,
 )
 
 PACKAGE_DIR = Path(__file__).parent / "TestLib"
@@ -399,3 +402,110 @@ class TestSciOptimizer:
         )
 
         assert np.isclose(popt[0], 2.0, atol=1e-2)
+
+
+FOREST_PARAMS = [
+    Parameter("conductivity", interval=(0.03, 0.06), model_property="a"),
+    Parameter("thickness", interval=(0.05, 0.30), model_property="b"),
+    Parameter("temp_setpoint", interval=(18.0, 24.0), model_property="c"),
+]
+_OPT_DICT = {"conductivity": 0.04, "thickness": 0.12, "temp_setpoint": 21.0}
+
+
+class TestPlotParameterForest:
+    def test_structure_and_normalization(self):
+        fig = plot_parameter_forest(FOREST_PARAMS, _OPT_DICT, title="My Title")
+        assert isinstance(fig, go.Figure)
+        assert (
+            len(fig.data) == 4
+        )  # lines + lower ticks + upper ticks + optimal diamonds
+        assert list(fig.data[3].x) == ["conductivity", "thickness", "temp_setpoint"]
+        assert np.isclose(
+            fig.data[3].y[0], 1 / 3, atol=1e-6
+        )  # conductivity: (0.04-0.03)/(0.06-0.03)
+        assert all(
+            np.isclose(v, 0.0)
+            for v in plot_parameter_forest(FOREST_PARAMS, [0.03, 0.05, 18.0]).data[3].y
+        )
+        assert all(
+            np.isclose(v, 1.0)
+            for v in plot_parameter_forest(FOREST_PARAMS, [0.06, 0.30, 24.0]).data[3].y
+        )
+        assert fig.layout.title.text == "My Title"
+
+    def test_input_types_and_choice_shown(self):
+        assert isinstance(
+            plot_parameter_forest(FOREST_PARAMS, [0.04, 0.12, 21.0]), go.Figure
+        )
+        assert isinstance(
+            plot_parameter_forest(FOREST_PARAMS, pd.Series(_OPT_DICT)), go.Figure
+        )
+        params_with_choice = FOREST_PARAMS + [
+            Parameter(
+                "algo", values=("A", "B", "C", "D"), ptype="Choice", model_property="d"
+            )
+        ]
+        opt_with_choice = {**_OPT_DICT, "algo": "A"}
+        fig = plot_parameter_forest(params_with_choice, opt_with_choice)
+        assert len(fig.data[-1].x) == 4  # 3 interval + 1 choice param all shown
+        assert len(fig.data) == 5  # lines + lower + upper + choice_ticks + optimal
+
+    def test_modes(self):
+        # normalized: no text on any trace
+        fig_norm = plot_parameter_forest(FOREST_PARAMS, _OPT_DICT, mode="normalized")
+        assert fig_norm.data[3].mode == "markers"
+        assert not any(t for t in (fig_norm.data[3].text or []))
+
+        # absolute: actual values annotated on lower, upper, and optimal traces
+        fig_abs = plot_parameter_forest(FOREST_PARAMS, _OPT_DICT, mode="absolute")
+        fig_abs.show()
+        assert fig_abs.data[3].mode == "markers+text"
+        assert fig_abs.data[1].text[0] == "0.03"  # conductivity lower bound
+        assert fig_abs.data[2].text[0] == "0.06"  # conductivity upper bound
+        assert fig_abs.data[3].text[0] == "0.04"  # conductivity optimal
+
+        # relative: Relative params shown as %, Absolute params fall back to actual values
+        rel_params = [
+            Parameter(
+                "mult", interval=(0.2, 1.5), relabs="Relative", model_property="x"
+            )
+        ]
+        fig_rel = plot_parameter_forest(rel_params, {"mult": 0.8}, mode="relative")
+        assert fig_rel.data[1].text[0] == "20%"
+        assert fig_rel.data[2].text[0] == "150%"
+        assert fig_rel.data[3].text[0] == "80%"
+        fig_abs_fallback = plot_parameter_forest(
+            FOREST_PARAMS, _OPT_DICT, mode="relative"
+        )
+        assert fig_abs_fallback.data[1].text[0] == "0.03"
+
+    def test_layout_and_style(self):
+        fig = plot_parameter_forest(FOREST_PARAMS, _OPT_DICT)
+        assert fig.data[0].line.color == "darkblue"
+        assert fig.layout.legend.y >= 0  # legend at top
+        assert fig.layout.autosize is True
+        assert fig.layout.width is None
+
+    def test_errors(self):
+        with pytest.raises(ValueError, match="mode must be one of"):
+            plot_parameter_forest(FOREST_PARAMS, _OPT_DICT, mode="bad")
+        with pytest.raises(ValueError, match="Missing optimal values"):
+            plot_parameter_forest(FOREST_PARAMS, {"conductivity": 0.04})
+        binary_only = [Parameter("bin", ptype="Binary", model_property="d")]
+        with pytest.raises(ValueError, match="No parameters with interval bounds"):
+            plot_parameter_forest(binary_only, {"bin": True})
+        params_with_choice = FOREST_PARAMS + [
+            Parameter("algo", values=("A", "B"), ptype="Choice", model_property="d")
+        ]
+        with pytest.raises(ValueError, match="not among choices"):
+            plot_parameter_forest(params_with_choice, {**_OPT_DICT, "algo": "C"})
+
+    def test_evaluator_method(self):
+        ev = ModelEvaluator(FOREST_PARAMS, X2())
+        fig = ev.plot_parameter_forest(_OPT_DICT, mode="absolute")
+        fig.show()
+        assert isinstance(fig, go.Figure)
+        assert fig.data[3].text[0] == "0.04"
+        pymoo_ev = PymooModelEvaluator(FOREST_PARAMS, X2())
+        fig2 = pymoo_ev.plot_parameter_forest([0.04, 0.12, 21.0])
+        assert list(fig2.data[3].x) == ["conductivity", "thickness", "temp_setpoint"]
