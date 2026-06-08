@@ -1052,6 +1052,7 @@ def plot_parameter_forest(
     optimal_values: dict[str, float] | list[float] | pd.Series,
     mode: str = "normalized",
     title: str = None,
+    template: str = "plotly_white",
     **plot_kwargs,
 ) -> go.Figure:
     """
@@ -1319,10 +1320,9 @@ def plot_parameter_forest(
             tickvals=y_tickvals,
             ticktext=y_ticktext,
             showgrid=True,
-            gridcolor="#eeeeee",
             zeroline=False,
         ),
-        plot_bgcolor="white",
+        template=template,
         legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="right", x=1),
         autosize=True,
         margin=dict(l=70, r=30, t=40, b=b_margin),
