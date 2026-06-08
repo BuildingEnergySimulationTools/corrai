@@ -458,7 +458,6 @@ class TestPlotParameterForest:
 
         # absolute: actual values annotated on lower, upper, and optimal traces
         fig_abs = plot_parameter_forest(FOREST_PARAMS, _OPT_DICT, mode="absolute")
-        fig_abs.show()
         assert fig_abs.data[3].mode == "markers+text"
         assert fig_abs.data[1].text[0] == "0.03"  # conductivity lower bound
         assert fig_abs.data[2].text[0] == "0.06"  # conductivity upper bound
@@ -503,7 +502,6 @@ class TestPlotParameterForest:
     def test_evaluator_method(self):
         ev = ModelEvaluator(FOREST_PARAMS, X2())
         fig = ev.plot_parameter_forest(_OPT_DICT, mode="absolute")
-        fig.show()
         assert isinstance(fig, go.Figure)
         assert fig.data[3].text[0] == "0.04"
         pymoo_ev = PymooModelEvaluator(FOREST_PARAMS, X2())

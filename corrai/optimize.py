@@ -1312,7 +1312,6 @@ def plot_parameter_forest(
         title=title,
         xaxis=dict(
             tickangle=-30 if len(names) > 5 else 0,
-            ticklabelstandoff=4,
         ),
         yaxis=dict(
             title=title_y,
