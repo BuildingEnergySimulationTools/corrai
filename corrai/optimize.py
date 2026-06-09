@@ -1038,13 +1038,24 @@ def _apply_figure_kwargs(fig: go.Figure, **kwargs) -> None:
             fig.update_traces(**{key: val})
 
 
-def _forest_label(value: float, relabs: str, mode: str) -> str:
+def _forest_label(
+    value: float, relabs: str, mode: str, ref_value: float | None = None
+) -> str:
     """Format a bound or optimal value for forest plot annotation."""
     if mode == "normalized":
         return ""
     if mode == "relative" and relabs == "Relative":
         return f"{value * 100:.4g}%"
+    if mode == "absolute" and relabs == "Relative" and ref_value is not None:
+        return f"{value * ref_value:.4g}"
     return f"{value:.4g}"
+
+
+def _forest_ref_value(p) -> float | None:
+    """Return the reference value for converting a Relative parameter, or None."""
+    if p.relabs == "Relative" and p.init_value is not None:
+        return float(p.init_value[0])
+    return None
 
 
 def plot_parameter_forest(
@@ -1066,8 +1077,9 @@ def plot_parameter_forest(
     How bounds are labelled depends on ``mode``:
 
     * ``"normalized"`` — no value annotations; Y-axis ticks read 0 % … 100 %.
-    * ``"absolute"``   — actual lower, upper, and optimal values are shown as
-      text on each bar.
+    * ``"absolute"``   — for parameters with ``relabs="Absolute"``, actual bound and
+      optimal values are shown; for parameters with ``relabs="Relative"`` and a defined
+      ``init_value``, converted real values are shown (``bound * init_value``).
     * ``"relative"``   — parameters with ``relabs="Relative"`` are annotated in
       percent (e.g. ``interval=(0.2, 1.5)`` → ``"20 %"`` / ``"150 %"``);
       parameters with ``relabs="Absolute"`` fall back to actual values.
@@ -1158,15 +1170,17 @@ def plot_parameter_forest(
     # --- Labels
     annotate = mode != "normalized"
     lower_texts = {
-        p.name: _forest_label(p.interval[0], p.relabs, mode) for p in interval_params
+        p.name: _forest_label(p.interval[0], p.relabs, mode, _forest_ref_value(p))
+        for p in interval_params
     }
     upper_texts = {
-        p.name: _forest_label(p.interval[1], p.relabs, mode) for p in interval_params
+        p.name: _forest_label(p.interval[1], p.relabs, mode, _forest_ref_value(p))
+        for p in interval_params
     }
     # Optimal text: mode-aware for interval; empty for choice (tick labels already mark each position)
     all_opt_texts = {
         p.name: (
-            _forest_label(float(opt_dict[p.name]), p.relabs, mode)
+            _forest_label(float(opt_dict[p.name]), p.relabs, mode, _forest_ref_value(p))
             if p.interval is not None
             else ""
         )
