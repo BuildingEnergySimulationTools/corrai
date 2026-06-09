@@ -478,6 +478,29 @@ class TestPlotParameterForest:
         )
         assert fig_abs_fallback.data[1].text[0] == "0.03"
 
+        # absolute mode with Relative param + init_value: bounds converted (bound * init_value)
+        rel_param_with_init = [
+            Parameter(
+                "mult",
+                interval=(0.2, 1.5),
+                relabs="Relative",
+                init_value=4.0,
+                model_property="x",
+            )
+        ]
+        fig_abs_rel = plot_parameter_forest(
+            rel_param_with_init, {"mult": 0.8}, mode="absolute"
+        )
+        assert fig_abs_rel.data[1].text[0] == "0.8"  # 0.2 * 4.0
+        assert fig_abs_rel.data[2].text[0] == "6"  # 1.5 * 4.0
+        assert fig_abs_rel.data[3].text[0] == "3.2"  # 0.8 * 4.0
+
+        # absolute mode with Relative param without init_value: falls back to raw value
+        fig_abs_no_init = plot_parameter_forest(
+            rel_params, {"mult": 0.8}, mode="absolute"
+        )
+        assert fig_abs_no_init.data[1].text[0] == "0.2"
+
     def test_layout_and_style(self):
         fig = plot_parameter_forest(FOREST_PARAMS, _OPT_DICT)
         assert fig.data[0].line.color == "darkblue"
