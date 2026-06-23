@@ -1,10 +1,57 @@
 import pandas as pd
 import numpy as np
 
-from corrai.base.math import aggregate_time_series
+from corrai.base.math import aggregate_time_series, apply_cuts
 
 
 class TestMath:
+    def test_apply_cuts_series(self):
+        cuts = [
+            ("2009-01-01 00:00:00", "2009-01-01 2:00:00"),
+            ("2009-01-01 05:00:00", "2009-01-01 07:00:00"),
+        ]
+
+        index = pd.date_range("2009-01-01", freq="h", periods=8)
+
+        # Test pd.Series
+        s = pd.Series(range(len(index)), index=index)
+
+        result = apply_cuts(s, cuts)
+
+        mask = pd.Series(False, index=s.index)
+        for start, end in cuts:
+            mask |= (s.index >= start) & (s.index <= end)
+
+        pd.testing.assert_series_equal(
+            result,
+            s.loc[mask],
+        )
+
+        # Test pd.DataFrame
+        df = pd.DataFrame(
+            {"a": range(len(index)), "b": range(100, 100 + len(index))},
+            index=index,
+        )
+
+        result = apply_cuts(df, cuts)
+
+        mask = pd.Series(False, index=df.index)
+        for start, end in cuts:
+            mask |= (df.index >= start) & (df.index <= end)
+
+        pd.testing.assert_frame_equal(
+            result,
+            df.loc[mask],
+        )
+
+        # Test cuts = None
+        result = apply_cuts(s, None)
+
+        pd.testing.assert_series_equal(
+            result,
+            s,
+        )
+
     def test_aggregate_time_series(self):
         sim_res = pd.Series(
             [
