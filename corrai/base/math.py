@@ -160,7 +160,6 @@ def aggregate_time_series(
     agg_df = pd.concat([df[indicator].rename(i) for i, df in results.items()], axis=1)
 
     agg_df = apply_cuts(agg_df, cuts)
-    agg_df = apply_cuts(agg_df, cuts)
 
     if reference_time_series is not None:
         check_datetime_index(reference_time_series)
