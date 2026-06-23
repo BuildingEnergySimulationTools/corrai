@@ -13,7 +13,6 @@ class TestMath:
 
         index = pd.date_range("2009-01-01", freq="h", periods=8)
 
-        # Test pd.Series
         s = pd.Series(range(len(index)), index=index)
 
         result = apply_cuts(s, cuts)
