@@ -26,7 +26,14 @@ class TestMath:
             s.loc[mask],
         )
 
-        # Test pd.DataFrame
+    def test_apply_cuts_frame(self):
+        cuts = [
+            ("2009-01-01 00:00:00", "2009-01-01 2:00:00"),
+            ("2009-01-01 05:00:00", "2009-01-01 07:00:00"),
+        ]
+
+        index = pd.date_range("2009-01-01", freq="h", periods=8)
+
         df = pd.DataFrame(
             {"a": range(len(index)), "b": range(100, 100 + len(index))},
             index=index,
