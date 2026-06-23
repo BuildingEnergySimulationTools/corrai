@@ -50,12 +50,24 @@ class TestMath:
             df.loc[mask],
         )
 
-        # Test cuts = None
-        result = apply_cuts(s, None)
+    def test_apply_cuts_none(self):
+        s = pd.Series(range(len(index)), index=index)
+        df = pd.DataFrame(
+            {"a": range(len(index)), "b": range(100, 100 + len(index))},
+            index=index,
+        )
+
+        result_series = apply_cuts(s, None)
+        result_frame = apply_cuts(df, None)
 
         pd.testing.assert_series_equal(
-            result,
+            result_series,
             s,
+        )
+
+        pd.testing.assert_series_equal(
+            result_frame,
+            df,
         )
 
     def test_aggregate_time_series(self):
