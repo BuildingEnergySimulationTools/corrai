@@ -93,8 +93,8 @@ def aggregate_time_series(
         Prefix to use for naming the output column when `freq` is not specified.
 
     cuts : list[tuple[str, str]], optional
-        If provided, cut the time series based on these this list of cuts, before aggregation.
-        Aggregation is then done over the selected time periods only.
+        List of (start, end) time intervals (timezone-aware or unaware).
+        If provided, aggregation is performed only on data within these intervals.
 
     Returns
     -------
