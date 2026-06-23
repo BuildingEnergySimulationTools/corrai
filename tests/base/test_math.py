@@ -51,6 +51,7 @@ class TestMath:
         )
 
     def test_apply_cuts_none(self):
+        index = pd.date_range("2009-01-01", freq="h", periods=8)
         s = pd.Series(range(len(index)), index=index)
         df = pd.DataFrame(
             {"a": range(len(index)), "b": range(100, 100 + len(index))},
@@ -65,7 +66,7 @@ class TestMath:
             s,
         )
 
-        pd.testing.assert_series_equal(
+        pd.testing.assert_frame_equal(
             result_frame,
             df,
         )
