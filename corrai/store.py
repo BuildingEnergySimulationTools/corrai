@@ -421,7 +421,9 @@ class BaseStudyStore(ABC):
             "parameter_names": [p.name for p in self._parameters],
             "has_results": has_results,
             "simulation_start": sim_opts.get("startTime", sim_opts.get("start")),
-            "simulation_stop": sim_opts.get("stopTime", sim_opts.get("stop", sim_opts.get("end"))),
+            "simulation_stop": sim_opts.get(
+                "stopTime", sim_opts.get("stop", sim_opts.get("end"))
+            ),
         }
         indicators = self._get_indicators()
         if indicators is not None:
@@ -487,7 +489,9 @@ class SensitivityAnalysisStore(BaseStudyStore):
     ) -> "SensitivityAnalysisStore":
         """Create a store from a configuration (no results yet)."""
         study_cls = _import_class(method)
-        sanalysis = study_cls(parameters, model, simulation_options, **(study_options or {}))
+        sanalysis = study_cls(
+            parameters, model, simulation_options, **(study_options or {})
+        )
         return cls(sanalysis)
 
     @classmethod
@@ -505,7 +509,9 @@ class SensitivityAnalysisStore(BaseStudyStore):
         study_options = method_data.get("study_options", {})
         study_cls = _import_class(study_class_name)
         dummy_model = model or _DummyModel()
-        sanalysis = study_cls(parameters, dummy_model, simulation_options, **study_options)
+        sanalysis = study_cls(
+            parameters, dummy_model, simulation_options, **study_options
+        )
         if sample is not None:
             sanalysis.sampler.sample = sample
         store = object.__new__(cls)
@@ -523,7 +529,10 @@ class SensitivityAnalysisStore(BaseStudyStore):
         self._require_model()
         study_cls = _import_class(self._study_class_name)
         sanalysis = study_cls(
-            self._parameters, self._model, self._simulation_options, **self._study_options
+            self._parameters,
+            self._model,
+            self._simulation_options,
+            **self._study_options,
         )
         if self._sample is not None and not self._sample.values.empty:
             sanalysis.sampler.sample = self._sample
