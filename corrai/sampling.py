@@ -317,6 +317,7 @@ class Sample:
         reference_time_series: pd.Series = None,
         freq: str | pd.Timedelta | dt.timedelta = None,
         prefix: str = "aggregated",
+        cuts: list[tuple[str, str]] | None = None,
     ) -> pd.DataFrame:
         """
         Aggregate sample results using a specified statistical or error metric.
@@ -362,6 +363,10 @@ class Sample:
 
         prefix : str, default="aggregated"
             Prefix to use for naming the output column when `freq` is not specified.
+
+        cuts : list[tuple[str, str]], optional
+            List of (start, end) time intervals (timezone-aware or unaware).
+            If provided, aggregation is performed only on data within these intervals.
 
         Returns
         -------
@@ -433,6 +438,7 @@ class Sample:
             reference_time_series,
             freq,
             prefix,
+            cuts,
         )
 
     def get_static_results_as_df(self):
