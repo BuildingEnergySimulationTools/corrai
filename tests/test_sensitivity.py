@@ -107,7 +107,9 @@ class TestSensitivity:
             warnings.simplefilter("always")
             sobol_analysis.analyze("res", seed=42)
         our_warnings = [w for w in caught if "sensitivity" in str(w.filename)]
-        assert len(our_warnings) == 0, f"Unexpected warnings from sensitivity.py: {our_warnings}"
+        assert (
+            len(our_warnings) == 0
+        ), f"Unexpected warnings from sensitivity.py: {our_warnings}"
 
     def test_sanalysis_morris(self):
         morris_analysis = MorrisSanalysis(

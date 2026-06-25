@@ -184,7 +184,9 @@ class Sanalysis(ABC, SampleMethodsMixin):
                 prefix=method,
             )
         else:
-            if agg_method_kwarg is not None or (method is not None and method != "mean"):
+            if agg_method_kwarg is not None or (
+                method is not None and method != "mean"
+            ):
                 warnings.warn(
                     "'method' or 'agg_method_kwarg' was provided but Model is static."
                     " Arguments will be ignored"
