@@ -20,6 +20,19 @@ METHODS = {
 }
 
 
+def apply_cuts(obj: pd.Series | pd.DataFrame, cuts):
+    if cuts is None:
+        return obj
+    if len(obj) == 0:
+        return ValueError("DataFrame is empty, cannot apply cuts.")
+    if obj.index.tz is not None:
+        obj.index = obj.index.tz_localize(None)
+    mask = pd.Series(False, index=obj.index)
+    for start, end in cuts:
+        mask |= (obj.index >= start) & (obj.index <= end)
+    return obj.loc[mask]
+
+
 def aggregate_time_series(
     results: pd.Series,
     indicator: str,
@@ -28,6 +41,7 @@ def aggregate_time_series(
     reference_time_series: pd.Series = None,
     freq: str | pd.Timedelta | dt.timedelta = None,
     prefix: str = "aggregated",
+    cuts: list[tuple[str, str]] | None = None,
 ) -> pd.DataFrame:
     """
     Aggregate time series data using a specified statistical or error metric.
@@ -77,6 +91,10 @@ def aggregate_time_series(
 
     prefix : str, default="aggregated"
         Prefix to use for naming the output column when `freq` is not specified.
+
+    cuts : list[tuple[str, str]], optional
+        List of (start, end) time intervals (timezone-aware or unaware).
+        If provided, aggregation is performed only on data within these intervals.
 
     Returns
     -------
@@ -141,8 +159,11 @@ def aggregate_time_series(
         check_datetime_index(df)
     agg_df = pd.concat([df[indicator].rename(i) for i, df in results.items()], axis=1)
 
+    agg_df = apply_cuts(agg_df, cuts)
+
     if reference_time_series is not None:
         check_datetime_index(reference_time_series)
+        reference_time_series = apply_cuts(reference_time_series, cuts)
         if not agg_df.shape[0] == reference_time_series.shape[0]:
             raise ValueError(
                 "Cannot perform aggregation, Dataframes in results and "
