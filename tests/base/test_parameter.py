@@ -1,5 +1,6 @@
 import pytest
 from corrai.base.parameter import Parameter
+from corrai.base.distribution import Distribution
 
 
 VALID_INTERVAL = (0, 10)
@@ -70,4 +71,33 @@ class TestParameter:
                 model_property="m.choice",
                 values=("A", "B", "C"),
                 init_value="D",
+            )
+
+    def test_parameter_with_distribution_only(self):
+        param = Parameter(
+            name="x",
+            model_property="m.x",
+            distribution=Distribution("normal", {"mean": 0, "std": 1}),
+        )
+        assert param.interval is None
+        assert param.distribution.dist == "normal"
+
+    def test_parameter_with_distribution_and_interval(self):
+        param = Parameter(
+            name="x",
+            model_property="m.x",
+            interval=(0, 1),
+            distribution=Distribution("uniform", {"low": 0, "high": 1}),
+        )
+        assert param.interval == (0, 1)
+        assert param.distribution is not None
+
+    def test_distribution_requires_real_ptype(self):
+        with pytest.raises(ValueError, match="distribution.*ptype='Real'"):
+            Parameter(
+                name="bad",
+                model_property="m.bad",
+                values=("A", "B"),
+                ptype="Choice",
+                distribution=Distribution("normal", {"mean": 0, "std": 1}),
             )

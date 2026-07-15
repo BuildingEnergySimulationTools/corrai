@@ -3,10 +3,12 @@ import numpy as np
 import pandas as pd
 
 from corrai.base.parameter import Parameter
+from corrai.base.distribution import Distribution
 from corrai.sampling import (
     LHSSampler,
     MorrisSampler,
     SobolSampler,
+    MonteCarloSampler,
     Sample,
 )
 
@@ -41,6 +43,27 @@ ISHIGAMI_PARAMETERS = [
     Parameter("par_x1", (-3.14159265359, 3.14159265359), model_property="x1"),
     Parameter("par_x2", (-3.14159265359, 3.14159265359), model_property="x2"),
     Parameter("par_x3", (-3.14159265359, 3.14159265359), model_property="x3"),
+]
+
+MONTECARLO_PARAMS = [
+    Parameter(
+        "param_1",
+        model_property="prop_1",
+        distribution=Distribution("normal", {"mean": 5, "std": 1}),
+    ),
+    Parameter(
+        "param_2",
+        model_property="prop_2",
+        relabs="Relative",
+        distribution=Distribution("uniform", {"low": 0.8, "high": 1.2}),
+    ),
+    Parameter(
+        "param_3",
+        model_property="prop_3",
+        distribution=Distribution(
+            "truncnormal", {"mean": 50, "std": 20, "low": 0, "high": 100}
+        ),
+    ),
 ]
 
 
@@ -560,3 +583,47 @@ class TestSample:
                 ]
             ),
         )
+
+    def test_montecarlo_sampler(self):
+        sampler = MonteCarloSampler(
+            parameters=MONTECARLO_PARAMS,
+            model=PymodelDynamic(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        sampler.add_sample(2000, seed=42, simulate=False)
+
+        assert sampler.values.shape == (2000, 3)
+        np.testing.assert_allclose(sampler.values["param_1"].mean(), 5, atol=0.2)
+        np.testing.assert_allclose(sampler.values["param_1"].std(), 1, atol=0.2)
+        assert sampler.values["param_2"].min() >= 0.8
+        assert sampler.values["param_2"].max() <= 1.2
+        assert sampler.values["param_3"].min() >= 0
+        assert sampler.values["param_3"].max() <= 100
+
+        sampler.simulate_at(0)
+        assert not sampler.results.iloc[0].empty
+
+    def test_montecarlo_sampler_reproducible_with_seed(self):
+        sampler_1 = MonteCarloSampler(
+            parameters=MONTECARLO_PARAMS,
+            model=PymodelDynamic(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        sampler_1.add_sample(10, seed=42, simulate=False)
+
+        sampler_2 = MonteCarloSampler(
+            parameters=MONTECARLO_PARAMS,
+            model=PymodelDynamic(),
+            simulation_options=SIMULATION_OPTIONS,
+        )
+        sampler_2.add_sample(10, seed=42, simulate=False)
+
+        pd.testing.assert_frame_equal(sampler_1.values, sampler_2.values)
+
+    def test_montecarlo_sampler_missing_distribution_raises(self):
+        with pytest.raises(ValueError, match="must define a `distribution`"):
+            MonteCarloSampler(
+                parameters=REAL_PARAM,
+                model=PymodelDynamic(),
+                simulation_options=SIMULATION_OPTIONS,
+            )

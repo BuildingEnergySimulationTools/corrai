@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from corrai.base.distribution import Distribution
+
 TYPES = ["Integer", "Real", "Choice", "Binary"]
 RELABS = ["Absolute", "Relative"]
 
@@ -16,6 +18,7 @@ class Parameter:
         tuple[int | float, int | float] | list[tuple[int | float, int | float]] | None
     ) = None
     model_property: str | tuple[str, ...] = None
+    distribution: Distribution | None = None
 
     """
     A parameter definition for models. Can Affect a single model property or a list
@@ -64,12 +67,23 @@ class Parameter:
     min_max_interval : tuple of int or float, optional
         Optional min and max bounds used for some checking operations.
 
+    distribution : Distribution, optional
+        Probability distribution used to draw random values for this
+        parameter, e.g. with `corrai.sampling.MonteCarloSampler` for
+        uncertainty propagation. Only valid for `ptype="Real"`. If
+        `interval` is not provided, at least `distribution` or `values`
+        must be. `interval` may still be provided alongside `distribution`
+        as a purely informative/plotting bound (it does not constrain the
+        draws).
+
     Raises
     ------
     ValueError
-        If both `interval` and `values` are specified, or if neither is specified.
+        If both `interval` and `values` are specified, or if none of
+        `interval`, `values`, or `distribution` is specified.
         If `init_value` is outside the specified domain.
         If `ptype` or `relabs` are not in the allowed sets.
+        If `distribution` is specified with a `ptype` other than `"Real"`.
 
     Examples
     --------
@@ -93,16 +107,37 @@ class Parameter:
     ...     ptype="Choice",
     ...     init_value="TARP"
     ... )
+
+    >>> # Example using a probability distribution for uncertainty propagation
+    >>> from corrai.base.distribution import Distribution
+    >>> p = Parameter(
+    ...     name="Conductivity",
+    ...     model_property="building.wall.insulation.conductivity",
+    ...     distribution=Distribution(
+    ...         "truncnormal", {"mean": 0.036, "std": 0.002, "low": 0.03, "high": 0.04}
+    ...     ),
+    ... )
     """
 
     def __post_init__(self):
         if self.interval is not None and self.values is not None:
             raise ValueError("Only one of 'interval' or 'values' may be specified.")
-        if self.interval is None and self.values is None and self.ptype != "Binary":
+        if (
+            self.interval is None
+            and self.values is None
+            and self.distribution is None
+            and self.ptype != "Binary"
+        ):
             raise ValueError("One of 'interval' or 'values' must be specified.")
 
         if self.ptype not in TYPES:
             raise ValueError(f"Invalid type: {self.ptype!r}. Must be one of {TYPES}.")
+
+        if self.distribution is not None and self.ptype != "Real":
+            raise ValueError(
+                f"'distribution' can only be used with ptype='Real', "
+                f"got ptype={self.ptype!r}."
+            )
 
         if isinstance(self.relabs, str) and self.relabs not in RELABS:
             raise ValueError(
