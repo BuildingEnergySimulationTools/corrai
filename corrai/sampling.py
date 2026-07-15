@@ -218,7 +218,14 @@ class Sample:
             If parameters are not of type 'Real'.
         """
         if all(param.ptype == "Real" for param in self.parameters):
-            return np.array([param.interval for param in self.parameters])
+            return np.array(
+                [
+                    param.interval
+                    if param.interval is not None
+                    else param.distribution.quantile_range()
+                    for param in self.parameters
+                ]
+            )
         elif any(param.ptype == "Integer" for param in self.parameters):
             raise NotImplementedError(
                 "get_param_interval is not yet implemented for integer parameters"
@@ -1562,6 +1569,72 @@ class SobolSampler(RealSampler):
             calc_second_order=calc_second_order,
             **sobol_kwargs,
         )
+        self._post_draw_sample(
+            new_sample,
+            simulate,
+            n_cpu,
+            sample_is_dimless=False,
+            simulation_kwargs=simulation_kwargs,
+        )
+
+
+class MonteCarloSampler(RealSampler):
+    """
+    Monte Carlo sampler for uncertainty propagation.
+
+    Draws each parameter independently from its `Parameter.distribution`
+    and runs simulations for the resulting samples. Used to propagate
+    parameter uncertainty (given as probability distributions) through the
+    model, rather than to explore a deterministic design of experiments.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        Real-valued parameters, each with a `distribution` set.
+    model : Model
+        Model to simulate.
+    simulation_options : dict, optional
+        Options for simulation.
+
+    Raises
+    ------
+    ValueError
+        If any parameter does not define a `distribution`.
+
+    Methods
+    -------
+    add_sample(n, seed=None, simulate=True, n_cpu=1, simulation_kwargs=None)
+        Draw `n` samples from the parameters' distributions.
+    """
+
+    def __init__(
+        self,
+        parameters: list[Parameter],
+        model: Model,
+        simulation_options: dict = None,
+    ):
+        super().__init__(parameters, model, simulation_options)
+
+        missing = [par.name for par in parameters if par.distribution is None]
+        if missing:
+            raise ValueError(
+                f"All parameters must define a `distribution`. Missing for: {missing}"
+            )
+
+    def add_sample(
+        self,
+        n: int,
+        seed: int = None,
+        simulate: bool = True,
+        n_cpu: int = 1,
+        simulation_kwargs: dict = None,
+    ):
+        rng = np.random.default_rng(seed)
+        columns = [
+            param.distribution.rvs(size=n, random_state=rng)
+            for param in self.parameters
+        ]
+        new_sample = np.column_stack(columns)
         self._post_draw_sample(
             new_sample,
             simulate,
