@@ -89,8 +89,14 @@ class TestSimulationOptionsPacking:
         bundle = tmp_path / "bundle"
         bundle.mkdir()
 
+        opts = {"file_a": dir_a / "data.csv", "file_b": dir_b / "data.csv"}
+        packed = _pack_simulation_options(opts, bundle)
+
         files = list((bundle / "simulation_files").iterdir())
         assert len(files) == 2
+        assert {f.name for f in files} == {"data.csv", "data_1.csv"}
+        assert packed["file_a"]["__bundle_file__"] == "simulation_files/data.csv"
+        assert packed["file_b"]["__bundle_file__"] == "simulation_files/data_1.csv"
 
     def test_nonexistent_path_string_not_treated_as_file(self, tmp_path):
         bundle = tmp_path / "bundle"
