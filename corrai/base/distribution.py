@@ -37,7 +37,9 @@ class Distribution:
     Examples
     --------
     >>> Distribution("normal", {"mean": 0.036, "std": 0.002})
-    >>> Distribution("truncnormal", {"mean": 0.036, "std": 0.002, "low": 0.03, "high": 0.04})
+    >>> Distribution(
+    ...     "truncnormal", {"mean": 0.036, "std": 0.002, "low": 0.03, "high": 0.04}
+    ... )
     >>> Distribution("uniform", {"low": 0.03, "high": 0.04})
     >>> Distribution("halfcauchy", {"loc": 0, "scale": 1})
     """
