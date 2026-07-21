@@ -14,9 +14,6 @@ class Parameter:
     ptype: str = "Real"
     relabs: str = "Absolute"
     init_value: str | int | float | tuple[str | int | float] | None = None
-    min_max_interval: (
-        tuple[int | float, int | float] | list[tuple[int | float, int | float]] | None
-    ) = None
     model_property: str | tuple[str, ...] = None
     distribution: Distribution | None = None
 
@@ -63,9 +60,6 @@ class Parameter:
     init_value : str, int, or float, optional
         The initial value of the parameter. If `interval` is used, must fall within
         the interval. If `values` is used, must be one of the listed values.
-
-    min_max_interval : tuple of int or float, optional
-        Optional min and max bounds used for some checking operations.
 
     distribution : Distribution, optional
         Probability distribution used to draw random values for this

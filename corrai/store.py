@@ -67,12 +67,6 @@ def deserialize_parameter(d: dict) -> Parameter:
         d["values"] = tuple(d["values"])
     if isinstance(d.get("model_property"), list):
         d["model_property"] = tuple(d["model_property"])
-    mmv = d.get("min_max_interval")
-    if mmv is not None:
-        if isinstance(mmv, list) and len(mmv) > 0 and isinstance(mmv[0], list):
-            d["min_max_interval"] = [tuple(t) for t in mmv]
-        elif isinstance(mmv, list):
-            d["min_max_interval"] = tuple(mmv)
     if isinstance(d.get("distribution"), dict):
         d["distribution"] = Distribution(**d["distribution"])
     return Parameter(**d)
