@@ -11,6 +11,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from corrai.base.distribution import Distribution
 from corrai.base.model import Model
 from corrai.base.parameter import Parameter
 from corrai.sampling import Sample
@@ -72,6 +73,8 @@ def deserialize_parameter(d: dict) -> Parameter:
             d["min_max_interval"] = [tuple(t) for t in mmv]
         elif isinstance(mmv, list):
             d["min_max_interval"] = tuple(mmv)
+    if isinstance(d.get("distribution"), dict):
+        d["distribution"] = Distribution(**d["distribution"])
     return Parameter(**d)
 
 

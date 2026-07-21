@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
 
+from corrai.base.distribution import Distribution
 from corrai.base.model import Ishigami, PyModel
 from corrai.base.parameter import Parameter
 from corrai.optimize import SciOptimizer
@@ -154,6 +155,32 @@ class TestParameterSerialization:
         d = serialize_parameter(p)
         p2 = deserialize_parameter(d)
         assert p2.values == ("A", "B", "C")
+
+    def test_roundtrip_distribution(self):
+        p = Parameter(
+            "cond",
+            interval=(0.03, 0.04),
+            model_property="m",
+            distribution=Distribution(
+                "truncnormal", {"mean": 0.036, "std": 0.002, "low": 0.03, "high": 0.04}
+            ),
+        )
+        d = serialize_parameter(p)
+        p2 = deserialize_parameter(d)
+        assert isinstance(p2.distribution, Distribution)
+        assert p2.distribution.dist == "truncnormal"
+        assert p2.distribution.params == {
+            "mean": 0.036,
+            "std": 0.002,
+            "low": 0.03,
+            "high": 0.04,
+        }
+
+    def test_roundtrip_no_distribution(self):
+        p = PARAMETERS[0]
+        d = serialize_parameter(p)
+        p2 = deserialize_parameter(d)
+        assert p2.distribution is None
 
     def test_save_load_parameters(self, tmp_path):
         path = tmp_path / "params.json"
