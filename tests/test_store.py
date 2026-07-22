@@ -5,7 +5,7 @@ from corrai.base.distribution import Distribution
 from corrai.base.model import Ishigami, PyModel
 from corrai.base.parameter import Parameter
 from corrai.optimize import SciOptimizer
-from corrai.sampling import LHSSampler
+from corrai.sampling import LHSSampler, MonteCarloSampler
 from corrai.sensitivity import SobolSanalysis
 from corrai.store import (
     OptimizationStore,
@@ -346,3 +346,32 @@ class TestSamplingStore:
         # Resume: add more samples
         sampler2.add_sample(n=5, rng=1, simulate=True)
         assert len(sampler2.sample) == 25
+
+    def test_full_cycle_montecarlo(self, tmp_path):
+        params = [
+            Parameter(
+                "x1",
+                model_property="x1",
+                distribution=Distribution("uniform", {"low": 0.0, "high": 2.0}),
+            ),
+            Parameter(
+                "x2",
+                model_property="x2",
+                distribution=Distribution("uniform", {"low": 0.0, "high": 2.0}),
+            ),
+        ]
+        sampler = MonteCarloSampler(params, StaticSquare())
+        sampler.add_sample(n=20, seed=0, simulate=True)
+
+        store = SamplingStore(sampler)
+        store.save(tmp_path / "samp_mc")
+
+        loaded = SamplingStore.load(tmp_path / "samp_mc", model=StaticSquare())
+        assert loaded._study_class_name == "MonteCarloSampler"
+        sampler2 = loaded.to_study()
+
+        pd.testing.assert_frame_equal(
+            sampler2.sample.values.reset_index(drop=True),
+            sampler.sample.values.reset_index(drop=True),
+        )
+        assert len(sampler2.sample.results) == 20

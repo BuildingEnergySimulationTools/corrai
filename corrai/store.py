@@ -27,6 +27,7 @@ _CLASS_REGISTRY = {
     "MorrisSampler": "corrai.sampling",
     "FASTSampler": "corrai.sampling",
     "RBDFASTSampler": "corrai.sampling",
+    "MonteCarloSampler": "corrai.sampling",
 }
 
 
